@@ -529,7 +529,24 @@ function ConnectionCheck({
           </span>
 
         </div>
+{/* ==================================================
+    STORAGE ACCOUNT
+    ================================================== */}
 
+<div className="connection-info-item">
+
+  <span className="connection-info-label">
+    Storage Account
+  </span>
+
+  <span className="connection-info-value">
+
+    {deploymentInfo?.storage_account_name ||
+      "—"}
+
+  </span>
+
+</div>
       </div>
 
 

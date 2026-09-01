@@ -5,8 +5,9 @@
 // Handles:
 // POST /api/connections/setup
 //
-// subscription_id, resource_group_name and location are taken
-// automatically from the successful infrastructure deployment.
+// subscription_id, resource_group_name, storage_account_name
+// and location are taken automatically from the successful
+// infrastructure deployment.
 //
 // ============================================================
 
@@ -44,6 +45,11 @@ export const setupConnections = async (deploymentInfo) => {
       deploymentInfo.resource_group_name || ""
     ).trim();
 
+  const storageAccountName =
+    String(
+      deploymentInfo.storage_account_name || ""
+    ).trim();
+
   const location =
     String(
       deploymentInfo.location || ""
@@ -63,6 +69,12 @@ export const setupConnections = async (deploymentInfo) => {
   if (!resourceGroupName) {
     throw new Error(
       "Resource group name is missing from the infrastructure deployment."
+    );
+  }
+
+  if (!storageAccountName) {
+    throw new Error(
+      "Storage account name is missing from the infrastructure deployment."
     );
   }
 
@@ -88,6 +100,7 @@ export const setupConnections = async (deploymentInfo) => {
   const payload = {
     subscription_id: subscriptionId,
     resource_group_name: resourceGroupName,
+    storage_account_name: storageAccountName,
     location: location,
   };
 
@@ -122,7 +135,7 @@ export const setupConnections = async (deploymentInfo) => {
   // ==========================================================
 
   const response = await fetch(
-    `${API_BASE_URL}/api/connections/setup`,
+    `${API_BASE_URL}/api/connection`,
     {
       method: "POST",
 

@@ -1,85 +1,68 @@
 
 import logging
 
-from fastapi import (
-    APIRouter,
-    HTTPException,
-)
+from fastapi import APIRouter, HTTPException
 
-from app.schemas.connections import (
-    ConnectionSetupRequest,
-    ConnectionSetupResponse,
+from app.schemas.connection import (
+    ConnectionRequest,
+    ConnectionResponse,
 )
-
-from app.services.connection_service import (
-    ConnectionSetupService,
-)
+from app.services.connection import ConnectionService
 
 
 logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
-    prefix="/api/connections",
+    prefix="/api",
     tags=["Connections"],
 )
 
 
-# ============================================================
-# CHECK / CREATE / AUTHENTICATE CONNECTIONS
-# ============================================================
+connection_service = ConnectionService()
+
+
+# =============================================================
+# CREATE AND CHECK ALL CONNECTIONS
+# =============================================================
 
 @router.post(
-    "/setup",
-    response_model=ConnectionSetupResponse,
+    "/connection",
+    response_model=ConnectionResponse,
 )
-def setup_connections(
-    request: ConnectionSetupRequest,
-):
+def create_connection(
+    request: ConnectionRequest,
+) -> ConnectionResponse:
 
     try:
 
-        service = (
-            ConnectionSetupService()
+        logger.info(
+            "POST /api/connection received"
         )
 
-        return service.setup(
+        return connection_service.create_connections(
             request
         )
 
-    except ValueError as exc:
+    except FileNotFoundError as exc:
 
-        logger.exception(
-            "Connection validation error."
-        )
-
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        ) from exc
-
-    except RuntimeError as exc:
-
-        logger.exception(
-            "Connection setup error."
+        logger.error(
+            "Connection ARM template not found: %s",
+            exc,
         )
 
         raise HTTPException(
             status_code=500,
             detail=str(exc),
-        ) from exc
+        )
 
     except Exception as exc:
 
         logger.exception(
-            "Unexpected connection error."
+            "Failed to create Azure connections"
         )
 
         raise HTTPException(
             status_code=500,
-            detail=(
-                "Unexpected error while "
-                "processing API connections: "
-                f"{exc}"
-            ),
-        ) from exc
+            detail=f"Failed to create connections: {exc}",
+        )
