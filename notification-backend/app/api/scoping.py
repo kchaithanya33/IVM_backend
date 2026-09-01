@@ -1,62 +1,64 @@
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 
 from app.schemas.scoping import (
     ScopingDeploymentRequest,
     ScopingDeploymentResponse,
 )
-from app.services.scoping_deployment_service import (
+
+from app.services.scoping import (
     ScopingDeploymentService,
 )
 
+
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+
+router = APIRouter(
+    prefix="/api/scoping",
+    tags=["Scoping"],
+)
+
+
+# ============================================================
+# SERVICE
+# ============================================================
 
 scoping_service = ScopingDeploymentService()
 
 
+# ============================================================
+# DEPLOY SCOPING-00
+# ============================================================
+
 @router.post(
     "/deploy",
     response_model=ScopingDeploymentResponse,
-    status_code=status.HTTP_200_OK,
 )
 def deploy_scoping(
     request: ScopingDeploymentRequest,
-):
-    """
-    Deploy the Scoping Logic Apps using scoping.json.
-
-    Equivalent to the original Bash deployment script.
-    """
+) -> ScopingDeploymentResponse:
 
     logger.info(
-        "Received Scoping deployment request for Logic App: %s",
-        request.logic_app_name,
+        "Received Scoping-00 deployment request."
     )
 
-    try:
-        result = scoping_service.deploy(request)
+    return scoping_service.deploy_scoping(
+        request
+    )
 
-        if not result.success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=result.message,
-            )
 
-        return result
+# ============================================================
+# HEALTH / TEST ENDPOINT
+# ============================================================
 
-    except HTTPException:
-        raise
+@router.get(
+    "/health",
+)
+def scoping_health():
 
-    except Exception as exc:
-
-        logger.exception(
-            "Unexpected error during Scoping deployment."
-        )
-
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Scoping deployment failed: {str(exc)}",
-        ) from exc
+    return {
+        "status": "ok",
+        "service": "scoping",
+    }

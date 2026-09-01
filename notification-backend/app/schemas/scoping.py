@@ -1,57 +1,144 @@
 from typing import Optional
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 
+
+# ============================================================
+# SCOPING DEPLOYMENT REQUEST
+# ============================================================
 
 class ScopingDeploymentRequest(BaseModel):
     """
-    Request model for Scoping Logic App deployment.
+    Request received from the frontend for Scoping-00 deployment.
+
+    Function App name and function names are supplied by the user.
+    The backend dynamically resolves the actual Function URLs.
     """
 
+    # --------------------------------------------------------
+    # Azure infrastructure
+    # --------------------------------------------------------
+
     subscription_id: str = Field(..., min_length=1)
+
     resource_group_name: str = Field(..., min_length=1)
+
     location: str = Field(..., min_length=1)
 
-    storage_account_name: str = Field(..., min_length=3)
+    # --------------------------------------------------------
+    # Logic App
+    # --------------------------------------------------------
 
-    sharepoint_url: str = Field(..., min_length=1)
+    logic_app_name: str = Field(
+        default="LA-Scoping-00",
+        min_length=1,
+    )
 
-    logic_app_name: str = Field(..., min_length=1)
-    scoping01_logic_app_name: str = Field(..., min_length=1)
-    scoping02_logic_app_name: str = Field(..., min_length=1)
+    # --------------------------------------------------------
+    # Storage
+    # --------------------------------------------------------
 
-    callback_secret_key: str = Field(..., min_length=1)
+    storage_account_name: str = Field(..., min_length=1)
 
-    table_connection_name: str = Field(..., min_length=1)
-    queue_connection_name: str = Field(..., min_length=1)
-    sharepoint_connection_name: str = Field(..., min_length=1)
+    scoping_schedule_queue_name: str = Field(..., min_length=1)
 
     notification_log_table_name: str = Field(..., min_length=1)
-    notification_status_table_name: str = Field(..., min_length=1)
 
-    queue_name: str = Field(..., min_length=1)
-    authscan_queue_name: str = Field(..., min_length=1)
+    # --------------------------------------------------------
+    # Completion callback
+    # --------------------------------------------------------
 
     completion_logic_app_url: str = Field(..., min_length=1)
 
+    callback_secret_key: str = Field(..., min_length=1)
+
+    # --------------------------------------------------------
+    # Notification service
+    # --------------------------------------------------------
+
+    notification_service_url: str = Field(..., min_length=1)
+
+    # --------------------------------------------------------
+    # Function App
+    # --------------------------------------------------------
+
+    function_app_name: str = Field(..., min_length=1)
+
+    # --------------------------------------------------------
+    # Function names
+    # --------------------------------------------------------
+
+    config_function_name: str = Field(
+        default="config",
+        min_length=1,
+    )
+
+    business_day_hour_status_function_name: str = Field(
+        default="businessdayhourstatus",
+        min_length=1,
+    )
+
+    get_next_business_day_function_name: str = Field(
+        default="GetNextBusinessDay",
+        min_length=1,
+    )
+
+    # --------------------------------------------------------
+    # Logic App API connection names
+    # --------------------------------------------------------
+
+    table_connection_name: str = Field(
+        default="azuretables-1",
+        min_length=1,
+    )
+
+    queue_connection_name: str = Field(
+        default="azurequeues-1",
+        min_length=1,
+    )
+
+
+# ============================================================
+# SCOPING DEPLOYMENT RESPONSE
+# ============================================================
 
 class ScopingDeploymentResponse(BaseModel):
     success: bool
+
     message: str
 
-    subscription_id: Optional[str] = None
-    resource_group_name: Optional[str] = None
-    location: Optional[str] = None
+    subscription_id: str
 
-    logic_app_name: Optional[str] = None
-    scoping01_logic_app_name: Optional[str] = None
-    scoping02_logic_app_name: Optional[str] = None
+    resource_group_name: str
 
-    storage_account_name: Optional[str] = None
+    location: str
+
+    logic_app_name: str
+
+    storage_account_name: str
+
+    # --------------------------------------------------------
+    # Resolved connection IDs
+    # --------------------------------------------------------
 
     table_connection_id: Optional[str] = None
+
     queue_connection_id: Optional[str] = None
-    sharepoint_connection_id: Optional[str] = None
+
+    # --------------------------------------------------------
+    # Dynamically resolved Function URLs
+    # --------------------------------------------------------
+
+    config_service_url: Optional[str] = None
+
+    business_day_hour_status_url: Optional[str] = None
+
+    get_next_business_day_url: Optional[str] = None
+
+    # --------------------------------------------------------
+    # ARM deployment information
+    # --------------------------------------------------------
 
     deployment_name: Optional[str] = None
+
     provisioning_state: Optional[str] = None

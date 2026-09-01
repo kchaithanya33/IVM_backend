@@ -49,16 +49,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:5173",
     ],
-
     allow_credentials=True,
-
     allow_methods=["*"],
-
     allow_headers=["*"],
 )
 
@@ -67,43 +63,64 @@ app.add_middleware(
 # ROUTERS
 # ============================================================
 
+# ------------------------------------------------------------
 # Workflow
+# ------------------------------------------------------------
+
 app.include_router(
     workflow_router
 )
 
 
+# ------------------------------------------------------------
 # Configuration
+# ------------------------------------------------------------
+
 app.include_router(
     configuration_router
 )
 
 
+# ------------------------------------------------------------
 # Key Vault
+# ------------------------------------------------------------
+
 app.include_router(
     key_vault_router
 )
 
 
+# ------------------------------------------------------------
 # Azure API Connections
+# ------------------------------------------------------------
+
 app.include_router(
     connections_router
 )
 
 
+# ------------------------------------------------------------
 # Function App Deployment
+# ------------------------------------------------------------
+
 app.include_router(
     deployment.router
 )
 
 
+# ------------------------------------------------------------
 # Notification ARM Deployment
+# ------------------------------------------------------------
+
 app.include_router(
     notification_arm_router
 )
 
 
-# Scoping Logic App Deployment
+# ------------------------------------------------------------
+# Scoping-00 Logic App Deployment
+# ------------------------------------------------------------
+
 app.include_router(
     scoping_router
 )
@@ -115,7 +132,6 @@ app.include_router(
 
 @app.get("/")
 def root():
-
     return {
         "status": "running",
         "service": "notification-backend",
