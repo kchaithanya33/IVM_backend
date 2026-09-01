@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+
+azure-identity
+
+azure-keyvault-secrets
+azure-mgmt-keyvault
+azure-mgmt-authorization
+azure-mgmt-resource
+azure-mgmt-web
+
+azure-data-tables
+
+pydantic
+python-dotenv

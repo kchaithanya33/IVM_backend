@@ -1,0 +1,358 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+
+  "parameters": {
+    "storageAccountName": {
+      "type": "string",
+      "metadata": {
+        "description": "Storage account used by the notification service"
+      }
+    },
+
+    "location": {
+      "type": "string",
+      "defaultValue": "northeurope",
+      "metadata": {
+        "description": "Azure resource location"
+      }
+    },
+
+    "azureTablesConnectionName": {
+      "type": "string",
+      "defaultValue": "azuretables-1"
+    },
+
+    "office365ConnectionName": {
+      "type": "string",
+      "defaultValue": "office365-1"
+    },
+
+    "teamsConnectionName": {
+      "type": "string",
+      "defaultValue": "teams-1"
+    },
+    "functionAppName": {
+  "type": "string"
+},
+"functionAppPlanName": {
+  "type": "string"
+},
+"queueName": {
+  "type": "string",
+  "defaultValue": "scopingschedulequeue",
+  "metadata": {
+    "description": "Queue used by the Scoping scheduler Logic App"
+  }
+},
+"taskReminderQueueName": {
+  "type": "string",
+  "defaultValue": "taskreminder",
+  "metadata": {
+    "description": "Queue used for task reminders and notification follow-up processing"
+  }
+},
+  "sharepointConnectionName": {
+  "type": "string",
+  "defaultValue": "sharepointonline-1"
+},
+  "azureQueuesConnectionName": {
+  "type": "string",
+  "defaultValue": "azurequeues-1"
+},
+"statusTableName": {
+  "type": "string",
+  "defaultValue": "NotificationStatus",
+  "metadata": {
+    "description": "Table used to store notification task status"
+  }
+},
+"authScanQueueName": {
+  "type": "string",
+  "defaultValue": "authscan00",
+  "metadata": {
+    "description": "Queue used for AuthScan processing"
+  }
+}
+}
+
+  ,
+
+  "resources": [
+
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[parameters('storageAccountName')]",
+      "location": "[parameters('location')]",
+
+      "sku": {
+        "name": "Standard_LRS"
+      },
+
+      "kind": "StorageV2",
+
+      "properties": {
+        "accessTier": "Hot",
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true
+      },
+
+      "resources": [
+
+        {
+          "type": "tableServices/tables",
+          "apiVersion": "2023-05-01",
+          "name": "default/AppConfiguration",
+          "dependsOn": [
+            "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+          ]
+        },
+
+        {
+          "type": "tableServices/tables",
+          "apiVersion": "2023-05-01",
+          "name": "default/EmailRecipientConfiguration",
+          "dependsOn": [
+            "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+          ]
+        },
+
+        {
+          "type": "tableServices/tables",
+          "apiVersion": "2023-05-01",
+          "name": "default/NotificationConfiguration",
+          "dependsOn": [
+            "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+          ]
+        },
+
+        {
+          "type": "tableServices/tables",
+          "apiVersion": "2023-05-01",
+          "name": "default/NotificationTemplates",
+          "dependsOn": [
+            "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+          ]
+        },
+
+        {
+          "type": "tableServices/tables",
+          "apiVersion": "2023-05-01",
+          "name": "default/TeamsRecipientConfiguration",
+          "dependsOn": [
+            "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+          ]
+        },
+
+        {
+          "type": "tableServices/tables",
+          "apiVersion": "2023-05-01",
+          "name": "default/NotificationLogs",
+          "dependsOn": [
+            "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+          ]
+        },
+{
+  "type": "tableServices/tables",
+  "apiVersion": "2023-05-01",
+  "name": "default/Cycles",
+  "dependsOn": [
+    "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+  ]
+},
+{
+  "type": "tableServices/tables",
+  "apiVersion": "2023-05-01",
+  "name": "[concat('default/', parameters('statusTableName'))]",
+  "dependsOn": [
+    "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+  ]
+},
+{
+  "type": "queueServices/queues",
+  "apiVersion": "2023-05-01",
+  "name": "[concat('default/', parameters('queueName'))]",
+  "dependsOn": [
+    "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+  ]
+},
+{
+  "type": "queueServices/queues",
+  "apiVersion": "2023-05-01",
+  "name": "[concat('default/', parameters('taskReminderQueueName'))]",
+  "dependsOn": [
+    "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+  ]
+},
+{
+  "type": "queueServices/queues",
+  "apiVersion": "2023-05-01",
+  "name": "[concat('default/', parameters('authScanQueueName'))]",
+  "dependsOn": [
+    "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+  ]
+}
+      ]
+    },
+
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('azureTablesConnectionName')]",
+      "location": "[parameters('location')]",
+
+      "properties": {
+        "displayName": "[parameters('azureTablesConnectionName')]",
+
+        "api": {
+          "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuretables')]"
+        },
+
+        "parameterValues": {
+          "storageaccount": "[parameters('storageAccountName')]",
+          "sharedkey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2023-05-01').keys[0].value]",
+          "privacySetting": "None"
+        }
+      },
+
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+      ]
+    },
+    {
+  "type": "Microsoft.Web/connections",
+  "apiVersion": "2016-06-01",
+  "name": "[parameters('sharepointConnectionName')]",
+  "location": "[parameters('location')]",
+
+  "properties": {
+    "displayName": "[parameters('sharepointConnectionName')]",
+
+    "api": {
+      "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'sharepointonline')]"
+    }
+  }
+},
+    {
+  "type": "Microsoft.Web/connections",
+  "apiVersion": "2016-06-01",
+  "name": "[parameters('azureQueuesConnectionName')]",
+  "location": "[parameters('location')]",
+
+  "properties": {
+    "displayName": "[parameters('azureQueuesConnectionName')]",
+
+    "api": {
+      "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azurequeues')]"
+    },
+
+    "parameterValues": {
+      "storageaccount": "[parameters('storageAccountName')]",
+     "sharedkey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2023-05-01').keys[0].value]"
+    }
+  },
+
+  "dependsOn": [
+    "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+  ]
+},
+
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('office365ConnectionName')]",
+      "location": "[parameters('location')]",
+
+      "properties": {
+        "displayName": "[parameters('office365ConnectionName')]",
+
+        "api": {
+          "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'office365')]"
+        }
+      }
+    },
+
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('teamsConnectionName')]",
+      "location": "[parameters('location')]",
+
+      "properties": {
+        "displayName": "[parameters('teamsConnectionName')]",
+
+        "api": {
+          "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'teams')]"
+        }
+      }
+    },
+    {
+  "type": "Microsoft.Web/serverfarms",
+  "apiVersion": "2022-03-01",
+  "name": "[parameters('functionAppPlanName')]",
+  "location": "[parameters('location')]",
+  "sku": {
+    "name": "Y1",
+    "tier": "Dynamic"
+  },
+  "kind": "functionapp",
+  "properties": {
+    "reserved": true
+  }
+},
+{
+  "type": "Microsoft.Web/sites",
+  "apiVersion": "2022-03-01",
+  "name": "[parameters('functionAppName')]",
+  "location": "[parameters('location')]",
+  "kind": "functionapp,linux",
+    "identity": {
+    "type": "SystemAssigned"
+  },
+  "dependsOn": [
+    "[resourceId('Microsoft.Web/serverfarms', parameters('functionAppPlanName'))]",
+    "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+  ],
+  "properties": {
+    "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('functionAppPlanName'))]",
+    "siteConfig": {
+      "linuxFxVersion": "Python|3.11",
+      "appSettings": [
+        {
+          "name": "FUNCTIONS_EXTENSION_VERSION",
+          "value": "~4"
+        },
+        {
+          "name": "FUNCTIONS_WORKER_RUNTIME",
+          "value": "python"
+        },
+        {
+          "name": "FUNCTIONS_WORKER_RUNTIME_VERSION",
+          "value": "3.11"
+        },
+        {
+          "name": "AzureWebJobsStorage",
+          "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2023-05-01').keys[0].value, ';EndpointSuffix=core.windows.net')]"
+        }
+      ]
+    }
+  }
+},
+{
+  "type": "Microsoft.Authorization/roleAssignments",
+  "apiVersion": "2022-04-01",
+  "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), resourceId('Microsoft.Web/sites', parameters('functionAppName')), 'Storage Table Data Contributor')]",
+  "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+  "dependsOn": [
+    "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+  ],
+  "properties": {
+    "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3')]",
+    "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-03-01', 'Full').identity.principalId]",
+    "principalType": "ServicePrincipal"
+  }
+}
+
+  ]
+}

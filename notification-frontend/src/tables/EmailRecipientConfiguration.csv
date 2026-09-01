@@ -1,0 +1,6 @@
+PartitionKey,RowKey,Value,Value@type,Description,SampleValue
+Recipient,Cyberark_Team,,String,CyberArk team email recipient,sample@gmail.com
+Recipient,IVM_Team,,String,IVM team email recipient,sample@gmail.com
+Recipient,TCS_Team,,String,TCS team email recipient,sample@gmail.com
+ValueStream,Default Value,,String,Default value stream email recipient,sample@gmail.com
+ValueStream,Enterprise Services,,String,Enterprise Services email recipient,sample@gmail.com

@@ -1,0 +1,6 @@
+PartitionKey,RowKey,Value,Value@type
+Recipient,CYBER_ARK,,String
+Recipient,IVM_Team,,String
+ValueStream,Default Value,,String
+ValueStream,Enterprise Services,,String
+ValueStream,IVM_Team,,String

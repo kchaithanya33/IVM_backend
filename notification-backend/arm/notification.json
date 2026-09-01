@@ -1,0 +1,2179 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+"parameters": {
+  "storageAccountName": {
+    "type": "string"
+  },
+  "location": {
+    "type": "string"
+  },
+  "logicAppName": {
+    "type": "string"
+  },
+  "azureTablesConnectionName": {
+    "type": "string"
+  },
+  "office365ConnectionName": {
+    "type": "string"
+  },
+  "teamsConnectionName": {
+    "type": "string"
+  },
+    "notificationFollowupLogicAppName": {
+    "type": "string"
+  },
+  "azureQueuesConnectionName": {
+  "type": "string"
+},
+  "completionLogicAppName": {
+  "type": "string"
+},
+"notificationLogTableName": {
+  "type": "string",
+  "metadata": {
+    "description": "Existing table used for notification logs"
+  }
+},
+"callbackSecretKey": {
+  "type": "secureString",
+  "metadata": {
+    "description": "Secret key used to validate completion callback tokens"
+  }
+},
+"NotificationStatus": {
+      "type": "string",
+      "metadata": {
+        "description": "Existing table used for notification status"
+      }
+    },
+    "followupQueueName": {
+  "type": "String",
+  "defaultValue": "taskreminder"
+}
+
+},
+  "resources": [
+
+
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [],
+      "properties": {
+        "state": "Enabled",
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuretables": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('azureTablesConnectionName'))]",
+                "connectionName": "[parameters('azureTablesConnectionName')]",
+                "connectionProperties": {},
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuretables')]"
+              },
+              "office365": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('office365ConnectionName'))]",
+                "connectionName": "[parameters('office365ConnectionName')]",
+                "connectionProperties": {},
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'office365')]"
+              },
+              "teams": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('teamsConnectionName'))]",
+                "connectionName": "[parameters('teamsConnectionName')]",
+                "connectionProperties": {},
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'teams')]"
+              }
+            }
+          },
+          "storageAccountName": {
+            "value": "[parameters('storageAccountName')]"
+          }
+        },
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            },
+            "storageAccountName": {
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "When_a_HTTP_request_is_received": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "WorkflowName": {
+                      "type": "string"
+                    },
+                    "NotificationType": {
+                      "type": "string"
+                    },
+                    "NotificationTitle": {
+                      "type": "string"
+                    },
+                    "NotificationContent": {
+                      "type": "string"
+                    },
+                    "RecipientList": {
+                      "type": "array"
+                    },
+                    "TeamsList": {
+                      "type": "array"
+                    },
+                    "TemplateVariables": {
+                      "type": "array"
+                    },
+                    "NotificationChannels": {
+                      "type": "array"
+                    },
+                    "TemplateId": {
+                      "type": "string"
+                    },
+                    "Importance": {
+                      "type": "string"
+                    },
+                    "Attachments": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "actions": {
+            "Initialize_All_Variables": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "processedContent",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "processedTitle",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "processedAdaptiveContent",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "processedTeamsContent",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "finalRecipients",
+                    "type": "array",
+                    "value": []
+                  },
+                  {
+                    "name": "finalChannels",
+                    "type": "array",
+                    "value": []
+                  },
+                  {
+                    "name": "teamsGroup",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "teamsGroups",
+                    "type": "array",
+                    "value": []
+                  },
+                  {
+                    "name": "tempContent",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "tempTitle",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "tempAdaptiveContent",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "tempTeamsContent",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "resolvedEmails",
+                    "type": "array",
+                    "value": []
+                  },
+                  {
+                    "name": "resolvedTeamsChannels",
+                    "type": "array",
+                    "value": []
+                  }
+                ]
+              }
+            },
+            "Resolve_Recipients": {
+              "foreach": "@coalesce(triggerBody()?['RecipientList'], createArray())",
+              "actions": {
+                "Check_If_Email_Or_Name": {
+                  "actions": {
+                    "Add_Direct_Email": {
+                      "type": "AppendToArrayVariable",
+                      "inputs": {
+                        "name": "resolvedEmails",
+                        "value": "@trim(item())"
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Get_Email_From_Configuration": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuretables']['connectionId']"
+                            }
+                          },
+                          "method": "get",
+                          "path": "/v2/storageAccounts/@{encodeURIComponent(parameters('storageAccountName'))}/tables/@{encodeURIComponent('EmailRecipientConfiguration')}/entities",
+                          "queries": {
+                            "$filter": "@{concat('PartitionKey eq ''Recipient'' and RowKey eq ''', trim(item()), '''')}"
+                          }
+                        }
+                      },
+                      "Parse_Semicolon_Separated_Emails": {
+                        "foreach": "@split(coalesce(first(body('Get_Email_From_Configuration')?['value'])?['Value'], ''), ';')",
+                        "actions": {
+                          "Add_Resolved_Email": {
+                            "actions": {
+                              "Append_Resolved_Email": {
+                                "type": "AppendToArrayVariable",
+                                "inputs": {
+                                  "name": "resolvedEmails",
+                                  "value": "@trim(item())"
+                                }
+                              }
+                            },
+                            "else": {
+                              "actions": {}
+                            },
+                            "expression": {
+                              "and": [
+                                {
+                                  "not": {
+                                    "equals": [
+                                      "@trim(item())",
+                                      ""
+                                    ]
+                                  }
+                                }
+                              ]
+                            },
+                            "type": "If"
+                          }
+                        },
+                        "runAfter": {
+                          "Get_Email_From_Configuration": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Foreach"
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "contains": [
+                          "@item()",
+                          "@"
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Initialize_All_Variables": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "Resolve_Teams_Channels": {
+              "foreach": "@coalesce(triggerBody()?['TeamsList'], createArray())",
+              "actions": {
+                "Check_If_TeamsChannel_Or_Name": {
+                  "actions": {
+                    "Add_Direct_TeamsChannel": {
+                      "type": "AppendToArrayVariable",
+                      "inputs": {
+                        "name": "resolvedTeamsChannels",
+                        "value": "@trim(item())"
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Get_TeamsChannel_From_Configuration": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuretables']['connectionId']"
+                            }
+                          },
+                          "method": "get",
+                          "path": "/v2/storageAccounts/@{encodeURIComponent(parameters('storageAccountName'))}/tables/@{encodeURIComponent('TeamsRecipientConfiguration')}/entities",
+                          "queries": {
+                            "$filter": "@{concat('PartitionKey eq ''Recipient'' and RowKey eq ''', trim(item()), '''')}"
+                          }
+                        }
+                      },
+                      "Parse_Semicolon_Separated_TeamsChannels": {
+                        "foreach": "@split(coalesce(first(body('Get_TeamsChannel_From_Configuration')?['value'])?['Value'], ''), ';')",
+                        "actions": {
+                          "Add_Resolved_TeamsChannel": {
+                            "actions": {
+                              "Append_Resolved_TeamsChannel": {
+                                "type": "AppendToArrayVariable",
+                                "inputs": {
+                                  "name": "resolvedTeamsChannels",
+                                  "value": "@trim(item())"
+                                }
+                              }
+                            },
+                            "else": {
+                              "actions": {}
+                            },
+                            "expression": {
+                              "and": [
+                                {
+                                  "not": {
+                                    "equals": [
+                                      "@trim(item())",
+                                      ""
+                                    ]
+                                  }
+                                }
+                              ]
+                            },
+                            "type": "If"
+                          }
+                        },
+                        "runAfter": {
+                          "Get_TeamsChannel_From_Configuration": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Foreach"
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "contains": [
+                          "@item()",
+                          "@"
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Resolve_Recipients": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "if_TemplateID_does_not_exists": {
+              "type": "If",
+              "expression": {
+                "or": [
+                  {
+                    "equals": [
+                      "@triggerBody()?['TemplateId']",
+                      null
+                    ]
+                  },
+                  {
+                    "equals": [
+                      "@triggerBody()?['TemplateId']",
+                      ""
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Check_Recipients_Exist_Direct": {
+                  "type": "Scope",
+                  "actions": {
+                    "For_each_1": {
+                      "type": "Foreach",
+                      "foreach": "@triggerBody()?['NotificationChannels']",
+                      "actions": {
+                        "Switch_1": {
+                          "type": "Switch",
+                          "expression": "@item()",
+                          "cases": {
+                            "Case_3": {
+                              "case": "Email",
+                              "actions": {
+                                "For_each_Recipients_1": {
+                                  "type": "Foreach",
+                                  "foreach": "@variables('resolvedEmails')",
+                                  "actions": {
+                                    "Send_email_direct": {
+                                      "type": "ApiConnection",
+                                      "inputs": {
+                                        "host": {
+                                          "connection": {
+                                            "name": "@parameters('$connections')['office365']['connectionId']"
+                                          }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                          "To": "@{items('For_each_Recipients_1')}",
+                                          "Subject": "@{triggerBody()?['NotificationTitle']}",
+                                          "Body": "<p class=\"editor-paragraph\">@{triggerBody()?['NotificationContent']}</p>",
+                                          "Importance": "@{triggerBody()?['Importance']}"
+                                        },
+                                        "path": "/v2/Mail"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "Case_4": {
+                              "case": "Teams",
+                              "actions": {
+                                "For_each_TeamsChannels_Direct": {
+                                  "type": "Foreach",
+                                  "foreach": "@variables('resolvedTeamsChannels')",
+                                  "actions": {
+                                    "Post_teams_message_direct": {
+                                      "type": "ApiConnection",
+                                      "inputs": {
+                                        "host": {
+                                          "connection": {
+                                            "name": "@parameters('$connections')['teams']['connectionId']"
+                                          }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                          "recipient": "@{items('For_each_TeamsChannels_Direct')}",
+                                          "messageBody": "<p class=\"editor-paragraph\">@{triggerBody()?['NotificationContent']}</p>"
+                                        },
+                                        "path": "/beta/teams/conversation/message/poster/@{encodeURIComponent('User')}/location/@{encodeURIComponent('Group chat')}"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "default": {
+                            "actions": {}
+                          }
+                        }
+                      }
+                    },
+                    "Log_Audit": {
+                      "type": "ApiConnection",
+                      "runAfter": {
+                        "For_each_1": [
+                          "Succeeded"
+                        ]
+                      },
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuretables']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "body": {
+                          "PartitionKey": "Notifications",
+                          "RowKey": "@concat(formatDateTime(utcNow(), 'yyyyMMddHHmmss'), '-', guid())",
+                          "MessageTitle": "@triggerBody()?['NotificationTitle']",
+                          "Recipients": "@string(join(variables('resolvedEmails'), ','))",
+                          "TeamsChannels": "@string(join(variables('resolvedTeamsChannels'), ','))",
+                          "SentDateTime": "@utcNow()"
+                        },
+                        "path": "/v2/storageAccounts/@{encodeURIComponent(parameters('storageAccountName'))}/tables/@{encodeURIComponent('NotificationLogs')}/entities"
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Getting_Template_Entity": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuretables']['connectionId']"
+                        }
+                      },
+                      "method": "get",
+                      "path": "/v2/storageAccounts/@{encodeURIComponent(parameters('storageAccountName'))}/tables/@{encodeURIComponent('NotificationTemplates')}/entities",
+                      "queries": {
+                        "$filter": "@{concat('PartitionKey eq ''', triggerBody()?['WorkflowName'], ''' and RowKey eq ''', triggerBody()?['TemplateId'], '''')}"
+                      }
+                    }
+                  },
+                  "Set_Template_Content": {
+                    "type": "SetVariable",
+                    "runAfter": {
+                      "Getting_Template_Entity": [
+                        "Succeeded"
+                      ]
+                    },
+                    "inputs": {
+                      "name": "processedContent",
+                      "value": "@coalesce(first(body('Getting_Template_Entity')?['value'])?['NotificationContent'], '')"
+                    }
+                  },
+                  "Set_Template_Title": {
+                    "type": "SetVariable",
+                    "runAfter": {
+                      "Set_Template_Content": [
+                        "Succeeded"
+                      ]
+                    },
+                    "inputs": {
+                      "name": "processedTitle",
+                      "value": "@coalesce(first(body('Getting_Template_Entity')?['value'])?['NotificationTitle'], '')"
+                    }
+                  },
+                  "Set_Template_AdaptiveContent": {
+                    "type": "SetVariable",
+                    "runAfter": {
+                      "Set_Template_Title": [
+                        "Succeeded"
+                      ]
+                    },
+                    "inputs": {
+                      "name": "processedAdaptiveContent",
+                      "value": "@coalesce(first(body('Getting_Template_Entity')?['value'])?['AdaptiveContent'], '')"
+                    }
+                  },
+                  "Set_Template_TeamsContent": {
+                    "type": "SetVariable",
+                    "runAfter": {
+                      "Set_Template_AdaptiveContent": [
+                        "Succeeded"
+                      ]
+                    },
+                    "inputs": {
+                      "name": "processedTeamsContent",
+                      "value": "@coalesce(first(body('Getting_Template_Entity')?['value'])?['TeamsContent'], '')"
+                    }
+                  },
+                  "Get_Template_Configuration": {
+                    "type": "ApiConnection",
+                    "runAfter": {
+                      "Set_Template_TeamsContent": [
+                        "Succeeded"
+                      ]
+                    },
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuretables']['connectionId']"
+                        }
+                      },
+                      "method": "get",
+                      "path": "/v2/storageAccounts/@{encodeURIComponent(parameters('storageAccountName'))}/tables/@{encodeURIComponent('NotificationConfiguration')}/entities",
+                      "queries": {
+                        "$filter": "@{concat('PartitionKey eq ''', triggerBody()?['WorkflowName'], ''' and RowKey eq ''', triggerBody()?['TemplateId'], '''')}"
+                      }
+                    }
+                  },
+                  "Process_Template_Variables": {
+                    "type": "Foreach",
+                    "operationOptions": "Sequential",
+                    "foreach": "@coalesce(triggerBody()?['TemplateVariables'], createArray())",
+                    "runAfter": {
+                      "Get_Template_Configuration": [
+                        "Succeeded"
+                      ]
+                    },
+                    "actions": {
+                      "Set_Temp_Content_Template": {
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "tempContent",
+                          "value": "@replace(variables('processedContent'), concat('{', items('Process_Template_Variables')?['key'], '}'), coalesce(items('Process_Template_Variables')?['value'], ''))"
+                        }
+                      },
+                      "Update_Processed_Content_Template": {
+                        "type": "SetVariable",
+                        "runAfter": {
+                          "Set_Temp_Content_Template": [
+                            "Succeeded"
+                          ]
+                        },
+                        "inputs": {
+                          "name": "processedContent",
+                          "value": "@variables('tempContent')"
+                        }
+                      },
+                      "Set_Temp_Title_Template": {
+                        "type": "SetVariable",
+                        "runAfter": {
+                          "Update_Processed_Content_Template": [
+                            "Succeeded"
+                          ]
+                        },
+                        "inputs": {
+                          "name": "tempTitle",
+                          "value": "@replace(variables('processedTitle'), concat('{', items('Process_Template_Variables')?['key'], '}'), coalesce(items('Process_Template_Variables')?['value'], ''))"
+                        }
+                      },
+                      "Update_Processed_Title_Template": {
+                        "type": "SetVariable",
+                        "runAfter": {
+                          "Set_Temp_Title_Template": [
+                            "Succeeded"
+                          ]
+                        },
+                        "inputs": {
+                          "name": "processedTitle",
+                          "value": "@variables('tempTitle')"
+                        }
+                      },
+                      "Set_Temp_AdaptiveContent_Template": {
+                        "type": "SetVariable",
+                        "runAfter": {
+                          "Update_Processed_Title_Template": [
+                            "Succeeded"
+                          ]
+                        },
+                        "inputs": {
+                          "name": "tempAdaptiveContent",
+                          "value": "@replace(variables('processedAdaptiveContent'), concat('{', items('Process_Template_Variables')?['key'], '}'), coalesce(items('Process_Template_Variables')?['value'], ''))"
+                        }
+                      },
+                      "Update_Processed_AdaptiveContent_Template": {
+                        "type": "SetVariable",
+                        "runAfter": {
+                          "Set_Temp_AdaptiveContent_Template": [
+                            "Succeeded"
+                          ]
+                        },
+                        "inputs": {
+                          "name": "processedAdaptiveContent",
+                          "value": "@variables('tempAdaptiveContent')"
+                        }
+                      },
+                      "Set_Temp_TeamsContent_Template": {
+                        "type": "SetVariable",
+                        "runAfter": {
+                          "Update_Processed_AdaptiveContent_Template": [
+                            "Succeeded"
+                          ]
+                        },
+                        "inputs": {
+                          "name": "tempTeamsContent",
+                          "value": "@replace(variables('processedTeamsContent'), concat('{', items('Process_Template_Variables')?['key'], '}'), coalesce(items('Process_Template_Variables')?['value'], ''))"
+                        }
+                      },
+                      "Update_Processed_TeamsContent_Template": {
+                        "type": "SetVariable",
+                        "runAfter": {
+                          "Set_Temp_TeamsContent_Template": [
+                            "Succeeded"
+                          ]
+                        },
+                        "inputs": {
+                          "name": "processedTeamsContent",
+                          "value": "@variables('tempTeamsContent')"
+                        }
+                      }
+                    }
+                  },
+                  "Parse_Recipients_from_AppConfig": {
+                    "type": "SetVariable",
+                    "runAfter": {
+                      "Process_Template_Variables": [
+                        "Succeeded"
+                      ]
+                    },
+                    "inputs": {
+                      "name": "finalRecipients",
+                      "value": "@variables('resolvedEmails')"
+                    }
+                  },
+                  "Parse_Channels_from_AppConfig": {
+                    "type": "SetVariable",
+                    "runAfter": {
+                      "Parse_Recipients_from_AppConfig": [
+                        "Succeeded"
+                      ]
+                    },
+                    "inputs": {
+                      "name": "finalChannels",
+                      "value": "@split(coalesce(first(body('Get_Template_Configuration')?['value'])?['NotificationChannels'], ''), ',')"
+                    }
+                  },
+                  "Parse_TeamsGroups_from_AppConfig": {
+                    "type": "SetVariable",
+                    "runAfter": {
+                      "Parse_Channels_from_AppConfig": [
+                        "Succeeded"
+                      ]
+                    },
+                    "inputs": {
+                      "name": "teamsGroups",
+                      "value": "@variables('resolvedTeamsChannels')"
+                    }
+                  },
+                  "Check_Recipients_Exist": {
+                    "type": "If",
+                    "runAfter": {
+                      "Parse_TeamsGroups_from_AppConfig": [
+                        "Succeeded"
+                      ]
+                    },
+                    "expression": {
+                      "or": [
+                        {
+                          "and": [
+                            {
+                              "greater": [
+                                "@length(variables('finalRecipients'))",
+                                0
+                              ]
+                            },
+                            {
+                              "not": {
+                                "equals": [
+                                  "@first(variables('finalRecipients'))",
+                                  ""
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "and": [
+                            {
+                              "greater": [
+                                "@length(variables('teamsGroups'))",
+                                0
+                              ]
+                            },
+                            {
+                              "not": {
+                                "equals": [
+                                  "@first(variables('teamsGroups'))",
+                                  ""
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "actions": {
+                      "Send_Template_Notifications": {
+                        "type": "Foreach",
+                        "foreach": "@variables('finalChannels')",
+                        "actions": {
+                          "Switch_Template": {
+                            "type": "Switch",
+                            "expression": "@trim(item())",
+                            "cases": {
+                              "Case_Template_Email": {
+                                "case": "Email",
+                                "actions": {
+                                  "For_each_Template_Recipients": {
+                                    "type": "Foreach",
+                                    "foreach": "@variables('finalRecipients')",
+                                    "actions": {
+                                      "Send_email_template": {
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                          "host": {
+                                            "connection": {
+                                              "name": "@parameters('$connections')['office365']['connectionId']"
+                                            }
+                                          },
+                                          "method": "post",
+                                          "body": {
+                                            "To": "@trim(items('For_each_Template_Recipients'))",
+                                            "Subject": "@variables('processedTitle')",
+                                            "Body": "<p>@{replace(variables('processedContent'), '\n', '<br>')}</p>",
+                                            "Importance": "@coalesce(first(body('Getting_Template_Entity')?['value'])?['Importance'], triggerBody()?['Importance'], 'Normal')"
+                                          },
+                                          "path": "/v2/Mail"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "Case_Template_Teams": {
+                                "case": "Teams",
+                                "actions": {
+                                  "For_each_TeamsGroup_Message": {
+                                    "type": "Foreach",
+                                    "foreach": "@variables('teamsGroups')",
+                                    "actions": {
+                                      "Post_teams_message_template": {
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                          "host": {
+                                            "connection": {
+                                              "name": "@parameters('$connections')['teams']['connectionId']"
+                                            }
+                                          },
+                                          "method": "post",
+                                          "body": {
+                                            "recipient": "@trim(item())",
+                                            "messageBody": "@if(empty(variables('processedTeamsContent')), variables('processedContent'), variables('processedTeamsContent'))"
+                                          },
+                                          "path": "/beta/teams/conversation/message/poster/@{encodeURIComponent('User')}/location/@{encodeURIComponent('Group chat')}"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "Case_Template_TeamsCard": {
+                                "case": "TeamsCard",
+                                "actions": {
+                                  "For_each_TeamsGroup_Card": {
+                                    "type": "Foreach",
+                                    "foreach": "@variables('teamsGroups')",
+                                    "actions": {
+                                      "Post_adaptive_card_to_teams_group": {
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                          "host": {
+                                            "connection": {
+                                              "name": "@parameters('$connections')['teams']['connectionId']"
+                                            }
+                                          },
+                                          "method": "post",
+                                          "body": {
+                                            "recipient": "@trim(item())",
+                                            "messageBody": "@variables('processedAdaptiveContent')"
+                                          },
+                                          "path": "/v1.0/teams/conversation/adaptivecard/poster/@{encodeURIComponent('User')}/location/@{encodeURIComponent('Group chat')}"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "default": {
+                              "actions": {}
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "else": {
+                      "actions": {
+                        "Log_No_Recipients_Error": {
+                          "type": "Compose",
+                          "inputs": {
+                            "Error": "No recipients found in AppConfiguration",
+                            "WorkflowName": "@triggerBody()?['WorkflowName']",
+                            "TemplateId": "@triggerBody()?['TemplateId']"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "Log_Audit_Template": {
+                    "type": "ApiConnection",
+                    "runAfter": {
+                      "Check_Recipients_Exist": [
+                        "Succeeded"
+                      ]
+                    },
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuretables']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "body": {
+                        "PartitionKey": "Notifications",
+                        "RowKey": "@concat('Notif-', formatDateTime(utcNow(), 'yyyyMMddHHmmss'), '-', guid())",
+                        "MessageTitle": "@variables('processedTitle')",
+                        "Recipients": "@string(join(variables('finalRecipients'), ','))",
+                        "TeamsChannels": "@string(join(variables('teamsGroups'), ','))",
+                        "SentDateTime": "@utcNow()",
+                        "TemplateUsed": "@triggerBody()?['TemplateId']"
+                      },
+                      "path": "/v2/storageAccounts/@{encodeURIComponent(parameters('storageAccountName'))}/tables/@{encodeURIComponent('NotificationLogs')}/entities"
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Resolve_Teams_Channels": [
+                  "Succeeded"
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        }
+      }
+    },
+    {
+  "type": "Microsoft.Logic/workflows",
+  "apiVersion": "2019-05-01",
+  "name": "[parameters('notificationFollowupLogicAppName')]",
+  "location": "[parameters('location')]",
+  "dependsOn": [],
+  "properties": {
+    "state": "Enabled",
+    "parameters": {
+  "$connections": {
+    "value": {
+      "azuretables": {
+        "connectionId": "[resourceId('Microsoft.Web/connections', parameters('azureTablesConnectionName'))]",
+        "connectionName": "[parameters('azureTablesConnectionName')]",
+        "connectionProperties": {},
+        "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuretables')]"
+      },
+      "azurequeues": {
+        "connectionId": "[resourceId('Microsoft.Web/connections', parameters('azureQueuesConnectionName'))]",
+        "connectionName": "[parameters('azureQueuesConnectionName')]",
+        "connectionProperties": {},
+        "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azurequeues')]"
+      }
+    }
+  },
+
+  "storageAccountName": {
+    "value": "[parameters('storageAccountName')]"
+  },
+
+  "followupQueueName": {
+    "value": "[parameters('followupQueueName')]"
+  },
+  "NotificationStatus": {
+  "value": "[parameters('NotificationStatus')]"
+},
+"notificationLogTableName": {
+  "value": "[parameters('notificationLogTableName')]"
+}
+},
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0",
+      "parameters": {
+        "$connections": {
+          "type": "Object",
+          "defaultValue": {}
+        },
+        "storageAccountName": {
+          "type": "String"
+        },
+            "followupQueueName": {
+      "type": "String"
+    },
+    "NotificationStatus": {
+  "type": "String"
+},
+"notificationLogTableName": {
+  "type": "String"
+}
+      },
+     "triggers": {
+  "When_a_message_is_received_in_a_queue_(V2)": {
+    "recurrence": {
+      "interval": 12,
+      "frequency": "Second"
+    },
+    "evaluatedRecurrence": {
+      "interval": 12,
+      "frequency": "Second"
+    },
+    "type": "ApiConnection",
+    "inputs": {
+      "host": {
+        "connection": {
+          "name": "@parameters('$connections')['azurequeues']['connectionId']"
+        }
+      },
+      "method": "get",
+      "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('followupQueueName'))}/message_trigger"
+    },
+    "runtimeConfiguration": {
+      "concurrency": {
+        "runs": 1
+      }
+    }
+  }
+},
+      "actions": {
+  "Initialize_Variables": {
+    "runAfter": {},
+    "type": "InitializeVariable",
+    "inputs": {
+      "variables": [
+        {
+          "name": "callbackParams",
+          "type": "object",
+          "value": {}
+        }
+      ]
+    }
+  },
+  "Parse_Queue_Message": {
+  "runAfter": {
+    "Initialize_Variables": [
+      "Succeeded"
+    ]
+  },
+  "type": "ParseJson",
+  "inputs": {
+    "content": "@json(first(triggerBody()?['QueueMessagesList']?['QueueMessage'])?['MessageText'])",
+    "schema": {}
+  }
+},
+"Extract_Message_Data": {
+  "runAfter": {
+    "Parse_Queue_Message": [
+      "Succeeded"
+    ]
+  },
+  "type": "Compose",
+  "inputs": "@body('Parse_Queue_Message')"
+},
+"Debug_Before_Status_Check": {
+  "runAfter": {
+    "Extract_Message_Data": [
+      "Succeeded"
+    ]
+  },
+  "type": "Compose",
+  "inputs": {
+    "workflowName": "@outputs('Extract_Message_Data')?['workflowName']",
+    "taskId": "@outputs('Extract_Message_Data')?['taskId']",
+    "workflowNameLength": "@length(coalesce(outputs('Extract_Message_Data')?['workflowName'], ''))",
+    "taskIdLength": "@length(coalesce(outputs('Extract_Message_Data')?['taskId'], ''))",
+    "fullParsedMessage": "@body('Parse_Queue_Message')",
+    "extractedData": "@outputs('Extract_Message_Data')"
+  }
+},
+"Get_Dynamic_Configuration": {
+  "actions": {
+    "Get_Escalation_Levels": {
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['azuretables']['connectionId']"
+          }
+        },
+        "method": "get",
+        "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('AppConfiguration')}/entities(PartitionKey='@{encodeURIComponent(outputs('Extract_Message_Data')?['workflowName'])}',RowKey='@{encodeURIComponent('EscalationLevels')}')"
+      }
+    },
+    "Get_Reminder_Intervals": {
+      "runAfter": {
+        "Get_Escalation_Levels": [
+          "Succeeded"
+        ]
+      },
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['azuretables']['connectionId']"
+          }
+        },
+        "method": "get",
+        "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('AppConfiguration')}/entities(PartitionKey='@{encodeURIComponent(outputs('Extract_Message_Data')?['workflowName'])}',RowKey='@{encodeURIComponent('ReminderInterval')}')"
+      }
+    },
+    "Parse_Configuration_Arrays": {
+      "runAfter": {
+        "Get_Reminder_Intervals": [
+          "Succeeded"
+        ]
+      },
+      "type": "Compose",
+      "inputs": {
+        "escalationLevels": "@split(replace(replace(coalesce(body('Get_Escalation_Levels')?['Value'], '[3,6,9]'), '[', ''), ']', ''), ',')",
+        "reminderIntervals": "@split(replace(replace(coalesce(body('Get_Reminder_Intervals')?['Value'], '[2,1,1]'), '[', ''), ']', ''), ',')"
+      }
+    }
+  },
+  "runAfter": {
+    "Debug_Before_Status_Check": [
+      "Succeeded"
+    ]
+  },
+  "type": "Scope"
+},
+"Calculate_Dynamic_Escalation_Details": {
+  "runAfter": {
+    "Get_Dynamic_Configuration": [
+      "Succeeded"
+    ]
+  },
+  "type": "Compose",
+  "inputs": {
+    "currentReminderCount": "@coalesce(outputs('Extract_Message_Data')?['reminderCount'], 0)",
+    "currentEscalationLevel": "@coalesce(outputs('Extract_Message_Data')?['escalationLevel'], 0)",
+    "escalationThresholds": "@outputs('Parse_Configuration_Arrays')?['escalationLevels']",
+    "reminderIntervals": "@outputs('Parse_Configuration_Arrays')?['reminderIntervals']",
+    "maxReminders": "@int(last(outputs('Parse_Configuration_Arrays')?['escalationLevels']))",
+    "shouldStop": "@greater(coalesce(outputs('Extract_Message_Data')?['reminderCount'], 0), int(last(outputs('Parse_Configuration_Arrays')?['escalationLevels'])))"
+  }
+},
+ "Determine_Escalation_Level": {
+        "runAfter": {
+          "Calculate_Dynamic_Escalation_Details": ["Succeeded"]
+        },
+        "type": "Compose",
+        "inputs": {
+          "newEscalationLevel": "@if(lessOrEquals(coalesce(outputs('Extract_Message_Data')?['reminderCount'], 0), int(outputs('Parse_Configuration_Arrays')?['escalationLevels'][0])), 1, if(and(greater(length(outputs('Parse_Configuration_Arrays')?['escalationLevels']), 1), lessOrEquals(coalesce(outputs('Extract_Message_Data')?['reminderCount'], 0), int(outputs('Parse_Configuration_Arrays')?['escalationLevels'][1]))), 2, if(and(greater(length(outputs('Parse_Configuration_Arrays')?['escalationLevels']), 2), lessOrEquals(coalesce(outputs('Extract_Message_Data')?['reminderCount'], 0), int(outputs('Parse_Configuration_Arrays')?['escalationLevels'][2]))), 3, add(length(outputs('Parse_Configuration_Arrays')?['escalationLevels']), 1))))"
+        }
+      },
+"Calculate_Visibility_Timeout": {
+  "runAfter": {
+    "Determine_Escalation_Level": [
+      "Succeeded"
+    ]
+  },
+  "type": "Compose",
+  "inputs": {
+    "escalationLevelIndex": "@max(0, sub(outputs('Determine_Escalation_Level')?['newEscalationLevel'], 1))",
+    "safeIndex": "@if(greater(sub(outputs('Determine_Escalation_Level')?['newEscalationLevel'], 1), sub(length(outputs('Parse_Configuration_Arrays')?['reminderIntervals']), 1)), sub(length(outputs('Parse_Configuration_Arrays')?['reminderIntervals']), 1), max(0, sub(outputs('Determine_Escalation_Level')?['newEscalationLevel'], 1)))",
+    "timeoutDays": "@int(outputs('Parse_Configuration_Arrays')?['reminderIntervals'][if(greater(sub(outputs('Determine_Escalation_Level')?['newEscalationLevel'], 1), sub(length(outputs('Parse_Configuration_Arrays')?['reminderIntervals']), 1)), sub(length(outputs('Parse_Configuration_Arrays')?['reminderIntervals']), 1), max(0, sub(outputs('Determine_Escalation_Level')?['newEscalationLevel'], 1)))])",
+    "visibilityTimeoutSeconds": "@mul(int(outputs('Parse_Configuration_Arrays')?['reminderIntervals'][if(greater(sub(outputs('Determine_Escalation_Level')?['newEscalationLevel'], 1), sub(length(outputs('Parse_Configuration_Arrays')?['reminderIntervals']), 1)), sub(length(outputs('Parse_Configuration_Arrays')?['reminderIntervals']), 1), max(0, sub(outputs('Determine_Escalation_Level')?['newEscalationLevel'], 1)))]), 86400)"
+  }
+},
+"Check_If_Should_Stop": {
+  "runAfter": {
+    "Calculate_Visibility_Timeout": [
+      "Succeeded"
+    ]
+  },
+  "type": "If",
+  "expression": {
+    "equals": [
+      "@outputs('Calculate_Dynamic_Escalation_Details')?['shouldStop']",
+      true
+    ]
+  },
+  "actions": {
+    "Log_Max_Reminders_Reached": {
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['azuretables']['connectionId']"
+          }
+        },
+        "method": "post",
+        "body": {
+          "PartitionKey": "@{outputs('Extract_Message_Data')?['workflowName']}",
+          "RowKey": "@{concat(utcNow('yyyyMMddHHmmss'), '-', guid())}",
+          "EventType": "MaxRemindersReached",
+          "TaskId": "@{outputs('Extract_Message_Data')?['taskId']}",
+          "ExecutedAt": "@{utcNow()}",
+          "FinalReminderCount": "@{outputs('Extract_Message_Data')?['reminderCount']}",
+          "FinalEscalationLevel": "@{outputs('Extract_Message_Data')?['escalationLevel']}",
+          "MaxReminders": "@{outputs('Calculate_Dynamic_Escalation_Details')?['maxReminders']}",
+          "Status": "Stopped - Maximum reminders reached"
+        },
+        "path": "/Tables/@{encodeURIComponent(parameters('auditLogTableName'))}/entities"
+      }
+    },
+    "Delete_Final_Queue_Message": {
+      "runAfter": {
+        "Log_Max_Reminders_Reached": [
+          "Succeeded"
+        ]
+      },
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['azurequeues']['connectionId']"
+          }
+        },
+        "method": "delete",
+        "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('followupQueueName'))}/messages/@{encodeURIComponent(first(triggerBody()?['QueueMessagesList']?['QueueMessage'])?['MessageId'])}",
+        "queries": {
+          "popreceipt": "@{first(triggerBody()?['QueueMessagesList']?['QueueMessage'])?['PopReceipt']}"
+        }
+      }
+    }
+  },
+  "else": {
+    "actions": {
+      "Check_Execution_Time": {
+  "actions": {
+    "Get_Current_Status": {
+      "type": "ApiConnection",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['azuretables']['connectionId']"
+          }
+        },
+        "method": "get",
+        "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('NotificationStatus'))}/entities(PartitionKey='@{encodeURIComponent(outputs('Extract_Message_Data')?['workflowName'])}',RowKey='@{encodeURIComponent(outputs('Extract_Message_Data')?['taskId'])}')"
+      }
+    },
+
+    "Check_Task_Status": {
+      "actions": {
+        "Process_Reminder": {
+          "actions": {
+            "Send_Reminder": {
+              "type": "Http",
+              "inputs": {
+                "uri": "https://prod-08.canadacentral.logic.azure.com:443/workflows/b651f069e9704427a45f29eb7fb0351c/triggers/When_a_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_a_HTTP_request_is_received%2Frun&sv=1.0&sig=4r74-HBI3baGbUYUabL6TvYrCeGslVVVEQyFYRi3UsI",
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "WorkflowName": "@outputs('Extract_Message_Data')?['workflowName']",
+                  "NotificationType": "@if(greater(outputs('Determine_Escalation_Level')?['newEscalationLevel'], outputs('Extract_Message_Data')?['escalationLevel']), 'Escalation', 'Reminder')",
+                  "NotificationTitle": "@outputs('Extract_Message_Data')?['taskTitle']",
+                  "NotificationContent": "@outputs('Extract_Message_Data')?['taskDescription']",
+                  "RecipientList": "@coalesce(outputs('Extract_Message_Data')?['RecipientList'], json('[]'))",
+                  "TeamsList": "@coalesce(outputs('Extract_Message_Data')?['TeamsList'], json('[]'))",
+                  "NotificationChannels": "@coalesce(outputs('Extract_Message_Data')?['NotificationChannels'], createArray('Email'))",
+                  "RelatedEntityId": "@outputs('Extract_Message_Data')?['taskId']",
+                  "CycleName": "@coalesce(outputs('Extract_Message_Data')?['cycleId'], 'General')",
+                  "TemplateId": "@coalesce(outputs('Extract_Message_Data')?['TemplateId'], '')",
+                  "TemplateVariables": "@coalesce(outputs('Extract_Message_Data')?['TemplateVariables'], json('[]'))"
+                }
+              }
+            },
+
+            "Delete_Current_Queue_Message": {
+              "runAfter": {
+                "Send_Reminder": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azurequeues']['connectionId']"
+                  }
+                },
+                "method": "delete",
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('followupQueueName'))}/messages/@{encodeURIComponent(first(triggerBody()?['QueueMessagesList']?['QueueMessage'])?['MessageId'])}",
+                "queries": {
+                  "popreceipt": "@{first(triggerBody()?['QueueMessagesList']?['QueueMessage'])?['PopReceipt']}"
+                }
+              }
+            },
+
+            "Calculate_Next_Reminder_Time": {
+              "runAfter": {
+                "Delete_Current_Queue_Message": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": {
+                "nextReminderTime": "@addToTime(utcNow(), outputs('Calculate_Visibility_Timeout')?['timeoutDays'], 'Day')",
+                "visibilityTimeoutSeconds": "@outputs('Calculate_Visibility_Timeout')?['visibilityTimeoutSeconds']"
+              }
+            },
+
+            "Create_Updated_Fields": {
+              "runAfter": {
+                "Calculate_Next_Reminder_Time": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": {
+                "reminderCount": "@add(coalesce(outputs('Extract_Message_Data')?['reminderCount'], 0), 1)",
+                "escalationLevel": "@outputs('Determine_Escalation_Level')?['newEscalationLevel']"
+              }
+            },
+
+            "Create_Updated_Message_JSON": {
+              "runAfter": {
+                "Create_Updated_Fields": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": "@union(outputs('Extract_Message_Data'), outputs('Create_Updated_Fields'))"
+            },
+
+            "Debug_Message_Content": {
+              "runAfter": {
+                "Create_Updated_Message_JSON": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": {
+                "originalWorkflowName": "@outputs('Extract_Message_Data')?['workflowName']",
+                "originalTaskId": "@outputs('Extract_Message_Data')?['taskId']",
+                "updatedWorkflowName": "@outputs('Create_Updated_Message_JSON')?['workflowName']",
+                "updatedTaskId": "@outputs('Create_Updated_Message_JSON')?['taskId']",
+                "fullUpdatedMessage": "@outputs('Create_Updated_Message_JSON')",
+                "visibilityTimeout": "@outputs('Calculate_Visibility_Timeout')?['visibilityTimeoutSeconds']"
+              }
+            },
+
+            "Requeue_Updated_Message_Fixed": {
+              "runAfter": {
+                "Debug_Message_Content": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azurequeues']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": "@outputs('Create_Updated_Message_JSON')",
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('followupQueueName'))}/messages",
+                "queries": {
+                  "visibilitytimeout": "@{outputs('Calculate_Visibility_Timeout')?['visibilityTimeoutSeconds']}"
+                }
+              }
+            }
+          },
+
+          "else": {
+            "actions": {
+              "Skip_First_Reminder_Delete_Message": {
+                "type": "ApiConnection",
+                "inputs": {
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['azurequeues']['connectionId']"
+                    }
+                  },
+                  "method": "delete",
+                  "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('followupQueueName'))}/messages/@{encodeURIComponent(first(triggerBody()?['QueueMessagesList']?['QueueMessage'])?['MessageId'])}",
+                  "queries": {
+                    "popreceipt": "@{first(triggerBody()?['QueueMessagesList']?['QueueMessage'])?['PopReceipt']}"
+                  }
+                }
+              },
+
+              "Calculate_First_Reminder_Time": {
+                "runAfter": {
+                  "Skip_First_Reminder_Delete_Message": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "Compose",
+                "inputs": {
+                  "nextReminderTime": "@addToTime(utcNow(), outputs('Calculate_Visibility_Timeout')?['timeoutDays'], 'Day')",
+                  "visibilityTimeoutSeconds": "@outputs('Calculate_Visibility_Timeout')?['visibilityTimeoutSeconds']"
+                }
+              },
+
+              "Create_First_Reminder_Fields": {
+                "runAfter": {
+                  "Calculate_First_Reminder_Time": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "Compose",
+                "inputs": {
+                  "reminderCount": 1,
+                  "escalationLevel": "@outputs('Determine_Escalation_Level')?['newEscalationLevel']"
+                }
+              },
+
+              "Create_First_Message_JSON": {
+                "runAfter": {
+                  "Create_First_Reminder_Fields": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "Compose",
+                "inputs": "@union(outputs('Extract_Message_Data'), outputs('Create_First_Reminder_Fields'))"
+              },
+
+              "Requeue_First_Message": {
+                "runAfter": {
+                  "Create_First_Message_JSON": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['azurequeues']['connectionId']"
+                    }
+                  },
+                  "method": "post",
+                  "body": "@outputs('Create_First_Message_JSON')",
+                  "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('followupQueueName'))}/messages",
+                  "queries": {
+                    "visibilitytimeout": "@{outputs('Calculate_Visibility_Timeout')?['visibilityTimeoutSeconds']}"
+                  }
+                }
+              },
+
+              "Log_First_Schedule": {
+                "runAfter": {
+                  "Requeue_First_Message": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['azuretables']['connectionId']"
+                    }
+                  },
+                  "method": "post",
+                  "body": {
+                    "PartitionKey": "@{outputs('Extract_Message_Data')?['workflowName']}",
+                    "RowKey": "@{concat(utcNow('yyyyMMddHHmmss'), '-', guid())}",
+                    "EventType": "FirstReminderScheduled",
+                    "TaskId": "@{outputs('Extract_Message_Data')?['taskId']}",
+                    "ExecutedAt": "@{utcNow()}",
+                    "ScheduledTime": "@{outputs('Calculate_First_Reminder_Time')?['nextReminderTime']}",
+                    "VisibilityTimeoutDays": "@{outputs('Calculate_Visibility_Timeout')?['timeoutDays']}",
+                    "Message": "First reminder scheduled without sending notification"
+                  },
+                  "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+                }
+              }
+            }
+          },
+
+          "expression": {
+            "greater": [
+              "@coalesce(outputs('Extract_Message_Data')?['reminderCount'], 0)",
+              0
+            ]
+          },
+          "type": "If"
+        },
+
+        "Log_Processing": {
+          "runAfter": {
+            "Process_Reminder": [
+              "Succeeded"
+            ]
+          },
+          "type": "ApiConnection",
+          "inputs": {
+            "host": {
+              "connection": {
+                "name": "@parameters('$connections')['azuretables']['connectionId']"
+              }
+            },
+            "method": "post",
+            "body": {
+              "PartitionKey": "@{outputs('Extract_Message_Data')?['workflowName']}",
+              "RowKey": "@{concat(utcNow('yyyyMMddHHmmss'), '-', guid())}",
+              "EventType": "FollowupProcessed",
+              "TaskId": "@{outputs('Extract_Message_Data')?['taskId']}",
+              "ExecutedAt": "@{utcNow()}",
+              "ScheduledTime": "@{outputs('Extract_Message_Data')?['scheduledTime']}",
+              "ReminderCount": "@{add(coalesce(outputs('Extract_Message_Data')?['reminderCount'], 0), 1)}",
+              "EscalationLevel": "@{outputs('Determine_Escalation_Level')?['newEscalationLevel']}",
+              "PreviousEscalationLevel": "@{outputs('Extract_Message_Data')?['escalationLevel']}",
+              "MaxReminders": "@{outputs('Calculate_Dynamic_Escalation_Details')?['maxReminders']}",
+              "NotificationType": "@{if(greater(outputs('Determine_Escalation_Level')?['newEscalationLevel'], outputs('Extract_Message_Data')?['escalationLevel']), 'Escalation', 'Reminder')}",
+              "VisibilityTimeoutDays": "@{outputs('Calculate_Visibility_Timeout')?['timeoutDays']}",
+              "ConfiguredEscalationLevels": "@{join(outputs('Parse_Configuration_Arrays')?['escalationLevels'], ',')}",
+              "ConfiguredReminderIntervals": "@{join(outputs('Parse_Configuration_Arrays')?['reminderIntervals'], ',')}"
+            },
+            "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+          }
+        }
+      },
+
+      "runAfter": {
+        "Get_Current_Status": [
+          "Succeeded"
+        ]
+      },
+
+      "else": {
+        "actions": {
+          "Delete_Queue_Message_For_Completed_Task": {
+            "type": "ApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "name": "@parameters('$connections')['azurequeues']['connectionId']"
+                }
+              },
+              "method": "delete",
+              "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('followupQueueName'))}/messages/@{encodeURIComponent(first(triggerBody()?['QueueMessagesList']?['QueueMessage'])?['MessageId'])}",
+              "queries": {
+                "popreceipt": "@{first(triggerBody()?['QueueMessagesList']?['QueueMessage'])?['PopReceipt']}"
+              }
+            }
+          },
+
+          "Log_Callback_Completed": {
+            "runAfter": {
+              "Delete_Queue_Message_For_Completed_Task": [
+                "Succeeded"
+              ]
+            },
+            "type": "ApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "name": "@parameters('$connections')['azuretables']['connectionId']"
+                }
+              },
+              "method": "post",
+              "body": {
+                "PartitionKey": "@{outputs('Extract_Message_Data')?['workflowName']}",
+                "RowKey": "@{concat(utcNow('yyyyMMddHHmmss'), '-', guid())}",
+                "EventType": "CompletionCallbackExecuted",
+                "TaskId": "@{outputs('Extract_Message_Data')?['taskId']}",
+                "ExecutedAt": "@{utcNow()}",
+                "TaskStatus": "@{body('Get_Current_Status')?['Status']}",
+                "CallbackUri": "@{if(and(not(equals(outputs('Extract_Message_Data')?['callbacks'], null)), greater(length(outputs('Extract_Message_Data')?['callbacks']), 0)), first(outputs('Extract_Message_Data')?['callbacks'])?['callbackUri'], 'No callback configured')}",
+                "FinalReminderCount": "@{outputs('Extract_Message_Data')?['reminderCount']}"
+              },
+              "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+            }
+          }
+        }
+      },
+
+      "expression": {
+        "or": [
+          {
+            "equals": [
+              "@body('Get_Current_Status')?['Status']",
+              "Pending"
+            ]
+          },
+          {
+            "equals": [
+              "@body('Get_Current_Status')?['Status']",
+              "InProgress"
+            ]
+          }
+        ]
+      },
+
+      "type": "If"
+    }
+  },
+
+  "else": {
+    "actions": {
+      "Delete_Current_Message_Before_Requeue": {
+  "type": "ApiConnection",
+  "inputs": {
+    "host": {
+      "connection": {
+        "name": "@parameters('$connections')['azurequeues']['connectionId']"
+      }
+    },
+    "method": "delete",
+    "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('followupQueueName'))}/messages/@{encodeURIComponent(first(triggerBody()?['QueueMessagesList']?['QueueMessage'])?['MessageId'])}",
+    "queries": {
+      "popreceipt": "@{first(triggerBody()?['QueueMessagesList']?['QueueMessage'])?['PopReceipt']}"
+    }
+  }
+},
+
+      "Calculate_Next_Execution_Time": {
+        "runAfter": {
+          "Delete_Current_Message_Before_Requeue": [
+            "Succeeded"
+          ]
+        },
+        "type": "Compose",
+        "inputs": {
+          "timeUntilExecution": "@div(sub(ticks(outputs('Extract_Message_Data')?['executeAfter']), ticks(utcNow())), 10000000)",
+          "visibilityTimeoutSeconds": "@max(60, min(div(sub(ticks(outputs('Extract_Message_Data')?['executeAfter']), ticks(utcNow())), 10000000), 604800))"
+        }
+      },
+
+      "Requeue_Message": {
+        "runAfter": {
+          "Calculate_Next_Execution_Time": [
+            "Succeeded"
+          ]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azurequeues']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": "@outputs('Extract_Message_Data')",
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('followupQueueName'))}/messages",
+          "queries": {
+            "visibilitytimeout": "@{max(60, min(int(outputs('Calculate_Next_Execution_Time')?['visibilityTimeoutSeconds']), 604800))}"
+          }
+        }
+      },
+
+      "Log_Requeue": {
+        "runAfter": {
+          "Requeue_Message": [
+            "Succeeded"
+          ]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuretables']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": {
+            "PartitionKey": "@{outputs('Extract_Message_Data')?['workflowName']}",
+            "RowKey": "@{concat(utcNow('yyyyMMddHHmmss'), '-', guid())}",
+            "EventType": "FollowupRequeued",
+            "TaskId": "@{outputs('Extract_Message_Data')?['taskId']}",
+            "ExecutedAt": "@{utcNow()}",
+            "NewExecutionTime": "@{outputs('Extract_Message_Data')?['executeAfter']}",
+            "VisibilityTimeoutSeconds": "@{max(60, min(int(outputs('Calculate_Next_Execution_Time')?['visibilityTimeoutSeconds']), 604800))}"
+          },
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+        }
+      }
+    }
+  },
+
+  "expression": {
+    "or": [
+      {
+        "and": [
+          {
+            "not": {
+              "or": [
+                {
+                  "equals": [
+                    "@outputs('Extract_Message_Data')?['executeAfter']",
+                    null
+                  ]
+                },
+                {
+                  "equals": [
+                    "@outputs('Extract_Message_Data')?['executeAfter']",
+                    ""
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "lessOrEquals": [
+              "@ticks(body('Parse_Queue_Message')?['executeAfter'])",
+              "@ticks(utcNow())"
+            ]
+          }
+        ]
+      },
+      {
+        "equals": [
+          "@body('Parse_Queue_Message')?['executeAfter']",
+          null
+        ]
+      },
+      {
+        "equals": [
+          "@body('Parse_Queue_Message')?['executeAfter']",
+          ""
+        ]
+      }
+    ]
+  },
+
+  "type": "If"
+}
+    }
+  }
+}
+},
+
+      "outputs": {}
+    }
+  }
+},
+{
+  "type": "Microsoft.Logic/workflows",
+  "apiVersion": "2019-05-01",
+  "name": "[parameters('completionLogicAppName')]",
+  "location": "[parameters('location')]",
+  "dependsOn": [],
+  "properties": {
+    "state": "Enabled",
+    "parameters": {
+      "$connections": {
+        "value": {
+          "azuretables": {
+            "connectionId": "[resourceId('Microsoft.Web/connections', parameters('azureTablesConnectionName'))]",
+            "connectionName": "[parameters('azureTablesConnectionName')]",
+            "connectionProperties": {},
+            "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuretables')]"
+          }
+        }
+      },
+       "storageAccountName": {
+    "value": "[parameters('storageAccountName')]"
+  },
+  "callbackSecretKey": {
+    "value": "[parameters('callbackSecretKey')]"
+  },
+  "notificationLogTableName": {
+  "value": "[parameters('notificationLogTableName')]"
+},
+"NotificationStatus": {
+    "value": "[parameters('NotificationStatus')]"
+  }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0",
+      "parameters": {
+        "$connections": {
+          "type": "Object",
+          "defaultValue": {}
+        },
+        "storageAccountName": {
+          "type": "String"
+        },
+        "callbackSecretKey": {
+    "type": "SecureString"
+  },
+  "notificationLogTableName": {
+  "type": "String"
+},
+ "NotificationStatus": {
+    "type": "String"
+  }
+
+      },
+      "triggers": {
+        "When_a_HTTP_request_is_received": {
+          "type": "Request",
+          "kind": "Http",
+          "inputs": {
+            "method": "GET",
+            "relativePath": "/complete/{taskId}/{workflowName}/{token}"
+          }
+        }
+      },
+      "actions": {
+        "Initialize_Request_ID": {
+  "runAfter": {},
+  "type": "InitializeVariable",
+  "inputs": {
+    "variables": [
+      {
+        "name": "requestId",
+        "type": "string",
+        "value": "@{guid()}"
+      }
+    ]
+  }
+},
+"Initialize_Expected_Token": {
+  "runAfter": {
+    "Initialize_Request_ID": [
+      "Succeeded"
+    ]
+  },
+  "type": "InitializeVariable",
+  "inputs": {
+    "variables": [
+      {
+        "name": "expectedToken",
+        "type": "string",
+        "value": "@{base64(concat(triggerOutputs()['relativePathParameters']['taskId'], ':', triggerOutputs()['relativePathParameters']['workflowName'], ':', parameters('callbackSecretKey')))}"
+      }
+    ]
+  }
+},
+"Debug_Token_Comparison": {
+  "runAfter": {
+    "Initialize_Expected_Token": [
+      "Succeeded"
+    ]
+  },
+  "type": "InitializeVariable",
+  "inputs": {
+    "variables": [
+      {
+        "name": "debugInfo",
+        "type": "string",
+        "value": "@{concat('Expected: ', variables('expectedToken'), ' | Received: ', triggerOutputs()['relativePathParameters']['token'], ' | TaskId: ', triggerOutputs()['relativePathParameters']['taskId'], ' | WorkflowName: ', triggerOutputs()['relativePathParameters']['workflowName'])}"
+      }
+    ]
+  }
+},
+
+  "Validate_Token": {
+    "actions": {
+      "Get_Current_Status": {
+        "runAfter": {},
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuretables']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('NotificationStatus'))}/entities(PartitionKey='@{encodeURIComponent(triggerOutputs()['relativePathParameters']['workflowName'])}',RowKey='@{encodeURIComponent(triggerOutputs()['relativePathParameters']['taskId'])}')"
+        }
+      },
+"Check_if_Entity_Exists": {
+  "actions": {
+    "Check_Already_Completed": {
+      "actions": {
+        "Return_Already_Completed_Response": {
+          "type": "Response",
+          "kind": "Http",
+          "inputs": {
+            "statusCode": 200,
+            "headers": {
+              "Content-Type": "text/html"
+            },
+            "body": "<!DOCTYPE html><html><head><title>Task Already Completed</title><style>body{font-family:Arial,sans-serif;text-align:center;margin-top:50px;background-color:#f5f5f5;}div{background:white;padding:30px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);display:inline-block;}</style></head><body><div><h2 style='color:#28a745;'>Task Already Completed</h2><p>This task has already been marked as completed.</p><p><strong>Task ID:</strong> @{triggerOutputs()['relativePathParameters']['taskId']}</p><p><strong>Workflow:</strong> @{triggerOutputs()['relativePathParameters']['workflowName']}</p></div></body></html>"
+          }
+        }
+      },
+      "else": {
+        "actions": {
+          "Check_Special_PartitionKey_Conditions": {
+            "actions": {
+              "Update_Secondary_Approval_Task": {
+                "type": "ApiConnection",
+                "inputs": {
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['azuretables']['connectionId']"
+                    }
+                  },
+                  "method": "patch",
+                  "body": {
+                    "Status": "Completed",
+                    "LastUpdatedTime": "@{utcNow()}",
+                    "LastUpdatedBy": "EmailLinkClick",
+                    "Comments": "Completed via email link click - Cross approval task update",
+                    "CompletedViaEmail": true
+                  },
+                  "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('NotificationStatus'))}/entities(PartitionKey='@{encodeURIComponent(if(equals(triggerOutputs()['relativePathParameters']['workflowName'], 'VulnScan-CHGApproval'), 'VulnScan-CHGApproval-Secondary', 'VulnScan-CHGApproval'))}',RowKey='@{encodeURIComponent(body('Get_Current_Status')['ApprovalTaskId'])}')"
+                }
+              }
+            },
+            "runAfter": {},
+            "expression": {
+              "and": [
+                {
+                  "or": [
+                    {
+                      "equals": [
+                        "@triggerOutputs()['relativePathParameters']['workflowName']",
+                        "VulnScan-CHGApproval"
+                      ]
+                    },
+                    {
+                      "equals": [
+                        "@triggerOutputs()['relativePathParameters']['workflowName']",
+                        "VulnScan-CHGApproval-Secondary"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "not": {
+                    "equals": [
+                      "@body('Get_Current_Status')['ApprovalTaskId']",
+                      "@null"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "equals": [
+                      "@body('Get_Current_Status')['ApprovalTaskId']",
+                      ""
+                    ]
+                  }
+                }
+              ]
+            },
+            "type": "If"
+          },
+          "Update_Status_To_Completed": {
+            "runAfter": {
+              "Check_Special_PartitionKey_Conditions": [
+                "Succeeded",
+                "Skipped",
+                "Failed"
+              ]
+            },
+            "type": "ApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "name": "@parameters('$connections')['azuretables']['connectionId']"
+                }
+              },
+              "method": "patch",
+              "body": {
+                "Status": "Completed",
+                "LastUpdatedTime": "@{utcNow()}",
+                "LastUpdatedBy": "EmailLinkClick",
+                "Comments": "Completed via email link click",
+                "CompletedViaEmail": true
+              },
+              "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('NotificationStatus'))}/entities(PartitionKey='@{encodeURIComponent(triggerOutputs()['relativePathParameters']['workflowName'])}',RowKey='@{encodeURIComponent(triggerOutputs()['relativePathParameters']['taskId'])}')"
+            }
+          },
+          "Execute_Callback_If_URL_Exists": {
+            "actions": {
+              "HTTP_Callback": {
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@body('Get_Current_Status')['CallbackUri']",
+                  "headers": {
+                    "Content-Type": "application/json"
+                  },
+                  "body": "@if(or(empty(body('Get_Current_Status')['CallbackParameters']), equals(body('Get_Current_Status')['CallbackParameters'], null), equals(body('Get_Current_Status')['CallbackParameters'], '')), json('{}'), json(body('Get_Current_Status')['CallbackParameters']))"
+                }
+              }
+            },
+            "runAfter": {
+              "Update_Status_To_Completed": [
+                "Succeeded"
+              ]
+            },
+            "expression": {
+              "and": [
+                {
+                  "not": {
+                    "equals": [
+                      "@body('Get_Current_Status')['CallbackUri']",
+                      ""
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "equals": [
+                      "@body('Get_Current_Status')['CallbackUri']",
+                      "@null"
+                    ]
+                  }
+                }
+              ]
+            },
+            "type": "If"
+          },
+          "Create_Completion_Audit_Entry": {
+            "runAfter": {
+              "Execute_Callback_If_URL_Exists": [
+                "Succeeded",
+                "Skipped",
+                "Failed"
+              ]
+            },
+            "type": "ApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "name": "@parameters('$connections')['azuretables']['connectionId']"
+                }
+              },
+              "method": "post",
+              "body": {
+                "PartitionKey": "@{triggerOutputs()['relativePathParameters']['workflowName']}",
+                "RowKey": "@{formatDateTime(utcNow(), 'yyyyMMddHHmmss')}_@{guid()}",
+                "TaskId": "@{triggerOutputs()['relativePathParameters']['taskId']}",
+                "EntityType": "EmailLinkCompletion",
+                "PreviousStatus": "@{body('Get_Current_Status')['Status']}",
+                "NewStatus": "Completed",
+                "UpdatedBy": "EmailLinkClick",
+                "UpdateTime": "@{utcNow()}",
+                "Comments": "Task completed via email link click",
+                "RequestId": "@variables('requestId')",
+                "ClientIP": "@{coalesce(triggerOutputs()['headers']['x-forwarded-for'], 'Unknown')}",
+                "CallbackExecuted": "@{if(empty(body('Get_Current_Status')['CallbackUri']), 'Not Required', 'Attempted')}"
+              },
+              "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+            }
+          },
+          "Return_Success_Response": {
+            "runAfter": {
+              "Create_Completion_Audit_Entry": [
+                "Succeeded",
+                "Skipped"
+              ]
+            },
+            "type": "Response",
+            "kind": "Http",
+            "inputs": {
+              "statusCode": 200,
+              "headers": {
+                "Content-Type": "text/html"
+              },
+              "body": "<!DOCTYPE html><html><head><title>Task Completed</title><style>body{font-family:Arial,sans-serif;text-align:center;margin-top:50px;background-color:#f5f5f5;}div{background:white;padding:30px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);display:inline-block;}</style></head><body><div><h2 style='color:#28a745;'>Task Completed Successfully!</h2><p>Thank you for confirming the completion of this task.</p><p><strong>Task ID:</strong> @{triggerOutputs()['relativePathParameters']['taskId']}</p><p><strong>Workflow:</strong> @{triggerOutputs()['relativePathParameters']['workflowName']}</p><p><strong>Completed at:</strong> @{formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss')} UTC</p></div></body></html>"
+            }
+          }
+        }
+      },
+      "expression": {
+        "equals": [
+          "@body('Get_Current_Status')['Status']",
+          "Completed"
+        ]
+      },
+      "type": "If"
+    }
+  },
+  "runAfter": {
+    "Get_Current_Status": [
+      "Succeeded",
+      "Failed"
+    ]
+  },
+  "else": {
+    "actions": {
+      "Return_Task_Not_Found": {
+        "type": "Response",
+        "kind": "Http",
+        "inputs": {
+          "statusCode": 404,
+          "headers": {
+            "Content-Type": "text/html"
+          },
+          "body": "<!DOCTYPE html><html><head><title>Task Not Found</title><style>body{font-family:Arial,sans-serif;text-align:center;margin-top:50px;background-color:#f5f5f5;}div{background:white;padding:30px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);display:inline-block;}</style></head><body><div><h2 style='color:#dc3545;'>Task Not Found</h2><p>The requested task could not be found in the system.</p><p><strong>Task ID:</strong> @{triggerOutputs()['relativePathParameters']['taskId']}</p></div></body></html>"
+        }
+      }
+    }
+  },
+  "expression": {
+    "not": {
+      "equals": [
+        "@outputs('Get_Current_Status')['statusCode']",
+        404
+      ]
+    }
+  },
+  "type": "If"
+}
+    },
+    "runAfter": {
+      "Debug_Token_Comparison": [
+        "Succeeded"
+      ]
+    },
+    "else": {
+      "actions": {
+        "Log_Invalid_Token_Access": {
+          "type": "ApiConnection",
+          "inputs": {
+            "host": {
+              "connection": {
+                "name": "@parameters('$connections')['azuretables']['connectionId']"
+              }
+            },
+            "method": "post",
+            "body": {
+              "PartitionKey": "SecurityEvent",
+              "RowKey": "@{guid()}",
+              "EventType": "InvalidEmailLinkAccess",
+              "EventTime": "@{utcNow()}",
+              "RequestId": "@variables('requestId')",
+              "TaskId": "@{coalesce(triggerOutputs()['relativePathParameters']['taskId'], 'Unknown')}",
+              "WorkflowName": "@{coalesce(triggerOutputs()['relativePathParameters']['workflowName'], 'Unknown')}",
+              "ProvidedToken": "@{coalesce(triggerOutputs()['relativePathParameters']['token'], 'Missing')}",
+              "ExpectedToken": "@{variables('expectedToken')}",
+              "DebugInfo": "@{variables('debugInfo')}",
+              "ClientIP": "@{coalesce(triggerOutputs()['headers']['x-forwarded-for'], 'Unknown')}"
+            },
+            "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+          }
+        },
+        "Return_Unauthorized_Response": {
+          "runAfter": {
+            "Log_Invalid_Token_Access": [
+              "Succeeded"
+            ]
+          },
+          "type": "Response",
+          "kind": "Http",
+          "inputs": {
+            "statusCode": 401,
+            "headers": {
+              "Content-Type": "text/html"
+            },
+            "body": "<!DOCTYPE html><html><head><title>Unauthorized Access</title><style>body{font-family:Arial,sans-serif;text-align:center;margin-top:50px;background-color:#f5f5f5;}div{background:white;padding:30px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);display:inline-block;}</style></head><body><div><h2 style='color:#dc3549;'>Unauthorized Access</h2><p>This link is invalid or has expired.</p><p>Please contact your administrator if you believe this is an error.</p><p style='font-size:12px;color:#666;margin-top:20px;'>Debug: @{variables('debugInfo')}</p></div></body></html>"
+          }
+        }
+      }
+    },
+    "expression": {
+      "equals": [
+        "@variables('expectedToken')",
+        "@triggerOutputs()['relativePathParameters']['token']"
+      ]
+    },
+    "type": "If"
+  }
+
+      },
+      "outputs": {}
+    }
+  }
+}
+  ]
+}

@@ -1,0 +1,1846 @@
+/* ============================================================
+   APPLICATION CONFIGURATION
+   ============================================================ */
+
+.application-configuration {
+  width: 100%;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #1f2937;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+
+.application-configuration-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.application-configuration-header h2 {
+  margin: 0 0 8px 0;
+  font-size: 28px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.application-configuration-header p {
+  margin: 4px 0;
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   PAGE INDICATOR
+   ============================================================ */
+
+.configuration-page-indicator {
+  border: 1px solid #3b82f6;
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: #2563eb;
+  font-size: 14px;
+  font-weight: 600;
+  background: #ffffff;
+}
+
+/* ============================================================
+   DEPLOYMENT INPUTS
+   ============================================================ */
+
+.configuration-deployment-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.configuration-deployment-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.configuration-deployment-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.configuration-deployment-field input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 13px;
+  outline: none;
+}
+
+.configuration-deployment-field input:hover {
+  border-color: #9ca3af;
+}
+
+.configuration-deployment-field input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.configuration-deployment-field input::placeholder {
+  color: #9ca3af;
+}
+
+/* ============================================================
+   COMMON TABLE BASE
+   ============================================================ */
+
+.application-configuration-table,
+.notification-configuration-table,
+.channel-configuration-table,
+.notification-value-table {
+  width: 100%;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+/* ============================================================
+   FIRST TABLE
+   APPLICATION CONFIGURATION TABLE
+   ============================================================ */
+
+.application-configuration-table {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* ============================================================
+   FIRST TABLE HEADER
+   ============================================================ */
+
+.configuration-table-header {
+  display: grid;
+  grid-template-columns:
+    55px
+    minmax(220px, 1.5fr)
+    minmax(220px, 1.2fr)
+    minmax(220px, 1.2fr)
+    40px
+    55px;
+
+  align-items: center;
+  min-height: 54px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+/* ============================================================
+   FIRST TABLE ROW
+   ============================================================ */
+
+.configuration-table-row {
+  display: grid;
+  grid-template-columns:
+    55px
+    minmax(220px, 1.5fr)
+    minmax(220px, 1.2fr)
+    minmax(220px, 1.2fr)
+    40px
+    55px;
+
+  align-items: center;
+  min-height: 62px;
+  border-bottom: 1px solid #edf0f3;
+  background: #ffffff;
+  transition: background 0.15s ease;
+}
+
+.configuration-table-row:hover {
+  background: #f9fafb;
+}
+
+.configuration-table-row:last-child {
+  border-bottom: none;
+}
+
+/* ============================================================
+   FIRST TABLE COLUMNS
+   ============================================================ */
+
+.configuration-col-number,
+.configuration-col-description,
+.configuration-col-sample,
+.configuration-col-value,
+.configuration-col-required,
+.configuration-col-info {
+  padding: 10px 12px;
+  box-sizing: border-box;
+}
+
+.configuration-col-number {
+  text-align: center;
+  font-size: 13px;
+  color: #374151;
+}
+
+.configuration-col-description {
+  font-size: 13px;
+  line-height: 1.4;
+  color: #374151;
+}
+
+.configuration-col-sample {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #2563eb;
+  white-space: pre-line;
+}
+
+.sample-value {
+  color: #2563eb;
+  white-space: pre-line;
+  word-break: break-word;
+}
+
+.configuration-col-required {
+  text-align: center;
+}
+
+.configuration-col-info {
+  text-align: center;
+}
+
+/* ============================================================
+   FIRST TABLE INPUT
+   ============================================================ */
+
+.configuration-col-value input {
+  width: 100%;
+  height: 38px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  outline: none;
+  background: #ffffff;
+  color: #111827;
+  font-size: 13px;
+
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.configuration-col-value input::placeholder {
+  color: #9ca3af;
+}
+
+.configuration-col-value input:hover {
+  border-color: #9ca3af;
+}
+
+.configuration-col-value input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+/* ============================================================
+   REQUIRED STAR
+   ============================================================ */
+
+.required-star {
+  color: #ef4444;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ============================================================
+   INFO BUTTON
+   ============================================================ */
+
+.configuration-info-button {
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px;
+  line-height: 1;
+}
+
+.configuration-info-button:hover {
+  color: #2563eb;
+}
+
+/* ============================================================
+   SUB FIELDS
+   ============================================================ */
+
+.configuration-sub-fields {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.configuration-sub-field {
+  display: grid;
+  grid-template-columns: 135px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.configuration-sub-field span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #59616d;
+}
+
+/* ============================================================
+   TYPE
+   ============================================================ */
+
+.configuration-type {
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   FIRST TABLE FOOTER
+   ============================================================ */
+
+.application-configuration-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 24px;
+  min-height: 58px;
+  padding: 0 14px;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  background: #ffffff;
+}
+
+/* ============================================================
+   ROWS PER PAGE
+   ============================================================ */
+
+.rows-per-page {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.rows-per-page select {
+  height: 34px;
+  min-width: 60px;
+  padding: 0 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #374151;
+  outline: none;
+}
+
+/* ============================================================
+   CONFIGURATION COUNT
+   ============================================================ */
+
+.configuration-count {
+  font-size: 13px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   FIRST TABLE PAGINATION
+   ============================================================ */
+
+.configuration-pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pagination-button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #374151;
+  cursor: pointer;
+  font-size: 14px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.pagination-button:hover:not(:disabled) {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.pagination-button.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.pagination-button:disabled {
+  cursor: not-allowed;
+  color: #cbd5e1;
+  background: #f8fafc;
+}
+
+/* ============================================================
+   REQUIRED INFORMATION
+   ============================================================ */
+
+.configuration-required-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 6px;
+  background: #f8fbff;
+  color: #4b5563;
+  font-size: 13px;
+}
+
+.configuration-required-info strong {
+  color: #ef4444;
+}
+
+.configuration-info-circle {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #2563eb;
+  border-radius: 50%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   SECOND SECTION
+   NOTIFICATION CONFIGURATION
+   ============================================================ */
+
+.notification-configuration-section {
+  width: 100%;
+  margin-top: 32px;
+}
+
+.notification-configuration-header {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.notification-configuration-header h2 {
+  margin: 0 0 6px 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.notification-configuration-header p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #4b5563;
+}
+
+/* ============================================================
+   SECOND TABLE CONTAINER
+   ============================================================ */
+
+.notification-configuration-table {
+  overflow-x: auto;
+  border: 1px solid #d9dee7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+/* ============================================================
+   SECOND TABLE HEADER + ROW
+   ============================================================ */
+
+.notification-table-header,
+.notification-table-row {
+  display: grid;
+
+  grid-template-columns:
+    50px
+    150px
+    180px
+    minmax(280px, 2fr)
+    minmax(150px, 1fr)
+    minmax(220px, 1.4fr)
+    45px
+    60px;
+
+  min-width: 1185px;
+}
+
+/* ============================================================
+   SECOND TABLE HEADER
+   ============================================================ */
+
+.notification-table-header {
+  min-height: 64px;
+  align-items: center;
+  background: #f8fafc;
+  border-bottom: 1px solid #d9dee7;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+/* ============================================================
+   SECOND TABLE ROW
+   ============================================================ */
+
+.notification-table-row {
+  min-height: 110px;
+  align-items: center;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 14px;
+  background: #ffffff;
+  transition: background 0.15s ease;
+}
+
+.notification-table-row:hover {
+  background: #f9fafb;
+}
+
+.notification-table-row:last-child {
+  border-bottom: none;
+}
+
+/* ============================================================
+   SECOND TABLE CELLS
+   ============================================================ */
+
+.notification-table-header > div,
+.notification-table-row > div {
+  min-width: 0;
+  padding: 18px 14px;
+  box-sizing: border-box;
+}
+
+/* ============================================================
+   SECOND TABLE NUMBER
+   ============================================================ */
+
+.notification-col-number {
+  text-align: center;
+}
+
+/* ============================================================
+   SECOND TABLE PARTITION KEY
+   ============================================================ */
+
+.notification-col-partition-key {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   SECOND TABLE ROW KEY
+   ============================================================ */
+
+.notification-col-row-key {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ============================================================
+   SECOND TABLE DESCRIPTION
+   ============================================================ */
+
+.notification-col-description {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ============================================================
+   SECOND TABLE SAMPLE
+   ============================================================ */
+
+.notification-col-sample {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.notification-sample-value {
+  display: block;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ============================================================
+   SECOND TABLE VALUE
+   ============================================================ */
+
+.notification-col-value {
+  display: flex;
+  align-items: center;
+}
+
+.notification-col-value input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 14px;
+  outline: none;
+}
+
+.notification-col-value input:focus {
+  border-color: #2563eb;
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.notification-col-value input::placeholder {
+  color: #94a3b8;
+}
+
+/* ============================================================
+   SECOND TABLE REQUIRED
+   ============================================================ */
+
+.notification-col-required {
+  text-align: center;
+}
+
+.notification-required-star {
+  color: #dc2626;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ============================================================
+   SECOND TABLE INFO
+   ============================================================ */
+
+.notification-col-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-info-button {
+  width: 32px;
+  height: 32px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+
+  background: #ffffff;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.notification-info-button:hover {
+  background: #f1f5f9;
+}
+
+/* ============================================================
+   SECOND TABLE FOOTER
+   ============================================================ */
+
+.notification-configuration-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  width: 100%;
+  padding: 14px 4px;
+  box-sizing: border-box;
+}
+
+.notification-configuration-count {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* ============================================================
+   SECOND TABLE PAGINATION
+   ============================================================ */
+
+.notification-configuration-pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.notification-pagination-button {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+
+  background: #ffffff;
+  color: #374151;
+
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.notification-pagination-button:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.notification-pagination-button.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.notification-pagination-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   THIRD SECTION
+   NOTIFICATION CHANNEL CONFIGURATION
+   ============================================================ */
+
+.application-configuration-third-section {
+  width: 100%;
+  margin-top: 32px;
+}
+
+.application-configuration-third-section
+.application-configuration-toolbar {
+  margin-bottom: 14px;
+}
+
+.application-configuration-third-section
+.application-configuration-toolbar h2 {
+  margin: 0;
+}
+
+.application-configuration-third-section
+.application-configuration-toolbar p {
+  margin: 6px 0 0;
+  color: #334155;
+  font-size: 14px;
+}
+
+/* ============================================================
+   THIRD TABLE CONTAINER
+   ============================================================ */
+
+.channel-configuration-table {
+  width: 100%;
+  border: 1px solid #dbe1e8;
+  border-radius: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: #ffffff;
+}
+
+/* ============================================================
+   THIRD TABLE HEADER + ROW
+   ============================================================ */
+
+.channel-table-header,
+.channel-table-row {
+  min-width: 1250px;
+
+  display: grid;
+
+  grid-template-columns:
+    45px
+    180px
+    110px
+    minmax(180px, 1fr)
+    70px
+    minmax(190px, 1fr)
+    70px
+    minmax(170px, 1fr)
+    70px;
+}
+
+/* ============================================================
+   THIRD TABLE HEADER
+   ============================================================ */
+
+.channel-table-header {
+  align-items: stretch;
+  background: #f8fafc;
+  border-bottom: 1px solid #dbe1e8;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* ============================================================
+   THIRD TABLE ROW
+   ============================================================ */
+
+.channel-table-row {
+  align-items: center;
+  min-height: 68px;
+
+  border-bottom: 1px solid #e5e7eb;
+
+  background: #ffffff;
+
+  transition: background-color 0.15s ease;
+}
+
+.channel-table-row:last-child {
+  border-bottom: none;
+}
+
+.channel-table-row:hover {
+  background: #f8fafc;
+}
+
+/* ============================================================
+   THIRD TABLE CELLS
+   ============================================================ */
+
+.channel-table-header > div,
+.channel-table-row > div {
+  min-width: 0;
+  padding: 14px 10px;
+
+  display: flex;
+  align-items: center;
+
+  box-sizing: border-box;
+}
+
+.channel-table-header > div {
+  min-height: 52px;
+}
+
+.channel-table-row > div {
+  min-height: 68px;
+}
+
+/* ============================================================
+   THIRD TABLE NUMBER
+   ============================================================ */
+
+.channel-col-number {
+  justify-content: center;
+  text-align: center;
+}
+
+/* ============================================================
+   THIRD TABLE PARTITION
+   ============================================================ */
+
+.channel-col-partition {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* ============================================================
+   THIRD TABLE ROW
+   ============================================================ */
+
+.channel-col-row {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* ============================================================
+   THIRD TABLE CHANNELS
+   ============================================================ */
+
+.channel-col-channels {
+  min-width: 0;
+}
+
+/* ============================================================
+   THIRD TABLE EMAIL
+   ============================================================ */
+
+.channel-col-email {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ============================================================
+   THIRD TABLE TEAMS
+   ============================================================ */
+
+.channel-col-teams {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.channel-col-teams input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+
+  box-sizing: border-box;
+  padding: 8px 10px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+
+  background: #ffffff;
+  color: #0f172a;
+
+  font-size: 13px;
+  outline: none;
+
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.channel-col-teams input::placeholder {
+  color: #94a3b8;
+}
+
+.channel-col-teams input:hover {
+  border-color: #94a3b8;
+}
+
+.channel-col-teams input:focus {
+  border-color: #2563eb;
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+/* ============================================================
+   THIRD TABLE TYPE
+   ============================================================ */
+
+.channel-col-type {
+  justify-content: center;
+  text-align: center;
+}
+
+.channel-type-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 48px;
+  height: 28px;
+  padding: 0 8px;
+
+  border: 1px solid #dbe1e8;
+  border-radius: 5px;
+
+  background: #f8fafc;
+  color: #475569;
+
+  font-size: 12px;
+}
+
+/* ============================================================
+   THIRD TABLE INPUTS
+   ============================================================ */
+
+.channel-table-row input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+
+  box-sizing: border-box;
+  padding: 8px 10px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+
+  background: #ffffff;
+  color: #0f172a;
+
+  font-size: 13px;
+  outline: none;
+
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.channel-table-row input::placeholder {
+  color: #94a3b8;
+}
+
+.channel-table-row input:hover {
+  border-color: #94a3b8;
+}
+
+.channel-table-row input:focus {
+  border-color: #2563eb;
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+/* ============================================================
+   FOURTH SECTION
+   NOTIFICATION VALUE CONFIGURATION
+   ============================================================ */
+
+.notification-value-table {
+  overflow-x: auto;
+  border: 1px solid #dbe1e8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+/* ============================================================
+   FOURTH TABLE HEADER
+   ============================================================ */
+
+.notification-value-table
+.configuration-table-header {
+  display: grid;
+
+  grid-template-columns:
+    60px
+    minmax(180px, 1fr)
+    minmax(220px, 1.2fr)
+    minmax(280px, 1.5fr)
+    130px
+    60px;
+
+  align-items: center;
+
+  min-height: 64px;
+  padding: 0 12px;
+
+  box-sizing: border-box;
+}
+
+/* ============================================================
+   FOURTH TABLE ROW
+   ============================================================ */
+
+.notification-value-table
+.notification-value-row {
+  display: grid;
+
+  grid-template-columns:
+    60px
+    minmax(180px, 1fr)
+    minmax(220px, 1.2fr)
+    minmax(280px, 1.5fr)
+    130px
+    60px;
+
+  align-items: center;
+
+  min-height: 74px;
+  padding: 12px;
+
+  box-sizing: border-box;
+
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.notification-value-table
+.notification-value-row:last-child {
+  border-bottom: none;
+}
+
+.notification-value-table
+.notification-value-row:hover {
+  background: #f8fafc;
+}
+
+/* ============================================================
+   FOURTH TABLE VALUE INPUT
+   ============================================================ */
+
+.notification-value-table
+.configuration-col-third-value {
+  display: flex;
+  align-items: center;
+
+  width: 100%;
+  padding: 0 8px;
+
+  box-sizing: border-box;
+}
+
+.notification-value-table
+.configuration-col-third-value input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+
+  padding: 8px 12px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+
+  background: #ffffff;
+  font-size: 14px;
+  color: #111827;
+
+  box-sizing: border-box;
+  outline: none;
+
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.notification-value-table
+.configuration-col-third-value input:hover {
+  border-color: #94a3b8;
+}
+
+.notification-value-table
+.configuration-col-third-value input:focus {
+  border-color: #2563eb;
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.notification-value-table
+.configuration-col-third-value input::placeholder {
+  color: #94a3b8;
+}
+
+/* ============================================================
+   FOURTH TABLE VALUE TYPE
+   ============================================================ */
+
+.notification-value-table
+.configuration-col-value-type {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+
+.notification-value-table
+.value-type-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 70px;
+  padding: 6px 10px;
+
+  border-radius: 5px;
+
+  background: #f3f4f6;
+  color: #374151;
+
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ============================================================
+   FOURTH TABLE PARTITION / ROW KEY
+   ============================================================ */
+
+.notification-value-table
+.configuration-col-partition-key,
+
+.notification-value-table
+.configuration-col-row-key {
+  padding: 0 8px;
+
+  min-width: 0;
+
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ============================================================
+   FOURTH TABLE NUMBER
+   ============================================================ */
+
+.notification-value-table
+.configuration-col-number {
+  text-align: center;
+}
+
+/* ============================================================
+   FOURTH TABLE REQUIRED
+   ============================================================ */
+
+.notification-value-table
+.configuration-col-required {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================================
+   FOURTH TABLE INFO
+   ============================================================ */
+
+.notification-value-table
+.configuration-col-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================================
+   TEAMS RECIPIENT CONFIGURATION
+   ============================================================ */
+
+.application-configuration-fourth-section {
+  margin-top: 32px;
+  width: 100%;
+}
+
+.application-configuration-fourth-section
+.application-configuration-toolbar {
+  margin-bottom: 16px;
+}
+
+.application-configuration-fourth-section
+.application-configuration-toolbar h2 {
+  margin: 0;
+}
+
+.application-configuration-fourth-section
+.application-configuration-toolbar p {
+  margin: 6px 0 0;
+}
+
+/* ============================================================
+   TEAMS RECIPIENT TABLE
+   ============================================================ */
+
+.teams-recipient-configuration-table {
+  width: 100%;
+  overflow-x: auto;
+
+  border: 1px solid #ddd;
+  border-radius: 8px;
+
+  background: #fff;
+}
+
+/* ============================================================
+   TEAMS RECIPIENT TABLE HEADER
+   ============================================================ */
+
+.teams-recipient-table-header {
+  display: grid;
+
+  grid-template-columns:
+    60px
+    180px
+    220px
+    minmax(250px, 1fr)
+    120px;
+
+  align-items: center;
+
+  min-width: 830px;
+
+  background: #f5f6f8;
+  border-bottom: 1px solid #ddd;
+
+  font-weight: 600;
+}
+
+/* ============================================================
+   TEAMS RECIPIENT TABLE ROW
+   ============================================================ */
+
+.teams-recipient-table-row {
+  display: grid;
+
+  grid-template-columns:
+    60px
+    180px
+    220px
+    minmax(250px, 1fr)
+    120px;
+
+  align-items: center;
+
+  min-width: 830px;
+
+  border-bottom: 1px solid #e5e5e5;
+
+  background: #fff;
+}
+
+.teams-recipient-table-row:last-child {
+  border-bottom: none;
+}
+
+/* ============================================================
+   TEAMS RECIPIENT COMMON COLUMNS
+   ============================================================ */
+
+.teams-recipient-col-number,
+.teams-recipient-col-partition,
+.teams-recipient-col-row,
+.teams-recipient-col-value,
+.teams-recipient-col-type {
+  padding: 12px 14px;
+
+  min-width: 0;
+
+  overflow-wrap: anywhere;
+}
+
+/* ============================================================
+   TEAMS RECIPIENT NUMBER
+   ============================================================ */
+
+.teams-recipient-col-number {
+  text-align: center;
+  font-weight: 500;
+}
+
+/* ============================================================
+   TEAMS RECIPIENT PARTITION KEY
+   ============================================================ */
+
+.teams-recipient-col-partition {
+  font-weight: 500;
+}
+
+/* ============================================================
+   TEAMS RECIPIENT ROW KEY
+   ============================================================ */
+
+.teams-recipient-col-row {
+  font-weight: 500;
+}
+
+/* ============================================================
+   TEAMS RECIPIENT VALUE INPUT
+   ============================================================ */
+
+.teams-recipient-col-value input {
+  width: 100%;
+  box-sizing: border-box;
+
+  padding: 9px 11px;
+
+  border: 1px solid #ccc;
+  border-radius: 5px;
+
+  outline: none;
+
+  font-size: 14px;
+}
+
+.teams-recipient-col-value input:focus {
+  border-color: #2563eb;
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+/* ============================================================
+   TEAMS RECIPIENT TYPE
+   ============================================================ */
+
+.teams-recipient-col-type {
+  text-align: center;
+}
+
+.teams-recipient-col-type
+.channel-type-value {
+  display: inline-block;
+
+  padding: 4px 9px;
+
+  border-radius: 4px;
+
+  font-size: 13px;
+}
+
+/* ============================================================
+   TEAMS RECIPIENT HOVER
+   ============================================================ */
+
+.teams-recipient-table-row:hover {
+  background: #fafafa;
+}
+
+/* ============================================================
+   COMMON ACCESSIBILITY
+   ============================================================ */
+
+.application-configuration
+button:focus-visible,
+
+.application-configuration
+input:focus-visible,
+
+.application-configuration
+select:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+/* ============================================================
+   EMPTY STATE
+   ============================================================ */
+
+.configuration-empty-state {
+  padding: 32px 20px;
+
+  text-align: center;
+
+  color: #6b7280;
+  font-size: 14px;
+
+  background: #ffffff;
+}
+
+/* ============================================================
+   LOADING STATE
+   ============================================================ */
+
+.configuration-loading {
+  padding: 32px 20px;
+
+  text-align: center;
+
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* ============================================================
+   ERROR STATE
+   ============================================================ */
+
+.configuration-error {
+  margin-top: 12px;
+
+  padding: 12px 14px;
+
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+
+  background: #fef2f2;
+  color: #b91c1c;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   DEPLOY AREA
+   ============================================================ */
+
+.configuration-deploy-area {
+  width: 100%;
+
+  margin-top: 32px;
+  margin-bottom: 40px;
+
+  padding: 20px;
+
+  box-sizing: border-box;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+
+  background: #ffffff;
+}
+
+/* ============================================================
+   DEPLOY HEADER
+   ============================================================ */
+
+.configuration-deploy-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 14px;
+}
+
+.configuration-deploy-header h3 {
+  margin: 0;
+
+  font-size: 18px;
+  font-weight: 600;
+
+  color: #111827;
+}
+
+.configuration-deploy-header p {
+  margin: 4px 0 0;
+
+  color: #6b7280;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   DEPLOY BUTTON CONTAINER
+   ============================================================ */
+
+.configuration-deploy-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+
+  gap: 12px;
+
+  margin-top: 16px;
+}
+
+/* ============================================================
+   DEPLOY BUTTON
+   ============================================================ */
+
+.configuration-deploy-button {
+  min-width: 140px;
+  height: 46px;
+
+  padding: 0 22px;
+
+  border: none;
+  border-radius: 6px;
+
+  background: #2563eb;
+  color: #ffffff;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    opacity 0.15s ease,
+    transform 0.05s ease;
+}
+
+.configuration-deploy-button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.configuration-deploy-button:active:not(:disabled) {
+  background: #1e40af;
+  transform: translateY(1px);
+}
+
+.configuration-deploy-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   DEPLOY BUTTON LOADING
+   ============================================================ */
+
+.configuration-deploy-button.loading {
+  cursor: wait;
+}
+
+/* ============================================================
+   DEPLOY ERROR
+   ============================================================ */
+
+.configuration-deploy-error {
+  margin-top: 12px;
+
+  padding: 12px 14px;
+
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+
+  background: #fef2f2;
+  color: #b91c1c;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   DEPLOY SUCCESS
+   ============================================================ */
+
+.configuration-deploy-success {
+  margin-top: 12px;
+
+  padding: 12px 14px;
+
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+
+  background: #f0fdf4;
+  color: #166534;
+
+  font-size: 13px;
+  line-height: 1.5;
+
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ============================================================
+   DEPLOY STATUS
+   ============================================================ */
+
+.configuration-deploy-status {
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  margin-top: 12px;
+
+  padding: 10px 12px;
+
+  border: 1px solid #dbeafe;
+  border-radius: 6px;
+
+  background: #f8fbff;
+
+  color: #374151;
+
+  font-size: 13px;
+}
+
+/* ============================================================
+   DEPLOY STATUS DOT
+   ============================================================ */
+
+.configuration-deploy-status-dot {
+  width: 8px;
+  height: 8px;
+
+  border-radius: 50%;
+
+  background: #2563eb;
+
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   RESPONSIVE - APPLICATION TABLE
+   ============================================================ */
+
+@media (max-width: 1200px) {
+  .configuration-table-header,
+  .configuration-table-row {
+    grid-template-columns:
+      45px
+      minmax(180px, 1.4fr)
+      minmax(170px, 1fr)
+      minmax(170px, 1fr)
+      35px
+      45px;
+  }
+
+  .configuration-col-number,
+  .configuration-col-description,
+  .configuration-col-sample,
+  .configuration-col-value,
+  .configuration-col-required,
+  .configuration-col-info {
+    padding: 8px;
+  }
+}
+
+/* ============================================================
+   RESPONSIVE - DEPLOYMENT INPUTS
+   ============================================================ */
+
+@media (max-width: 800px) {
+  .configuration-deployment-inputs {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   RESPONSIVE - APPLICATION TABLE
+   ============================================================ */
+
+@media (max-width: 900px) {
+  .application-configuration {
+    overflow-x: auto;
+  }
+
+  .application-configuration-header {
+    min-width: 900px;
+  }
+
+  .application-configuration-table {
+    min-width: 900px;
+  }
+
+  .application-configuration-footer {
+    min-width: 900px;
+  }
+}
+
+/* ============================================================
+   RESPONSIVE - NOTIFICATION TABLE
+   ============================================================ */
+
+@media (max-width: 900px) {
+  .notification-configuration-table {
+    overflow-x: auto;
+  }
+
+  .notification-table-header,
+  .notification-table-row {
+    min-width: 1185px;
+  }
+
+  .notification-configuration-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
+
+/* ============================================================
+   RESPONSIVE - CHANNEL TABLE
+   ============================================================ */
+
+@media (max-width: 1200px) {
+  .channel-configuration-table {
+    overflow-x: auto;
+  }
+
+  .channel-table-header,
+  .channel-table-row {
+    min-width: 1250px;
+  }
+}
+
+/* ============================================================
+   RESPONSIVE - NOTIFICATION VALUE TABLE
+   ============================================================ */
+
+@media (max-width: 1100px) {
+  .notification-value-table
+  .configuration-table-header,
+
+  .notification-value-table
+  .notification-value-row {
+    grid-template-columns:
+      50px
+      150px
+      180px
+      250px
+      110px
+      50px;
+
+    min-width: 790px;
+  }
+
+  .notification-value-table {
+    overflow-x: auto;
+  }
+}
+
+/* ============================================================
+   RESPONSIVE - TEAMS RECIPIENT TABLE
+   ============================================================ */
+
+@media (max-width: 900px) {
+  .teams-recipient-configuration-table {
+    overflow-x: auto;
+  }
+
+  .teams-recipient-table-header,
+  .teams-recipient-table-row {
+    min-width: 830px;
+  }
+}
+
+/* ============================================================
+   MOBILE
+   ============================================================ */
+
+@media (max-width: 700px) {
+  .application-configuration-header {
+    display: block;
+  }
+
+  .configuration-page-indicator {
+    display: inline-block;
+    margin-top: 12px;
+  }
+
+  .configuration-deploy-area {
+    padding: 14px;
+  }
+
+  .configuration-deploy-header {
+    display: block;
+  }
+
+  .configuration-deploy-actions {
+    justify-content: stretch;
+  }
+
+  .configuration-deploy-button {
+    width: 100%;
+  }
+}
