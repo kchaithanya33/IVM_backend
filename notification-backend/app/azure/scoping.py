@@ -3,11 +3,11 @@ import logging
 import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import requests
 
-from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
+from azure.core.exceptions import HttpResponseError
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.resource import ResourceManagementClient
 
@@ -17,19 +17,28 @@ logger = logging.getLogger(__name__)
 
 class ScopingAzureManager:
     """
-    Azure manager for Scoping-00 Logic App deployment.
+    Azure manager for Scoping-00 and Scoping-01 Logic App deployment.
 
     Responsibilities
     ----------------
-    1. Resolve Azure API connections.
-    2. Retrieve actual Azure Function route metadata.
-    3. Retrieve Function App function keys using Azure REST API.
-    4. Build the real Function URLs dynamically.
-    5. Build ARM deployment parameters.
-    6. Deploy the Scoping Logic App ARM template.
+    1. Resolve Azure Tables API connection.
+    2. Resolve Azure Queues API connection.
+    3. Resolve SharePoint API connection.
+    4. Retrieve Azure Function metadata.
+    5. Retrieve Azure Function keys.
+    6. Build complete Azure Function URLs.
+    7. Resolve all required Function URLs.
+    8. Build ARM deployment parameters.
+    9. Deploy arm/scoping.json.
+
+    IMPORTANT
+    ---------
+    The ARM parameters passed here must match the parameters
+    declared in arm/scoping.json.
     """
 
     MANAGEMENT_API_VERSION = "2022-03-01"
+    ARM_MANAGEMENT_URL = "https://management.azure.com"
 
     def __init__(self) -> None:
         self.credential = DefaultAzureCredential()
@@ -40,7 +49,7 @@ class ScopingAzureManager:
 
     def _get_management_token(self) -> str:
         """
-        Get an Azure Resource Manager access token.
+        Get Azure Resource Manager access token.
         """
 
         token = self.credential.get_token(
@@ -50,7 +59,7 @@ class ScopingAzureManager:
         return token.token
 
     # ============================================================
-    # REST REQUEST
+    # MANAGEMENT REST REQUEST
     # ============================================================
 
     def _management_request(
@@ -60,7 +69,7 @@ class ScopingAzureManager:
         body: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        Execute an authenticated Azure Management REST request.
+        Execute authenticated Azure Management REST request.
         """
 
         token = self._get_management_token()
@@ -85,8 +94,10 @@ class ScopingAzureManager:
         )
 
         if not response.ok:
+
             logger.error(
-                "Azure REST request failed: status=%s body=%s",
+                "Azure REST request failed: "
+                "status=%s body=%s",
                 response.status_code,
                 response.text,
             )
@@ -102,10 +113,18 @@ class ScopingAzureManager:
         if not response.text:
             return {}
 
-        return response.json()
+        try:
+            return response.json()
+
+        except ValueError as exc:
+
+            raise ValueError(
+                "Azure Management API returned "
+                "a non-JSON response."
+            ) from exc
 
     # ============================================================
-    # CONNECTIONS
+    # API CONNECTIONS
     # ============================================================
 
     def get_connections(
@@ -114,15 +133,24 @@ class ScopingAzureManager:
         resource_group_name: str,
         table_connection_name: str,
         queue_connection_name: str,
-    ) -> Dict[str, Optional[str]]:
+        sharepoint_connection_name: str,
+    ) -> Dict[str, str]:
         """
-        Resolve Logic App API connection resource IDs.
+        Resolve Azure API connection resource IDs.
+
+        Required connections:
+
+            - Azure Tables
+            - Azure Queues
+            - SharePoint Online
         """
 
         logger.info(
-            "Resolving API connections: table=%s queue=%s",
+            "Resolving API connections: "
+            "table=%s queue=%s sharepoint=%s",
             table_connection_name,
             queue_connection_name,
+            sharepoint_connection_name,
         )
 
         resource_client = ResourceManagementClient(
@@ -130,8 +158,9 @@ class ScopingAzureManager:
             subscription_id,
         )
 
-        table_connection_id = None
-        queue_connection_id = None
+        table_connection_id: Optional[str] = None
+        queue_connection_id: Optional[str] = None
+        sharepoint_connection_id: Optional[str] = None
 
         connections = (
             resource_client.resources.list_by_resource_group(
@@ -150,36 +179,100 @@ class ScopingAzureManager:
             )
 
             if connection_name == table_connection_name:
+
                 table_connection_id = connection.id
 
-            if connection_name == queue_connection_name:
+            elif connection_name == queue_connection_name:
+
                 queue_connection_id = connection.id
 
+            elif connection_name == sharepoint_connection_name:
+
+                sharepoint_connection_id = connection.id
+
+        # --------------------------------------------------------
+        # Validate
+        # --------------------------------------------------------
+
         if not table_connection_id:
+
             raise ValueError(
                 "Azure Tables API connection was not found: "
                 f"{table_connection_name}"
             )
 
         if not queue_connection_id:
+
             raise ValueError(
                 "Azure Queues API connection was not found: "
                 f"{queue_connection_name}"
             )
 
+        if not sharepoint_connection_id:
+
+            raise ValueError(
+                "SharePoint API connection was not found: "
+                f"{sharepoint_connection_name}"
+            )
+
         logger.info(
-            "Resolved Azure Tables connection: %s",
-            table_connection_id,
+            "Azure Tables connection resolved."
         )
 
         logger.info(
-            "Resolved Azure Queues connection: %s",
-            queue_connection_id,
+            "Azure Queues connection resolved."
+        )
+
+        logger.info(
+            "SharePoint connection resolved."
         )
 
         return {
             "table_connection_id": table_connection_id,
             "queue_connection_id": queue_connection_id,
+            "sharepoint_connection_id": sharepoint_connection_id,
+        }
+
+    # ============================================================
+    # MANAGED API IDS
+    # ============================================================
+
+    def _get_managed_api_ids(
+        self,
+        subscription_id: str,
+        location: str,
+    ) -> Dict[str, str]:
+        """
+        Build managed API resource IDs used by $connections.
+        """
+
+        encoded_subscription = quote(
+            subscription_id,
+            safe="",
+        )
+
+        encoded_location = quote(
+            location,
+            safe="",
+        )
+
+        base = (
+            f"/subscriptions/{encoded_subscription}"
+            f"/providers/Microsoft.Web"
+            f"/locations/{encoded_location}"
+            f"/managedApis"
+        )
+
+        return {
+            "table": (
+                f"{base}/azuretables"
+            ),
+            "queue": (
+                f"{base}/azurequeues"
+            ),
+            "sharepoint": (
+                f"{base}/sharepointonline"
+            ),
         }
 
     # ============================================================
@@ -194,47 +287,42 @@ class ScopingAzureManager:
         function_name: str,
     ) -> Dict[str, Any]:
         """
-        Retrieve the actual Azure Function resource.
-
-        This is important because the Function App function name
-        does NOT necessarily equal the HTTP route.
-
-        Example:
-
-            Function name:
-                GetPartitionConfigs
-
-            Actual route:
-                /api/config/{partition}
-
-        Azure stores the actual route in function metadata.
+        Retrieve Azure Function metadata.
         """
 
         url = (
-            "https://management.azure.com"
-            f"/subscriptions/{quote(subscription_id)}"
-            f"/resourceGroups/{quote(resource_group_name)}"
-            f"/providers/Microsoft.Web/sites/{quote(function_app_name)}"
-            f"/functions/{quote(function_name)}"
+            f"{self.ARM_MANAGEMENT_URL}"
+            f"/subscriptions/"
+            f"{quote(subscription_id, safe='')}"
+            f"/resourceGroups/"
+            f"{quote(resource_group_name, safe='')}"
+            f"/providers/Microsoft.Web/sites/"
+            f"{quote(function_app_name, safe='')}"
+            f"/functions/"
+            f"{quote(function_name, safe='')}"
             f"?api-version={self.MANAGEMENT_API_VERSION}"
         )
 
         logger.info(
-            "Retrieving Azure Function metadata: app=%s function=%s",
+            "Retrieving Azure Function metadata: "
+            "app=%s function=%s",
             function_app_name,
             function_name,
         )
 
         try:
+
             return self._management_request(
                 method="GET",
                 url=url,
             )
 
         except Exception as exc:
+
             raise ValueError(
-                f"Unable to retrieve function '{function_name}' "
-                f"from Function App '{function_app_name}': {exc}"
+                f"Unable to retrieve function "
+                f"'{function_name}' from Function App "
+                f"'{function_app_name}': {exc}"
             ) from exc
 
     # ============================================================
@@ -249,31 +337,32 @@ class ScopingAzureManager:
         function_name: str,
     ) -> str:
         """
-        Retrieve the function key using the Azure REST listKeys
-        operation.
-
-        This avoids the WebSiteManagementClient issue where the
-        returned SDK object can differ between Azure SDK versions.
+        Retrieve Azure Function key using listKeys.
         """
 
         url = (
-            "https://management.azure.com"
-            f"/subscriptions/{quote(subscription_id)}"
-            f"/resourceGroups/{quote(resource_group_name)}"
-            f"/providers/Microsoft.Web/sites/{quote(function_app_name)}"
-            f"/functions/{quote(function_name)}"
+            f"{self.ARM_MANAGEMENT_URL}"
+            f"/subscriptions/"
+            f"{quote(subscription_id, safe='')}"
+            f"/resourceGroups/"
+            f"{quote(resource_group_name, safe='')}"
+            f"/providers/Microsoft.Web/sites/"
+            f"{quote(function_app_name, safe='')}"
+            f"/functions/"
+            f"{quote(function_name, safe='')}"
             f"/listKeys"
             f"?api-version={self.MANAGEMENT_API_VERSION}"
         )
 
         logger.info(
-            "Retrieving function key using REST listKeys: "
+            "Retrieving Function key: "
             "app=%s function=%s",
             function_app_name,
             function_name,
         )
 
         try:
+
             result = self._management_request(
                 method="POST",
                 url=url,
@@ -281,6 +370,7 @@ class ScopingAzureManager:
             )
 
         except Exception as exc:
+
             raise ValueError(
                 f"Unable to retrieve function keys for "
                 f"function '{function_name}' in Function App "
@@ -288,165 +378,36 @@ class ScopingAzureManager:
             ) from exc
 
         if not isinstance(result, dict):
+
             raise ValueError(
                 f"Unexpected function key response for "
                 f"'{function_name}'."
             )
 
-        # Azure normally returns:
-        #
-        # {
-        #     "keys": {
-        #         "default": "...."
-        #     }
-        # }
-        #
-        # Some API versions may return keys directly.
-
         keys = result.get("keys")
 
         if isinstance(keys, dict):
 
-            function_key = keys.get("default")
+            default_key = keys.get("default")
 
-            if not function_key:
-                for value in keys.values():
+            if default_key:
+                return str(default_key)
 
-                    if value:
-                        function_key = value
-                        break
+            for value in keys.values():
 
-            if function_key:
-                return str(function_key)
+                if value:
+                    return str(value)
 
-        # Fallback in case the API returns keys directly.
+        default_key = result.get("default")
 
-        function_key = result.get("default")
-
-        if function_key:
-            return str(function_key)
+        if default_key:
+            return str(default_key)
 
         raise ValueError(
             f"No function key was found for function "
             f"'{function_name}' in Function App "
             f"'{function_app_name}'."
         )
-
-    # ============================================================
-    # EXTRACT ACTUAL FUNCTION ROUTE
-    # ============================================================
-
-    def get_function_route(
-        self,
-        function_resource: Dict[str, Any],
-        function_name: str,
-    ) -> str:
-        """
-        Extract the actual HTTP route from Azure Function metadata.
-
-        Azure may return the route under:
-
-            properties.invoke_url_template
-
-        or:
-
-            properties.config.route
-
-        or other metadata depending on the Functions runtime/API
-        version.
-
-        If Azure does not expose a custom route, we fall back to:
-
-            /api/{function_name}
-        """
-
-        properties = function_resource.get(
-            "properties",
-            {},
-        )
-
-        if not isinstance(properties, dict):
-            properties = {}
-
-        # --------------------------------------------------------
-        # Preferred: invokeUrlTemplate
-        # --------------------------------------------------------
-
-        invoke_url_template = (
-            properties.get("invokeUrlTemplate")
-        )
-
-        if invoke_url_template:
-
-            logger.info(
-                "Azure returned invokeUrlTemplate for "
-                "function '%s': %s",
-                function_name,
-                invoke_url_template,
-            )
-
-            return str(invoke_url_template)
-
-        # --------------------------------------------------------
-        # Alternative property naming
-        # --------------------------------------------------------
-
-        invoke_url_template = (
-            properties.get("invoke_url_template")
-        )
-
-        if invoke_url_template:
-
-            logger.info(
-                "Azure returned invoke_url_template for "
-                "function '%s': %s",
-                function_name,
-                invoke_url_template,
-            )
-
-            return str(invoke_url_template)
-
-        # --------------------------------------------------------
-        # Check function config
-        # --------------------------------------------------------
-
-        config = properties.get("config")
-
-        if isinstance(config, dict):
-
-            route = config.get("route")
-
-            if route:
-
-                logger.info(
-                    "Azure returned custom route for "
-                    "function '%s': %s",
-                    function_name,
-                    route,
-                )
-
-                route = str(route)
-
-                if not route.startswith("/"):
-                    route = "/" + route
-
-                if not route.startswith("/api/"):
-                    route = "/api" + route
-
-                return route
-
-        # --------------------------------------------------------
-        # Fallback
-        # --------------------------------------------------------
-
-        logger.warning(
-            "Azure did not expose a custom route for function "
-            "'%s'. Using default route: %s",
-            function_name,
-            function_name,
-        )
-
-        return f"/api/{function_name}"
 
     # ============================================================
     # FUNCTION URL
@@ -460,54 +421,9 @@ class ScopingAzureManager:
         function_name: str,
     ) -> str:
         """
-        Build the real Azure Function URL dynamically.
-
-        Example:
-
-            Function name:
-                GetPartitionConfigs
-
-            Azure route:
-                /api/config/{partition}
-
-            Result:
-
-            https://function-app-chai.azurewebsites.net/api/config/{partition}?code=XXXX
+        Build a complete Azure Function URL including the
+        Function access key.
         """
-
-        logger.info(
-            "Resolving Function URL: app=%s function=%s",
-            function_app_name,
-            function_name,
-        )
-
-        # --------------------------------------------------------
-        # Get Function App
-        # --------------------------------------------------------
-
-        web_client = ResourceManagementClient(
-            self.credential,
-            subscription_id,
-        )
-
-        # Verify resource group exists.
-
-        try:
-            resource = web_client.resources.get(
-                resource_group_name,
-                "Microsoft.Web",
-                "",
-                "sites",
-                function_app_name,
-                "2022-03-01",
-            )
-
-        except Exception:
-            resource = None
-
-        # --------------------------------------------------------
-        # Retrieve function metadata using REST
-        # --------------------------------------------------------
 
         function_resource = self.get_function_resource(
             subscription_id=subscription_id,
@@ -516,22 +432,58 @@ class ScopingAzureManager:
             function_name=function_name,
         )
 
-        if not function_resource:
-            raise ValueError(
-                f"Function '{function_name}' was not found "
-                f"in Function App '{function_app_name}'."
-            )
+        properties = function_resource.get(
+            "properties",
+            {},
+        )
+
+        if not isinstance(properties, dict):
+            properties = {}
 
         # --------------------------------------------------------
-        # Get hostname
+        # Function route
+        # --------------------------------------------------------
+
+        route = properties.get(
+            "invokeUrlTemplate"
+        )
+
+        if not route:
+
+            route = properties.get(
+                "invoke_url_template"
+            )
+
+        if not route:
+
+            config = properties.get(
+                "config"
+            )
+
+            if isinstance(config, dict):
+
+                route = config.get(
+                    "route"
+                )
+
+        if not route:
+
+            route = f"/api/{function_name}"
+
+        route = str(route)
+
+        # --------------------------------------------------------
+        # Function App hostname
         # --------------------------------------------------------
 
         site_url = (
-            "https://management.azure.com"
-            f"/subscriptions/{quote(subscription_id)}"
-            f"/resourceGroups/{quote(resource_group_name)}"
+            f"{self.ARM_MANAGEMENT_URL}"
+            f"/subscriptions/"
+            f"{quote(subscription_id, safe='')}"
+            f"/resourceGroups/"
+            f"{quote(resource_group_name, safe='')}"
             f"/providers/Microsoft.Web/sites/"
-            f"{quote(function_app_name)}"
+            f"{quote(function_app_name, safe='')}"
             f"?api-version={self.MANAGEMENT_API_VERSION}"
         )
 
@@ -545,56 +497,48 @@ class ScopingAzureManager:
             {},
         )
 
-        hostname = None
+        hostname: Optional[str] = None
 
         if isinstance(site_properties, dict):
+
             hostname = site_properties.get(
                 "defaultHostName"
             )
 
         if not hostname:
+
             hostname = (
                 f"{function_app_name}.azurewebsites.net"
             )
 
         # --------------------------------------------------------
-        # Get actual route
+        # Normalize route
         # --------------------------------------------------------
 
-        route = self.get_function_route(
-            function_resource=function_resource,
-            function_name=function_name,
-        )
-
-        # --------------------------------------------------------
-        # If Azure returns a complete URL, use its path
-        # --------------------------------------------------------
-
-        if route.startswith("http://") or route.startswith(
-            "https://"
+        if (
+            route.startswith("http://")
+            or route.startswith("https://")
         ):
-
-            # Remove hostname because we want to use the current
-            # Function App hostname.
-
-            from urllib.parse import urlparse
 
             parsed = urlparse(route)
 
             route = parsed.path
 
             if parsed.query:
-                route = f"{route}?{parsed.query}"
 
-        # --------------------------------------------------------
-        # Normalize route
-        # --------------------------------------------------------
+                route = (
+                    f"{route}?{parsed.query}"
+                )
 
         if not route.startswith("/"):
             route = "/" + route
 
+        if not route.startswith("/api/"):
+
+            route = "/api" + route
+
         # --------------------------------------------------------
-        # Get function key
+        # Function key
         # --------------------------------------------------------
 
         function_key = self.get_function_key(
@@ -604,30 +548,21 @@ class ScopingAzureManager:
             function_name=function_name,
         )
 
-        # --------------------------------------------------------
-        # Build URL
-        # --------------------------------------------------------
+        separator = (
+            "&"
+            if "?" in route
+            else "?"
+        )
 
-        separator = "&" if "?" in route else "?"
-
-        url = (
+        return (
             f"https://{hostname}"
             f"{route}"
             f"{separator}"
             f"code={quote(function_key, safe='')}"
         )
 
-        logger.info(
-            "Resolved Function URL: app=%s function=%s url=%s",
-            function_app_name,
-            function_name,
-            url.split("?")[0],
-        )
-
-        return url
-
     # ============================================================
-    # RESOLVE ALL FUNCTION URLS
+    # ALL FUNCTION URLS
     # ============================================================
 
     def get_function_urls(
@@ -638,18 +573,26 @@ class ScopingAzureManager:
         config_function_name: str,
         business_day_hour_status_function_name: str,
         get_next_business_day_function_name: str,
+        call_azure_function_name: str,
     ) -> Dict[str, str]:
         """
-        Resolve all Function URLs required by Scoping-00.
+        Resolve all Function URLs required by Scoping.
+
+        Returns:
+
+            config_service_url
+            business_day_hour_status_url
+            get_next_business_day_url
+            call_azure_function_url
         """
 
         logger.info(
-            "Resolving Scoping Function URLs from Function App: %s",
+            "Resolving Function URLs from Function App: %s",
             function_app_name,
         )
 
         # --------------------------------------------------------
-        # Config
+        # Config Function
         # --------------------------------------------------------
 
         config_service_url = self.get_function_url(
@@ -660,7 +603,7 @@ class ScopingAzureManager:
         )
 
         # --------------------------------------------------------
-        # Business Day / Hour
+        # Business Day / Hour Function
         # --------------------------------------------------------
 
         business_day_hour_status_url = self.get_function_url(
@@ -671,7 +614,7 @@ class ScopingAzureManager:
         )
 
         # --------------------------------------------------------
-        # Next Business Day
+        # Next Business Day Function
         # --------------------------------------------------------
 
         get_next_business_day_url = self.get_function_url(
@@ -679,6 +622,21 @@ class ScopingAzureManager:
             resource_group_name=resource_group_name,
             function_app_name=function_app_name,
             function_name=get_next_business_day_function_name,
+        )
+
+        # --------------------------------------------------------
+        # Process Azure IP Data Function
+        # --------------------------------------------------------
+
+        call_azure_function_url = self.get_function_url(
+            subscription_id=subscription_id,
+            resource_group_name=resource_group_name,
+            function_app_name=function_app_name,
+            function_name=call_azure_function_name,
+        )
+
+        logger.info(
+            "All required Function URLs resolved successfully."
         )
 
         return {
@@ -689,6 +647,9 @@ class ScopingAzureManager:
             "get_next_business_day_url": (
                 get_next_business_day_url
             ),
+            "call_azure_function_url": (
+                call_azure_function_url
+            ),
         }
 
     # ============================================================
@@ -698,33 +659,24 @@ class ScopingAzureManager:
     def deploy(
         self,
         request: Any,
-        connections: Dict[str, Optional[str]],
-        function_urls: Dict[str, str],
+        connections: Dict[str, str],
+        function_urls: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """
-        Deploy the Scoping ARM template.
+        Deploy arm/scoping.json.
 
-        IMPORTANT:
-        Azure ResourceManagementClient expects the deployment
-        request body to contain:
+        Function URLs are supplied by the service layer.
 
-            {
-                "properties": {
-                    "mode": "...",
-                    "template": "...",
-                    "parameters": "..."
-                }
-            }
-
-        The previous implementation placed these properties at
-        the root, which caused:
-
-            Required property 'properties' not found in JSON.
+        Only parameters that are available in the
+        ScopingDeploymentRequest or resolved Function URLs
+        are passed to ARM.
         """
 
         logger.info(
-            "Starting ARM deployment for Logic App: %s",
+            "Starting Scoping ARM deployment: "
+            "logic_app=%s scoping01=%s",
             request.logic_app_name,
+            request.scoping01_logic_app_name,
         )
 
         resource_client = ResourceManagementClient(
@@ -745,7 +697,7 @@ class ScopingAzureManager:
         if not template_path.exists():
 
             raise FileNotFoundError(
-                f"Scoping ARM template not found: "
+                "Scoping ARM template not found: "
                 f"{template_path}"
             )
 
@@ -753,13 +705,22 @@ class ScopingAzureManager:
         # LOAD TEMPLATE
         # ========================================================
 
-        with open(
-            template_path,
-            "r",
-            encoding="utf-8",
-        ) as file:
+        try:
 
-            template = json.load(file)
+            with open(
+                template_path,
+                "r",
+                encoding="utf-8",
+            ) as file:
+
+                template = json.load(file)
+
+        except json.JSONDecodeError as exc:
+
+            raise ValueError(
+                "Invalid JSON in Scoping ARM template: "
+                f"{template_path}"
+            ) from exc
 
         # ========================================================
         # DEPLOYMENT NAME
@@ -773,12 +734,16 @@ class ScopingAzureManager:
         # CONNECTION IDS
         # ========================================================
 
-        table_connection_id = (
-            connections.get("table_connection_id")
+        table_connection_id = connections.get(
+            "table_connection_id"
         )
 
-        queue_connection_id = (
-            connections.get("queue_connection_id")
+        queue_connection_id = connections.get(
+            "queue_connection_id"
+        )
+
+        sharepoint_connection_id = connections.get(
+            "sharepoint_connection_id"
         )
 
         if not table_connection_id:
@@ -793,29 +758,27 @@ class ScopingAzureManager:
                 "Queue connection ID is missing."
             )
 
+        if not sharepoint_connection_id:
+
+            raise ValueError(
+                "SharePoint connection ID is missing."
+            )
+
         # ========================================================
         # MANAGED API IDS
         # ========================================================
 
-        table_managed_api_id = (
-            f"/subscriptions/"
-            f"{request.subscription_id}"
-            f"/providers/Microsoft.Web/"
-            f"locations/{request.location}"
-            f"/managedApis/azuretables"
-        )
-
-        queue_managed_api_id = (
-            f"/subscriptions/"
-            f"{request.subscription_id}"
-            f"/providers/Microsoft.Web/"
-            f"locations/{request.location}"
-            f"/managedApis/azurequeues"
+        managed_api_ids = self._get_managed_api_ids(
+            subscription_id=request.subscription_id,
+            location=request.location,
         )
 
         # ========================================================
-        # FUNCTION URL VALIDATION
+        # FUNCTION URLS
         # ========================================================
+
+        if function_urls is None:
+            function_urls = {}
 
         config_service_url = function_urls.get(
             "config_service_url"
@@ -829,129 +792,149 @@ class ScopingAzureManager:
             "get_next_business_day_url"
         )
 
-        if not config_service_url:
-            raise ValueError(
-                "Config Service Function URL is missing."
-            )
-
-        if not business_day_hour_status_url:
-            raise ValueError(
-                "Business Day Hour Status Function URL "
-                "is missing."
-            )
-
-        if not get_next_business_day_url:
-            raise ValueError(
-                "Get Next Business Day Function URL "
-                "is missing."
-            )
+        call_azure_function_url = function_urls.get(
+            "call_azure_function_url"
+        )
 
         # ========================================================
         # ARM PARAMETERS
         # ========================================================
 
-        parameters = {
+        parameters: Dict[str, Any] = {
+
+            # ----------------------------------------------------
+            # LOGIC APP NAMES
+            # ----------------------------------------------------
 
             "logicAppName": {
-                "value": request.logic_app_name
+                "value": request.logic_app_name,
             },
+
+            "scoping01LogicAppName": {
+                "value": request.scoping01_logic_app_name,
+            },
+
+            # ----------------------------------------------------
+            # LOCATION
+            # ----------------------------------------------------
 
             "location": {
-                "value": request.location
+                "value": request.location,
             },
 
+            # ----------------------------------------------------
+            # STORAGE
+            # ----------------------------------------------------
+
             "storageAccountName": {
-                "value": request.storage_account_name
+                "value": request.storage_account_name,
             },
 
             "scopingScheduleQueueName": {
-                "value": request.scoping_schedule_queue_name
+                "value": request.scoping_schedule_queue_name,
             },
 
             "notificationLogTableName": {
-                "value": request.notification_log_table_name
+                "value": request.notification_log_table_name,
             },
 
-            "completionLogicAppUrl": {
-                "value": request.completion_logic_app_url
-            },
+            # ----------------------------------------------------
+            # NOTIFICATION
+            # ----------------------------------------------------
 
-            "callbackSecretKey": {
-                "value": request.callback_secret_key
+            "NotificationStatus": {
+                "value": request.notification_status,
             },
 
             "notificationServiceUrl": {
-                "value": request.notification_service_url
+                "value": request.notification_service_url,
             },
 
             # ----------------------------------------------------
-            # DYNAMIC FUNCTION URLS
+            # FUNCTION URLS
             # ----------------------------------------------------
 
             "configServiceUrl": {
-                "value": config_service_url
+                "value": config_service_url,
             },
 
             "businessDayHourStatusUrl": {
-                "value": business_day_hour_status_url
+                "value": business_day_hour_status_url,
             },
 
             "getNextBusinessDayUrl": {
-                "value": get_next_business_day_url
+                "value": get_next_business_day_url,
+            },
+
+            "callAzureFunctionUrl": {
+                "value": call_azure_function_url,
             },
 
             # ----------------------------------------------------
-            # LOGIC APP API CONNECTIONS
+            # SHAREPOINT
+            # ----------------------------------------------------
+
+            "sharePointUrl": {
+                "value": request.share_point_url,
+            },
+
+            # ----------------------------------------------------
+            # COMPLETION CALLBACK
+            # ----------------------------------------------------
+
+            "completionLogicAppUrl": {
+                "value": request.completion_logic_app_url,
+            },
+
+            "callbackSecretKey": {
+                "value": request.callback_secret_key,
+            },
+
+            # ----------------------------------------------------
+            # API CONNECTIONS
             # ----------------------------------------------------
 
             "$connections": {
                 "value": {
 
                     request.table_connection_name: {
-                        "connectionId": table_connection_id,
+                        "connectionId": (
+                            table_connection_id
+                        ),
                         "connectionName": (
                             request.table_connection_name
                         ),
-                        "id": table_managed_api_id,
+                        "id": managed_api_ids["table"],
                     },
 
                     request.queue_connection_name: {
-                        "connectionId": queue_connection_id,
+                        "connectionId": (
+                            queue_connection_id
+                        ),
                         "connectionName": (
                             request.queue_connection_name
                         ),
-                        "id": queue_managed_api_id,
+                        "id": managed_api_ids["queue"],
+                    },
+
+                    request.sharepoint_connection_name: {
+                        "connectionId": (
+                            sharepoint_connection_id
+                        ),
+                        "connectionName": (
+                            request.sharepoint_connection_name
+                        ),
+                        "id": managed_api_ids["sharepoint"],
                     },
                 }
             },
         }
 
         # ========================================================
-        # CORRECT ARM DEPLOYMENT BODY
+        # DEPLOYMENT BODY
         # ========================================================
-        #
-        # THIS IS THE IMPORTANT FIX.
-        #
-        # Wrong:
-        #
-        # {
-        #     "mode": "...",
-        #     "template": "...",
-        #     "parameters": "..."
-        # }
-        #
-        # Correct:
-        #
-        # {
-        #     "properties": {
-        #         "mode": "...",
-        #         "template": "...",
-        #         "parameters": "..."
-        #     }
-        # }
-        #
 
-        deployment_properties = {
+        deployment_body = {
             "properties": {
                 "mode": "Incremental",
                 "template": template,
@@ -960,17 +943,23 @@ class ScopingAzureManager:
         }
 
         # ========================================================
-        # LOG SAFE DEPLOYMENT INFORMATION
+        # SAFE LOGGING
         # ========================================================
 
         logger.info(
-            "Deploying Scoping ARM template: %s",
+            "Deploying Scoping ARM template: "
+            "deployment=%s",
             deployment_name,
         )
 
         logger.info(
-            "Logic App: %s",
+            "Scoping-00 Logic App: %s",
             request.logic_app_name,
+        )
+
+        logger.info(
+            "Scoping-01 Logic App: %s",
+            request.scoping01_logic_app_name,
         )
 
         logger.info(
@@ -979,32 +968,65 @@ class ScopingAzureManager:
         )
 
         logger.info(
+            "Scoping Schedule Queue: %s",
+            request.scoping_schedule_queue_name,
+        )
+
+        logger.info(
+            "Notification Log Table: %s",
+            request.notification_log_table_name,
+        )
+
+        logger.info(
+            "Notification Status: %s",
+            request.notification_status,
+        )
+
+        logger.info(
+            "Notification Service URL configured."
+        )
+
+        logger.info(
+            "Config Function URL resolved."
+        )
+
+        logger.info(
+            "Business Day/Hour Function URL resolved."
+        )
+
+        logger.info(
+            "Next Business Day Function URL resolved."
+        )
+
+        logger.info(
+            "Process Azure IP Data Function URL resolved."
+        )
+
+        logger.info(
+            "SharePoint URL configured."
+        )
+
+        logger.info(
+            "Completion Logic App URL configured."
+        )
+
+        logger.info(
             "Table Connection: %s",
-            table_connection_id,
+            request.table_connection_name,
         )
 
         logger.info(
             "Queue Connection: %s",
-            queue_connection_id,
+            request.queue_connection_name,
         )
 
         logger.info(
-            "Config Function URL: %s",
-            config_service_url.split("?")[0],
-        )
-
-        logger.info(
-            "Business Day Function URL: %s",
-            business_day_hour_status_url.split("?")[0],
-        )
-
-        logger.info(
-            "Next Business Day Function URL: %s",
-            get_next_business_day_url.split("?")[0],
+            "SharePoint Connection: %s",
+            request.sharepoint_connection_name,
         )
 
         # ========================================================
-        # START DEPLOYMENT
+        # START ARM DEPLOYMENT
         # ========================================================
 
         try:
@@ -1014,13 +1036,13 @@ class ScopingAzureManager:
                 .begin_create_or_update(
                     request.resource_group_name,
                     deployment_name,
-                    deployment_properties,
+                    deployment_body,
                 )
             )
 
             result = deployment.result()
 
-            provisioning_state = None
+            provisioning_state: Optional[str] = None
 
             if result.properties:
 
@@ -1036,7 +1058,7 @@ class ScopingAzureManager:
             )
 
             # ====================================================
-            # ARM DEPLOYMENT ERROR
+            # FAILED
             # ====================================================
 
             if provisioning_state not in {
@@ -1044,9 +1066,10 @@ class ScopingAzureManager:
                 "succeeded",
             }:
 
-                error_message = None
+                error_message: Optional[str] = None
 
                 if result.properties:
+
                     error = getattr(
                         result.properties,
                         "error",
@@ -1054,12 +1077,14 @@ class ScopingAzureManager:
                     )
 
                     if error:
+
                         error_message = str(error)
 
                 return {
                     "deployment_name": deployment_name,
                     "provisioning_state": (
-                        provisioning_state or "Failed"
+                        provisioning_state
+                        or "Failed"
                     ),
                     "error": (
                         error_message
