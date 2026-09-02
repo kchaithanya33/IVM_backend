@@ -1,14 +1,14 @@
 
-import logging
-from typing import Any, Dict, Optional
 
+import logging
+
+from app.azure.scoping import ScopingAzureManager
 from app.schemas.scoping import (
     ScopingDeploymentRequest,
     ScopingDeploymentResponse,
     ScopingFunctionUrls,
+    ScopingLogicAppUrls,
 )
-
-from app.azure.scoping import ScopingAzureManager
 
 
 logger = logging.getLogger(__name__)
@@ -16,34 +16,39 @@ logger = logging.getLogger(__name__)
 
 class ScopingDeploymentService:
     """
-    Service layer for Scoping-00 and Scoping-01 deployment.
+    Service responsible for the complete Scoping deployment flow.
 
-    Flow
-    ----
-        API Request
-             |
-             v
-        Resolve API Connections
-             |
-             v
-        Resolve Azure Function URLs
-             |
-             v
-        Deploy scoping.json
-             |
-             v
-        Return deployment response
+    Flow:
 
-    Important
-    ---------
-    CMDBReportURL is NOT part of the deployment request.
-
-    It is generated later by Scoping-01 during workflow execution,
-    so this service does not read request.cmdb_report_url.
+        Frontend
+            |
+            v
+        ScopingDeploymentRequest
+            |
+            v
+        Get API connection IDs
+            |
+            v
+        Resolve Function URLs
+            |
+            v
+        Resolve Notification callback URL
+            |
+            v
+        Resolve Completion callback URL
+            |
+            v
+        Deploy ARM template
+            |
+            v
+        ScopingDeploymentResponse
     """
 
     def __init__(self) -> None:
-        self.azure_manager = ScopingAzureManager()
+
+        self.azure_manager = (
+            ScopingAzureManager()
+        )
 
     # ============================================================
     # DEPLOY SCOPING
@@ -54,123 +59,86 @@ class ScopingDeploymentService:
         request: ScopingDeploymentRequest,
     ) -> ScopingDeploymentResponse:
 
-        logger.info(
-            "Starting Scoping deployment: "
-            "scoping00=%s scoping01=%s resource_group=%s "
-            "function_app=%s storage_account=%s",
-            request.logic_app_name,
-            request.scoping01_logic_app_name,
-            request.resource_group_name,
-            request.function_app_name,
-            request.storage_account_name,
-        )
-
-        # ========================================================
-        # DEFAULT / RESULT VALUES
-        # ========================================================
-
-        table_connection_id: Optional[str] = None
-        queue_connection_id: Optional[str] = None
-        sharepoint_connection_id: Optional[str] = None
-
-        function_urls: Dict[str, str] = {}
-
-        deployment_name: Optional[str] = None
-        provisioning_state: Optional[str] = None
-
         try:
 
-            # ====================================================
-            # STEP 1
-            # RESOLVE API CONNECTIONS
-            # ====================================================
-
             logger.info(
-                "Step 1: Resolving Azure API connections."
-            )
-
-            connections = self.azure_manager.get_connections(
-                subscription_id=request.subscription_id,
-                resource_group_name=request.resource_group_name,
-                table_connection_name=request.table_connection_name,
-                queue_connection_name=request.queue_connection_name,
-                sharepoint_connection_name=(
-                    request.sharepoint_connection_name
-                ),
-            )
-
-            # ----------------------------------------------------
-            # Extract connection IDs
-            # ----------------------------------------------------
-
-            table_connection_id = connections.get(
-                "table_connection_id"
-            )
-
-            queue_connection_id = connections.get(
-                "queue_connection_id"
-            )
-
-            sharepoint_connection_id = connections.get(
-                "sharepoint_connection_id"
-            )
-
-            # ----------------------------------------------------
-            # Validate connections
-            # ----------------------------------------------------
-
-            if not table_connection_id:
-                raise ValueError(
-                    "Azure Tables connection could not be resolved."
-                )
-
-            if not queue_connection_id:
-                raise ValueError(
-                    "Azure Queues connection could not be resolved."
-                )
-
-            if not sharepoint_connection_id:
-                raise ValueError(
-                    "SharePoint connection could not be resolved."
-                )
-
-            logger.info(
-                "Azure API connections resolved successfully."
-            )
-
-            logger.debug(
-                "Table connection ID: %s",
-                table_connection_id,
-            )
-
-            logger.debug(
-                "Queue connection ID: %s",
-                queue_connection_id,
-            )
-
-            logger.debug(
-                "SharePoint connection ID: %s",
-                sharepoint_connection_id,
+                "Starting Scoping deployment: "
+                "logic_app=%s scoping01=%s scoping02=%s",
+                request.logic_app_name,
+                request.scoping01_logic_app_name,
+                request.scoping02_logic_app_name,
             )
 
             # ====================================================
-            # STEP 2
-            # RESOLVE FUNCTION URLS
+            # 1. GET API CONNECTION IDS
             # ====================================================
 
-            logger.info(
-                "Step 2: Resolving Azure Function URLs."
+            connections = (
+                self.azure_manager.get_connections(
+                    subscription_id=(
+                        request.subscription_id
+                    ),
+                    resource_group_name=(
+                        request.resource_group_name
+                    ),
+                    table_connection_name=(
+                        request.table_connection_name
+                    ),
+                    queue_connection_name=(
+                        request.queue_connection_name
+                    ),
+                    sharepoint_connection_name=(
+                        request.sharepoint_connection_name
+                    ),
+                )
             )
+
+            table_connection_id = (
+                connections.get(
+                    "table_connection_id"
+                )
+            )
+
+            queue_connection_id = (
+                connections.get(
+                    "queue_connection_id"
+                )
+            )
+
+            sharepoint_connection_id = (
+                connections.get(
+                    "sharepoint_connection_id"
+                )
+            )
+
+            # ====================================================
+            # 2. RESOLVE FUNCTION URLS
+            #
+            # Function App name + function names are supplied
+            # by frontend.
+            #
+            # Backend discovers:
+            #
+            #   hostname
+            #   route
+            #   function key
+            #
+            # and constructs the complete URL.
+            # ====================================================
 
             function_urls = (
                 self.azure_manager.get_function_urls(
-                    subscription_id=request.subscription_id,
+                    subscription_id=(
+                        request.subscription_id
+                    ),
                     resource_group_name=(
                         request.resource_group_name
                     ),
                     function_app_name=(
                         request.function_app_name
                     ),
+
+                    # Existing functions
                     config_function_name=(
                         request.config_function_name
                     ),
@@ -183,168 +151,109 @@ class ScopingDeploymentService:
                     call_azure_function_name=(
                         request.call_azure_function_name
                     ),
+
+                    # Scoping-02 functions
+                    process_asset_data_function_name=(
+                        request.process_asset_data_function_name
+                    ),
+                    create_asset_groups_function_name=(
+                        request.create_asset_groups_function_name
+                    ),
+                    error_processor_function_name=(
+                        request.error_processor_function_name
+                    ),
+                    check_working_hours_function_name=(
+                        request.check_working_hours_function_name
+                    ),
                 )
-            )
-
-            if not isinstance(function_urls, dict):
-                raise ValueError(
-                    "Azure Function URL resolution returned "
-                    "an invalid response."
-                )
-
-            # ----------------------------------------------------
-            # Extract URLs
-            # ----------------------------------------------------
-
-            config_service_url = function_urls.get(
-                "config_service_url"
-            )
-
-            business_day_hour_status_url = function_urls.get(
-                "business_day_hour_status_url"
-            )
-
-            get_next_business_day_url = function_urls.get(
-                "get_next_business_day_url"
-            )
-
-            call_azure_function_url = function_urls.get(
-                "call_azure_function_url"
             )
 
             # ====================================================
-            # VALIDATE FUNCTION URLS
+            # 3. RESOLVE LOGIC APP CALLBACK URLS
             # ====================================================
 
-            if not config_service_url:
-                raise ValueError(
-                    "Config Service Function URL "
-                    "could not be resolved."
+            logic_app_urls = (
+                self.azure_manager.get_logic_app_urls(
+                    subscription_id=(
+                        request.subscription_id
+                    ),
+                    resource_group_name=(
+                        request.resource_group_name
+                    ),
+
+                    notification_logic_app_name=(
+                        request.notification_logic_app_name
+                    ),
+
+                    notification_logic_app_action_name=(
+                        request.notification_logic_app_trigger_name
+                    ),
+
+                    completion_logic_app_name=(
+                        request.completion_logic_app_name
+                    ),
+
+                    completion_logic_app_action_name=(
+                        request.completion_logic_app_trigger_name
+                    ),
                 )
-
-            if not business_day_hour_status_url:
-                raise ValueError(
-                    "Business Day Hour Status Function URL "
-                    "could not be resolved."
-                )
-
-            if not get_next_business_day_url:
-                raise ValueError(
-                    "Get Next Business Day Function URL "
-                    "could not be resolved."
-                )
-
-            if not call_azure_function_url:
-                raise ValueError(
-                    "Call Azure Function URL "
-                    "could not be resolved."
-                )
-
-            logger.info(
-                "All required Azure Function URLs "
-                "resolved successfully."
-            )
-
-            # ----------------------------------------------------
-            # Safe URL logging
-            # ----------------------------------------------------
-
-            logger.debug(
-                "Config Function URL: %s",
-                config_service_url.split("?")[0],
-            )
-
-            logger.debug(
-                "Business Day Hour Status URL: %s",
-                business_day_hour_status_url.split("?")[0],
-            )
-
-            logger.debug(
-                "Get Next Business Day URL: %s",
-                get_next_business_day_url.split("?")[0],
-            )
-
-            logger.debug(
-                "Call Azure Function URL: %s",
-                call_azure_function_url.split("?")[0],
             )
 
             # ====================================================
-            # STEP 3
-            # DEPLOY ARM TEMPLATE
+            # 4. DEPLOY ARM TEMPLATE
             # ====================================================
 
-            logger.info(
-                "Step 3: Deploying Scoping-00 and "
-                "Scoping-01 ARM template."
-            )
-
-            deployment_result = self.azure_manager.deploy(
-                request=request,
-                connections=connections,
-                function_urls=function_urls,
-            )
-
-            if not isinstance(deployment_result, dict):
-                raise ValueError(
-                    "Azure deployment returned an invalid response."
+            deployment_result = (
+                self.azure_manager.deploy(
+                    request=request,
+                    connections=connections,
+                    function_urls=function_urls,
+                    logic_app_urls=logic_app_urls,
                 )
-
-            deployment_name = deployment_result.get(
-                "deployment_name"
             )
 
-            provisioning_state = deployment_result.get(
-                "provisioning_state"
+            deployment_name = (
+                deployment_result.get(
+                    "deployment_name"
+                )
+            )
+
+            provisioning_state = (
+                deployment_result.get(
+                    "provisioning_state"
+                )
             )
 
             # ====================================================
-            # STEP 4
-            # CHECK DEPLOYMENT RESULT
+            # 5. DEPLOYMENT FAILED
             # ====================================================
 
-            if provisioning_state in {
+            if provisioning_state not in {
                 "Succeeded",
                 "succeeded",
             }:
 
-                logger.info(
-                    "Scoping deployment succeeded. "
-                    "deployment=%s",
-                    deployment_name,
+                error_message = (
+                    deployment_result.get(
+                        "error",
+                        "Scoping ARM deployment failed.",
+                    )
                 )
 
-                # ------------------------------------------------
-                # Build response Function URL model
-                # ------------------------------------------------
-
-                resolved_function_urls = ScopingFunctionUrls(
-                    config_service_url=config_service_url,
-                    business_day_hour_status_url=(
-                        business_day_hour_status_url
-                    ),
-                    get_next_business_day_url=(
-                        get_next_business_day_url
-                    ),
-                    call_azure_function_url=(
-                        call_azure_function_url
-                    ),
+                logger.error(
+                    "Scoping deployment failed: %s",
+                    error_message,
                 )
 
                 return ScopingDeploymentResponse(
-                    success=True,
-
-                    message=(
-                        f"{request.logic_app_name} and "
-                        f"{request.scoping01_logic_app_name} "
-                        "deployment completed successfully."
+                    success=False,
+                    message=str(
+                        error_message
                     ),
 
-                    # --------------------------------------------
-                    # AZURE
-                    # --------------------------------------------
-
-                    subscription_id=request.subscription_id,
+                    subscription_id=(
+                        request.subscription_id
+                    ),
 
                     resource_group_name=(
                         request.resource_group_name
@@ -352,37 +261,30 @@ class ScopingDeploymentService:
 
                     location=request.location,
 
-                    # --------------------------------------------
-                    # LOGIC APPS
-                    # --------------------------------------------
-
-                    logic_app_name=request.logic_app_name,
+                    logic_app_name=(
+                        request.logic_app_name
+                    ),
 
                     scoping01_logic_app_name=(
                         request.scoping01_logic_app_name
                     ),
 
-                    # --------------------------------------------
-                    # STORAGE
-                    # --------------------------------------------
+                    scoping02_logic_app_name=(
+                        request.scoping02_logic_app_name
+                    ),
 
                     storage_account_name=(
                         request.storage_account_name
                     ),
 
-                    # --------------------------------------------
-                    # DEPLOYMENT
-                    # --------------------------------------------
-
-                    deployment_name=deployment_name,
+                    deployment_name=(
+                        deployment_name
+                    ),
 
                     provisioning_state=(
                         provisioning_state
+                        or "Failed"
                     ),
-
-                    # --------------------------------------------
-                    # API CONNECTIONS
-                    # --------------------------------------------
 
                     table_connection_id=(
                         table_connection_id
@@ -396,187 +298,113 @@ class ScopingDeploymentService:
                         sharepoint_connection_id
                     ),
 
-                    # --------------------------------------------
-                    # FUNCTION URLS
-                    # --------------------------------------------
+                    function_urls=(
+                        ScopingFunctionUrls(
+                            **function_urls
+                        )
+                    ),
 
-                    function_urls=resolved_function_urls,
+                    logic_app_urls=(
+                        ScopingLogicAppUrls(
+                            **logic_app_urls
+                        )
+                    ),
                 )
 
             # ====================================================
-            # STEP 5
-            # DEPLOYMENT FAILED
+            # 6. SUCCESS
             # ====================================================
 
-            error_message = deployment_result.get(
-                "error",
-                "Unknown ARM deployment error.",
-            )
-
-            logger.error(
-                "Scoping ARM deployment failed. "
-                "deployment=%s state=%s error=%s",
+            logger.info(
+                "Scoping deployment completed successfully: "
+                "deployment=%s",
                 deployment_name,
-                provisioning_state,
-                error_message,
             )
 
-            # ----------------------------------------------------
-            # Build function URL response if available
-            # ----------------------------------------------------
+            return ScopingDeploymentResponse(
+                success=True,
 
-            resolved_function_urls: Optional[
-                ScopingFunctionUrls
-            ] = None
+                message=(
+                    "Scoping-00, Scoping-01 and "
+                    "Scoping-02 deployed successfully."
+                ),
 
-            if function_urls:
+                subscription_id=(
+                    request.subscription_id
+                ),
 
-                resolved_function_urls = ScopingFunctionUrls(
-                    config_service_url=function_urls.get(
-                        "config_service_url"
-                    ),
-                    business_day_hour_status_url=(
-                        function_urls.get(
-                            "business_day_hour_status_url"
-                        )
-                    ),
-                    get_next_business_day_url=(
-                        function_urls.get(
-                            "get_next_business_day_url"
-                        )
-                    ),
-                    call_azure_function_url=(
-                        function_urls.get(
-                            "call_azure_function_url"
-                        )
-                    ),
-                )
+                resource_group_name=(
+                    request.resource_group_name
+                ),
+
+                location=request.location,
+
+                logic_app_name=(
+                    request.logic_app_name
+                ),
+
+                scoping01_logic_app_name=(
+                    request.scoping01_logic_app_name
+                ),
+
+                scoping02_logic_app_name=(
+                    request.scoping02_logic_app_name
+                ),
+
+                storage_account_name=(
+                    request.storage_account_name
+                ),
+
+                deployment_name=(
+                    deployment_name
+                ),
+
+                provisioning_state=(
+                    provisioning_state
+                ),
+
+                table_connection_id=(
+                    table_connection_id
+                ),
+
+                queue_connection_id=(
+                    queue_connection_id
+                ),
+
+                sharepoint_connection_id=(
+                    sharepoint_connection_id
+                ),
+
+                function_urls=(
+                    ScopingFunctionUrls(
+                        **function_urls
+                    )
+                ),
+
+                logic_app_urls=(
+                    ScopingLogicAppUrls(
+                        **logic_app_urls
+                    )
+                ),
+            )
+
+        except Exception as exc:
+
+            logger.exception(
+                "Scoping deployment failed."
+            )
 
             return ScopingDeploymentResponse(
                 success=False,
 
                 message=(
                     f"Scoping deployment failed: "
-                    f"{error_message}"
-                ),
-
-                # --------------------------------------------
-                # AZURE
-                # --------------------------------------------
-
-                subscription_id=request.subscription_id,
-
-                resource_group_name=(
-                    request.resource_group_name
-                ),
-
-                location=request.location,
-
-                # --------------------------------------------
-                # LOGIC APPS
-                # --------------------------------------------
-
-                logic_app_name=request.logic_app_name,
-
-                scoping01_logic_app_name=(
-                    request.scoping01_logic_app_name
-                ),
-
-                # --------------------------------------------
-                # STORAGE
-                # --------------------------------------------
-
-                storage_account_name=(
-                    request.storage_account_name
-                ),
-
-                # --------------------------------------------
-                # DEPLOYMENT
-                # --------------------------------------------
-
-                deployment_name=deployment_name,
-
-                provisioning_state=(
-                    provisioning_state
-                ),
-
-                # --------------------------------------------
-                # API CONNECTIONS
-                # --------------------------------------------
-
-                table_connection_id=(
-                    table_connection_id
-                ),
-
-                queue_connection_id=(
-                    queue_connection_id
-                ),
-
-                sharepoint_connection_id=(
-                    sharepoint_connection_id
-                ),
-
-                # --------------------------------------------
-                # FUNCTION URLS
-                # --------------------------------------------
-
-                function_urls=resolved_function_urls,
-            )
-
-        # ========================================================
-        # UNEXPECTED ERROR
-        # ========================================================
-
-        except Exception as exc:
-
-            logger.exception(
-                "Scoping deployment failed unexpectedly."
-            )
-
-            # ----------------------------------------------------
-            # Build partial function URL response
-            # ----------------------------------------------------
-
-            resolved_function_urls: Optional[
-                ScopingFunctionUrls
-            ] = None
-
-            if function_urls:
-
-                resolved_function_urls = ScopingFunctionUrls(
-                    config_service_url=function_urls.get(
-                        "config_service_url"
-                    ),
-                    business_day_hour_status_url=(
-                        function_urls.get(
-                            "business_day_hour_status_url"
-                        )
-                    ),
-                    get_next_business_day_url=(
-                        function_urls.get(
-                            "get_next_business_day_url"
-                        )
-                    ),
-                    call_azure_function_url=(
-                        function_urls.get(
-                            "call_azure_function_url"
-                        )
-                    ),
-                )
-
-            return ScopingDeploymentResponse(
-                success=False,
-
-                message=(
-                    f"{request.logic_app_name} deployment failed: "
                     f"{str(exc)}"
                 ),
 
-                # --------------------------------------------
-                # AZURE
-                # --------------------------------------------
-
-                subscription_id=request.subscription_id,
+                subscription_id=(
+                    request.subscription_id
+                ),
 
                 resource_group_name=(
                     request.resource_group_name
@@ -584,53 +412,19 @@ class ScopingDeploymentService:
 
                 location=request.location,
 
-                # --------------------------------------------
-                # LOGIC APPS
-                # --------------------------------------------
-
-                logic_app_name=request.logic_app_name,
+                logic_app_name=(
+                    request.logic_app_name
+                ),
 
                 scoping01_logic_app_name=(
                     request.scoping01_logic_app_name
                 ),
 
-                # --------------------------------------------
-                # STORAGE
-                # --------------------------------------------
+                scoping02_logic_app_name=(
+                    request.scoping02_logic_app_name
+                ),
 
                 storage_account_name=(
                     request.storage_account_name
                 ),
-
-                # --------------------------------------------
-                # DEPLOYMENT
-                # --------------------------------------------
-
-                deployment_name=deployment_name,
-
-                provisioning_state=(
-                    provisioning_state
-                ),
-
-                # --------------------------------------------
-                # API CONNECTIONS
-                # --------------------------------------------
-
-                table_connection_id=(
-                    table_connection_id
-                ),
-
-                queue_connection_id=(
-                    queue_connection_id
-                ),
-
-                sharepoint_connection_id=(
-                    sharepoint_connection_id
-                ),
-
-                # --------------------------------------------
-                # FUNCTION URLS
-                # --------------------------------------------
-
-                function_urls=resolved_function_urls,
             )
