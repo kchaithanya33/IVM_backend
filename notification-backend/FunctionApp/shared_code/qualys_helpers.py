@@ -983,7 +983,7 @@ def encode_excel_data(
         # Get Key Vault URL from Function App setting
         # ------------------------------------------------------------
 
-        key_vault_url = "https://kv-qualys-security-001.vault.azure.net/"
+        key_vault_url = "https://key-vault-IVM.vault.azure.net/"
 
         if not key_vault_url:
 

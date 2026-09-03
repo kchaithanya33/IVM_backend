@@ -1149,7 +1149,7 @@
             "FilePath": "@{variables('callbackParams')?['sourceFolder']}",
             "CallbackId": "@{triggerBody()?['callbackId']}"
           },
-          "path": "/v2/storageAccounts/@{encodeURIComponent(parameters('storageAccountName'))}/tables/@{encodeURIComponent('NotificationLogs')}/entities"
+          "path": "/v2/storageAccounts/@{encodeURIComponent(parameters('storageAccountName'))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
         }
       },
    

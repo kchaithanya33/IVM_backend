@@ -1,5 +1,3 @@
-
-
 from typing import Optional
 
 from pydantic import BaseModel
@@ -53,10 +51,13 @@ class ScopingDeploymentRequest(BaseModel):
     # AZURE
     # --------------------------------------------------------
 
+    # Required - environment specific
     subscription_id: str
 
+    # Required - environment specific
     resource_group_name: str
 
+    # Required - environment specific
     location: str
 
     # --------------------------------------------------------
@@ -73,59 +74,84 @@ class ScopingDeploymentRequest(BaseModel):
     # STORAGE
     # --------------------------------------------------------
 
+    # Required - environment specific
     storage_account_name: str
 
-    scoping_schedule_queue_name: str
+    scoping_schedule_queue_name: str = (
+        "scopingschedulequeue"
+    )
 
-    notification_log_table_name: str
+    notification_log_table_name: str = (
+        "NotificationLogs"
+    )
 
     # --------------------------------------------------------
     # SHAREPOINT
     # --------------------------------------------------------
 
+    # Required - environment specific
     share_point_url: str
 
-    sharepoint_connection_name: str = "sharepointonline-1"
+    sharepoint_connection_name: str = (
+        "sharepointonline-1"
+    )
 
     # --------------------------------------------------------
     # COMPLETION LOGIC APP
     # --------------------------------------------------------
 
-    completion_logic_app_name: str
+    completion_logic_app_name: str = (
+        "notification-completion"
+    )
 
-    completion_logic_app_trigger_name: str
+    completion_logic_app_trigger_name: str = (
+        "When_a_HTTP_request_is_received"
+    )
 
     # --------------------------------------------------------
     # SCOPING-02 LOGIC APP
     # --------------------------------------------------------
 
-    scoping02_logic_app_trigger_name: str
+    scoping02_logic_app_trigger_name: str = (
+        "HTTP_request_from_Notification_Followup"
+    )
 
     # --------------------------------------------------------
     # CALLBACK
     # --------------------------------------------------------
 
-    callback_secret_key: str
+    callback_secret_key: str = "123"
 
     # --------------------------------------------------------
     # NOTIFICATION LOGIC APP
     # --------------------------------------------------------
 
-    notification_logic_app_name: str
+    notification_logic_app_name: str = (
+        "notification-service"
+    )
 
-    notification_logic_app_trigger_name: str
+    notification_logic_app_trigger_name: str = (
+        "When_a_HTTP_request_is_received"
+    )
 
-    notification_status: str
+    notification_status: str = (
+        "NotificationStatus"
+    )
 
     # --------------------------------------------------------
     # FUNCTION APP
     # --------------------------------------------------------
 
+    # Required - environment specific
     function_app_name: str
 
-    # Existing functions
+    # --------------------------------------------------------
+    # EXISTING FUNCTIONS
+    # --------------------------------------------------------
 
-    config_function_name: str = "GetPartitionConfigs"
+    config_function_name: str = (
+        "GetPartitionConfigs"
+    )
 
     business_day_hour_status_function_name: str = (
         "IsBusinessDayAndHour"
@@ -143,21 +169,33 @@ class ScopingDeploymentRequest(BaseModel):
     # SCOPING-02 FUNCTIONS
     # --------------------------------------------------------
 
-    process_asset_data_function_name: str
+    process_asset_data_function_name: str = (
+        "ExcelIPExtractor"
+    )
 
-    create_asset_groups_function_name: str
+    create_asset_groups_function_name: str = (
+        "QualysAssetGrouping"
+    )
 
-    error_processor_function_name: str
+    error_processor_function_name: str = (
+        "error_processor"
+    )
 
-    check_working_hours_function_name: str
+    check_working_hours_function_name: str = (
+        "CheckBusinessHours"
+    )
 
     # --------------------------------------------------------
     # API CONNECTIONS
     # --------------------------------------------------------
 
-    table_connection_name: str = "azuretables-1"
+    table_connection_name: str = (
+        "azuretables-1"
+    )
 
-    queue_connection_name: str = "azurequeues-1"
+    queue_connection_name: str = (
+        "azurequeues-1"
+    )
 
 
 # ============================================================

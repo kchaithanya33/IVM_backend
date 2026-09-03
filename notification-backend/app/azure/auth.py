@@ -662,9 +662,9 @@ class AuthScanAzureService:
             "servicenowApiUrl": request.servicenow_api_url or "",
             "mulesoftApiKey": request.mulesoft_api_key or "",
             "excelipexractor": function_urls["excelipexractor"],
-            "vulnScanTriggerUrl": request.vuln_scan_trigger_url or "",
-            "assetServiceUrl": request.asset_service_url or "",
-            "keyVaultUrl": request.key_vault_url or "",
+            
+            
+            
 
             "$connections": self._build_connections_parameter(
                 request,
