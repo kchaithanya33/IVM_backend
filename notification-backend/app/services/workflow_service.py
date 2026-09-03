@@ -44,6 +44,10 @@ class WorkflowService:
             # ------------------------------------------------
 
             "AuthScanResults",
+             # Scan Log tables
+    "ScanStatusLog",
+    "ScanCompletionLog",
+            
         ]
 
         # ====================================================
