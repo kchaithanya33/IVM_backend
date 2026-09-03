@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -26,6 +25,11 @@ from app.api.connections import (
 
 from app.api.scoping import (
     router as scoping_router,
+)
+
+# NEW: AuthScan
+from app.api.auth import (
+    router as auth_router,
 )
 
 
@@ -123,6 +127,15 @@ app.include_router(
 
 app.include_router(
     scoping_router
+)
+
+
+# ------------------------------------------------------------
+# AuthScan Logic App Deployment
+# ------------------------------------------------------------
+
+app.include_router(
+    auth_router
 )
 
 

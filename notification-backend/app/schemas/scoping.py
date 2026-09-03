@@ -2,270 +2,56 @@
 
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 # ============================================================
-# SCOPING DEPLOYMENT REQUEST
-# ============================================================
-
-class ScopingDeploymentRequest(BaseModel):
-    """
-    Request model for deploying:
-
-        LA-Scoping-00
-        LA-Scoping-01
-        LA-Scoping-02
-
-    Function URLs and Logic App callback URLs are resolved
-    dynamically by the backend.
-
-    Frontend supplies:
-        - Azure resource names
-        - Logic App names
-        - Logic App trigger names
-        - Function App name
-        - Function names
-        - configuration values
-
-    Frontend does NOT supply Function URLs.
-    Frontend does NOT supply Logic App callback URLs.
-    """
-
-    # ========================================================
-    # AZURE
-    # ========================================================
-
-    subscription_id: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    resource_group_name: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    location: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    # ========================================================
-    # LOGIC APPS
-    # ========================================================
-
-    logic_app_name: str = Field(
-        default="LA-Scoping-00",
-    )
-
-    scoping01_logic_app_name: str = Field(
-        default="LA-Scoping-01",
-    )
-
-    scoping02_logic_app_name: str = Field(
-        default="LA-Scoping-02",
-    )
-
-    # ========================================================
-    # STORAGE / QUEUE / TABLE
-    # ========================================================
-
-    storage_account_name: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    scoping_schedule_queue_name: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    notification_log_table_name: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    # ========================================================
-    # SHAREPOINT
-    # ========================================================
-
-    share_point_url: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    sharepoint_connection_name: str = Field(
-        default="sharepointonline-1",
-    )
-
-    # ========================================================
-    # COMPLETION CALLBACK
-    # ========================================================
-
-    completion_logic_app_name: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    completion_logic_app_trigger_name: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    callback_secret_key: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    # ========================================================
-    # NOTIFICATION
-    # ========================================================
-
-    notification_logic_app_name: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    notification_logic_app_trigger_name: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    notification_status: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    # ========================================================
-    # FUNCTION APP
-    # ========================================================
-
-    function_app_name: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    # ========================================================
-    # EXISTING FUNCTION NAMES
-    # ========================================================
-
-    config_function_name: str = Field(
-        default="GetPartitionConfigs",
-    )
-
-    business_day_hour_status_function_name: str = Field(
-        default="IsBusinessDayAndHour",
-    )
-
-    get_next_business_day_function_name: str = Field(
-        default="GetNextBusinessDay",
-    )
-
-    call_azure_function_name: str = Field(
-        default="ProcessAzureIPData",
-    )
-
-    # ========================================================
-    # SCOPING-02 FUNCTION NAMES
-    #
-    # These names are supplied by the frontend.
-    # Backend resolves their actual URLs.
-    # ========================================================
-
-    process_asset_data_function_name: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    create_asset_groups_function_name: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    error_processor_function_name: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    check_working_hours_function_name: str = Field(
-        ...,
-        min_length=1,
-    )
-
-    # ========================================================
-    # API CONNECTIONS
-    # ========================================================
-
-    table_connection_name: str = Field(
-        default="azuretables-1",
-    )
-
-    queue_connection_name: str = Field(
-        default="azurequeues-1",
-    )
-
-
-# ============================================================
-# FUNCTION URL INFORMATION
+# FUNCTION URLS
 # ============================================================
 
 class ScopingFunctionUrls(BaseModel):
-    """
-    Azure Function URLs resolved dynamically by backend.
-    """
 
-    # Existing Scoping functions
+    config_service_url: str
 
-    config_service_url: Optional[str] = None
+    business_day_hour_status_url: str
 
-    business_day_hour_status_url: Optional[str] = None
+    get_next_business_day_url: str
 
-    get_next_business_day_url: Optional[str] = None
+    call_azure_function_url: str
 
-    call_azure_function_url: Optional[str] = None
+    # Scoping-02
+    process_asset_data_url: str
 
-    # Scoping-02 functions
+    create_asset_groups_url: str
 
-    process_asset_data_url: Optional[str] = None
+    error_processor_url: str
 
-    create_asset_groups_url: Optional[str] = None
-
-    error_processor_url: Optional[str] = None
-
-    check_working_hours_url: Optional[str] = None
+    check_working_hours_url: str
 
 
 # ============================================================
-# LOGIC APP URL INFORMATION
+# LOGIC APP URLS
 # ============================================================
 
 class ScopingLogicAppUrls(BaseModel):
-    """
-    Logic App callback URLs resolved dynamically by backend.
-    """
 
-    notification_service_url: Optional[str] = None
+    notification_service_url: str
 
-    completion_logic_app_url: Optional[str] = None
+    completion_logic_app_url: str
+
+    # This URL is obtained only AFTER Scoping-02 is deployed.
+    scoping02_logic_app_url: Optional[str] = None
 
 
 # ============================================================
-# DEPLOYMENT RESPONSE
+# DEPLOYMENT REQUEST
 # ============================================================
 
-class ScopingDeploymentResponse(BaseModel):
-    """
-    Response returned after Scoping deployment.
-    """
+class ScopingDeploymentRequest(BaseModel):
 
-    success: bool
-
-    message: str
-
-    # ========================================================
+    # --------------------------------------------------------
     # AZURE
-    # ========================================================
+    # --------------------------------------------------------
 
     subscription_id: str
 
@@ -273,33 +59,144 @@ class ScopingDeploymentResponse(BaseModel):
 
     location: str
 
-    # ========================================================
-    # LOGIC APPS
-    # ========================================================
+    # --------------------------------------------------------
+    # SCOPING LOGIC APPS
+    # --------------------------------------------------------
+
+    logic_app_name: str = "LA-Scoping-00"
+
+    scoping01_logic_app_name: str = "LA-Scoping-01"
+
+    scoping02_logic_app_name: str = "LA-Scoping-02"
+
+    # --------------------------------------------------------
+    # STORAGE
+    # --------------------------------------------------------
+
+    storage_account_name: str
+
+    scoping_schedule_queue_name: str
+
+    notification_log_table_name: str
+
+    # --------------------------------------------------------
+    # SHAREPOINT
+    # --------------------------------------------------------
+
+    share_point_url: str
+
+    sharepoint_connection_name: str = "sharepointonline-1"
+
+    # --------------------------------------------------------
+    # COMPLETION LOGIC APP
+    # --------------------------------------------------------
+
+    completion_logic_app_name: str
+
+    completion_logic_app_trigger_name: str
+
+    # --------------------------------------------------------
+    # SCOPING-02 LOGIC APP
+    # --------------------------------------------------------
+
+    scoping02_logic_app_trigger_name: str
+
+    # --------------------------------------------------------
+    # CALLBACK
+    # --------------------------------------------------------
+
+    callback_secret_key: str
+
+    # --------------------------------------------------------
+    # NOTIFICATION LOGIC APP
+    # --------------------------------------------------------
+
+    notification_logic_app_name: str
+
+    notification_logic_app_trigger_name: str
+
+    notification_status: str
+
+    # --------------------------------------------------------
+    # FUNCTION APP
+    # --------------------------------------------------------
+
+    function_app_name: str
+
+    # Existing functions
+
+    config_function_name: str = "GetPartitionConfigs"
+
+    business_day_hour_status_function_name: str = (
+        "IsBusinessDayAndHour"
+    )
+
+    get_next_business_day_function_name: str = (
+        "GetNextBusinessDay"
+    )
+
+    call_azure_function_name: str = (
+        "ProcessAzureIPData"
+    )
+
+    # --------------------------------------------------------
+    # SCOPING-02 FUNCTIONS
+    # --------------------------------------------------------
+
+    process_asset_data_function_name: str
+
+    create_asset_groups_function_name: str
+
+    error_processor_function_name: str
+
+    check_working_hours_function_name: str
+
+    # --------------------------------------------------------
+    # API CONNECTIONS
+    # --------------------------------------------------------
+
+    table_connection_name: str = "azuretables-1"
+
+    queue_connection_name: str = "azurequeues-1"
+
+
+# ============================================================
+# DEPLOYMENT RESPONSE
+# ============================================================
+
+class ScopingDeploymentResponse(BaseModel):
+
+    success: bool
+
+    message: str
+
+    subscription_id: str
+
+    resource_group_name: str
+
+    location: str
 
     logic_app_name: str
 
     scoping01_logic_app_name: str
 
-    scoping02_logic_app_name: Optional[str] = None
-
-    # ========================================================
-    # STORAGE
-    # ========================================================
+    scoping02_logic_app_name: str
 
     storage_account_name: str
 
-    # ========================================================
-    # DEPLOYMENT
-    # ========================================================
-
+    # Final deployment names
     deployment_name: Optional[str] = None
+
+    # Optional individual deployment names
+    scoping02_deployment_name: Optional[str] = None
+
+    scoping00_01_deployment_name: Optional[str] = None
 
     provisioning_state: Optional[str] = None
 
-    # ========================================================
-    # API CONNECTIONS
-    # ========================================================
+    scoping02_provisioning_state: Optional[str] = None
+
+    scoping00_01_provisioning_state: Optional[str] = None
 
     table_connection_id: Optional[str] = None
 
@@ -307,14 +204,10 @@ class ScopingDeploymentResponse(BaseModel):
 
     sharepoint_connection_id: Optional[str] = None
 
-    # ========================================================
-    # FUNCTION URLS
-    # ========================================================
+    function_urls: Optional[
+        ScopingFunctionUrls
+    ] = None
 
-    function_urls: Optional[ScopingFunctionUrls] = None
-
-    # ========================================================
-    # LOGIC APP URLS
-    # ========================================================
-
-    logic_app_urls: Optional[ScopingLogicAppUrls] = None
+    logic_app_urls: Optional[
+        ScopingLogicAppUrls
+    ] = None

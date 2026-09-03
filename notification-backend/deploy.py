@@ -12,10 +12,6 @@ from app.azure.function_app import (
     create_function_app,
 )
 
-from app.azure.resources import (
-    AzureResourceService,
-)
-
 
 class NotificationDeployment:
 
@@ -68,17 +64,6 @@ class NotificationDeployment:
 
         self.function_app_plan_name = (
             f"{function_app_name}-plan"
-        )
-
-        # ----------------------------------------------------
-        # Key Vault name
-        #
-        # User does NOT provide this.
-        # It is generated automatically.
-        # ----------------------------------------------------
-
-        self.key_vault_name = (
-            f"{function_app_name}-kv"
         )
 
         # ----------------------------------------------------
@@ -239,161 +224,12 @@ class NotificationDeployment:
         )
 
         # ====================================================
-        # KEY VAULT SETUP
-        # ====================================================
-
-        # ----------------------------------------------------
-        # 9. Initialize Azure Resource Service
-        # ----------------------------------------------------
-
-        azure_resource_service = (
-            AzureResourceService(
-                subscription_id=(
-                    self.subscription_id
-                )
-            )
-        )
-
-        # ----------------------------------------------------
-        # 10. Get Function App Managed Identity
-        # ----------------------------------------------------
-
-        function_app_principal_id = (
-            azure_resource_service
-            .get_function_app_principal_id(
-                resource_group_name=(
-                    self.resource_group_name
-                ),
-
-                function_app_name=(
-                    self.function_app_name
-                )
-            )
-        )
-
-        # ----------------------------------------------------
-        # 11. Get Azure Tenant ID
-        # ----------------------------------------------------
-
-        tenant_id = (
-            azure_resource_service
-            .get_tenant_id()
-        )
-
-        # ----------------------------------------------------
-        # 12. Create / Get Key Vault
-        # ----------------------------------------------------
-
-        (
-            key_vault,
-            key_vault_created,
-        ) = (
-            azure_resource_service
-            .create_key_vault(
-                resource_group_name=(
-                    self.resource_group_name
-                ),
-
-                key_vault_name=(
-                    self.key_vault_name
-                ),
-
-                location=(
-                    self.resource_group_location
-                ),
-
-                tenant_id=(
-                    tenant_id
-                )
-            )
-        )
-
-        if not key_vault:
-
-            raise RuntimeError(
-                "Key Vault creation/get operation "
-                "did not return a resource."
-            )
-
-        # ----------------------------------------------------
-        # 13. Get Key Vault ID
-        # ----------------------------------------------------
-
-        key_vault_id = (
-            azure_resource_service
-            .get_key_vault_id(
-                resource_group_name=(
-                    self.resource_group_name
-                ),
-
-                key_vault_name=(
-                    self.key_vault_name
-                )
-            )
-        )
-
-        # ----------------------------------------------------
-        # 14. Get Key Vault URL
-        # ----------------------------------------------------
-
-        key_vault_url = (
-            azure_resource_service
-            .get_key_vault_url(
-                self.key_vault_name
-            )
-        )
-
-        # ----------------------------------------------------
-        # 15. Assign Key Vault Secrets User Role
-        #
-        # Allows the Function App Managed Identity
-        # to read secrets from Key Vault.
-        # ----------------------------------------------------
-
-        (
-            _function_app_role_assignment,
-            function_app_role_assigned,
-        ) = (
-            azure_resource_service
-            .assign_key_vault_secrets_user_role(
-                key_vault_id=(
-                    key_vault_id
-                ),
-
-                principal_id=(
-                    function_app_principal_id
-                )
-            )
-        )
-
-        # ----------------------------------------------------
-        # 16. Configure KEY_VAULT_URL
-        # ----------------------------------------------------
-
-        azure_resource_service \
-            .configure_function_app_key_vault_url(
-                resource_group_name=(
-                    self.resource_group_name
-                ),
-
-                function_app_name=(
-                    self.function_app_name
-                ),
-
-                key_vault_url=(
-                    key_vault_url
-                )
-            )
-
-        function_app_key_vault_url_configured = (
-            True
-        )
-
-        # ====================================================
         # DEPLOYMENT COMPLETE
         # ====================================================
         #
         # IMPORTANT:
+        #
+        # Key Vault is not created or configured here.
         #
         # NotificationTemplates.csv is NOT imported here.
         #
@@ -448,36 +284,7 @@ class NotificationDeployment:
                     self.resource_group_location,
 
                 "app_service_plan":
-                    self.function_app_plan_name,
-
-                "managed_identity": {
-
-                    "enabled": True,
-
-                    "principal_id":
-                        function_app_principal_id
-                }
-            },
-
-            "key_vault": {
-
-                "name":
-                    self.key_vault_name,
-
-                "url":
-                    key_vault_url,
-
-                "tenant_id":
-                    tenant_id,
-
-                "created":
-                    key_vault_created,
-
-                "function_app_role_assigned":
-                    function_app_role_assigned,
-
-                "function_app_key_vault_url_configured":
-                    function_app_key_vault_url_configured
+                    self.function_app_plan_name
             },
 
             "tables":

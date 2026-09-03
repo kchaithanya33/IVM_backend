@@ -8,6 +8,12 @@
       "type": "string",
       "defaultValue": "LA-Scoping-00"
     },
+    "scoping02LogicAppUrl": {
+  "type": "string",
+  "metadata": {
+    "description": "URL of the Scoping-02 Logic App HTTP trigger"
+  }
+},
 
     "scoping01LogicAppName": {
       "type": "string",
@@ -154,1534 +160,7 @@
   },
 
   "resources": [
-    {
-      "type": "Microsoft.Logic/workflows",
-      "apiVersion": "2019-05-01",
-      "name": "[parameters('logicAppName')]",
-      "location": "[parameters('location')]",
-
-      "properties": {
-        "state": "Enabled",
-
-        "definition": {
-          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-          "contentVersion": "1.0.0.0",
-
-          "parameters": {
-            "$connections": {
-              "type": "Object",
-              "defaultValue": {}
-            },
-
-            "configServiceUrl": {
-              "type": "String"
-            },
-
-            "storageAccountName": {
-              "type": "String"
-            },
-
-            "notificationLogTableName": {
-              "type": "String"
-            },
-
-            "businessDayHourStatusUrl": {
-              "type": "String"
-            },
-
-            "getNextBusinessDayUrl": {
-              "type": "String"
-            },
-
-            "scopingScheduleQueueName": {
-              "type": "String"
-            },
-
-            "completionLogicAppUrl": {
-              "type": "String"
-            },
-
-            "callbackSecretKey": {
-              "type": "String"
-            },
-
-            "notificationServiceUrl": {
-              "type": "String"
-            }
-          },
-
-          "triggers": {
-            "Recurrence": {
-              "type": "Recurrence",
-              "recurrence": {
-                "frequency": "Month",
-                "interval": 1,
-                "schedule": {
-                  "hours": [
-                    0
-                  ],
-                  "minutes": [
-                    1
-                  ],
-                  "monthDays": [
-                    1
-                  ]
-                },
-                "timeZone": "India Standard Time"
-              }
-            }
-          },
-
-          "actions": {
-            "Get_Configuration": {
-              "runAfter": {},
-              "type": "Http",
-              "inputs": {
-                "uri": "@replace(parameters('configServiceUrl'), '{partition}', 'Scoping')",
-                "method": "GET"
-              }
-            },
-
-            "Initialize_Variables": {
-              "runAfter": {
-                "Get_Configuration": [
-                  "Succeeded"
-                ]
-              },
-              "type": "InitializeVariable",
-              "inputs": {
-                "variables": [
-                  {
-                    "name": "currentDate",
-                    "type": "string",
-                    "value": "@{utcNow('yyyy-MM-dd')}"
-                  },
-                  {
-                    "name": "cycleId",
-                    "type": "string",
-                    "value": "@{concat(formatDateTime(utcNow(), 'yyyy-MM'), '-CYCLE')}"
-                  },
-                  {
-                    "name": "fileName",
-                    "type": "string",
-                    "value": "@{concat('Scoping-', formatDateTime(utcNow(), 'yyyy-MM'), '-CYCLE-', formatDateTime(utcNow(), 'yyyyMMdd-HHmmss'), '.xlsx')}"
-                  },
-                  {
-                    "name": "targetFolder",
-                    "type": "string",
-                    "value": "@{body('Get_Configuration')?['SharePoint:ScopingFolderPath']}"
-                  },
-                  {
-                    "name": "cmdbSource",
-                    "type": "string",
-                    "value": "@{body('Get_Configuration')?['ServiceNow:CmdbSource']}"
-                  },
-                  {
-                    "name": "visibilityTimeoutSeconds",
-                    "type": "integer",
-                    "value": 0
-                  },
-                  {
-                    "name": "nextExecutionDate",
-                    "type": "string",
-                    "value": ""
-                  }
-                ]
-              }
-            },
-
-            "Create_Cycle_Entry": {
-              "runAfter": {
-                "Initialize_Variables": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
-                  }
-                },
-                "method": "put",
-                "body": {
-                  "PartitionKey": "Cycle",
-                  "RowKey": "@{variables('cycleId')}",
-                  "StartDate": "@{variables('currentDate')}",
-                  "CurrentPhase": "Scoping",
-                  "Status": "Scheduled",
-                  "LastUpdatedDate": "@{utcNow()}",
-                  "ScheduledBy": "LA-Scoping-00-MonthlyScheduler",
-                  "TriggerTime": "@{utcNow()}"
-                },
-                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('Cycles')}/entities(PartitionKey='@{encodeURIComponent('Cycle')}',RowKey='@{encodeURIComponent(variables('cycleId'))}')"
-              }
-            },
-
-            "Get_BusinessDay_Config": {
-              "runAfter": {
-                "Create_Cycle_Entry": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
-                  }
-                },
-                "method": "get",
-                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('AppConfiguration')}/entities(PartitionKey='@{encodeURIComponent('BusinessDay')}',RowKey='@{encodeURIComponent('WorkingDayandHour')}')"
-              }
-            },
-
-            "Check_Current_Business_Hours": {
-              "runAfter": {
-                "Get_BusinessDay_Config": [
-                  "Succeeded"
-                ]
-              },
-              "type": "Http",
-              "inputs": {
-                "uri": "@parameters('businessDayHourStatusUrl')",
-                "method": "POST",
-                "headers": {
-                  "Content-Type": "application/json"
-                },
-                "body": {
-                  "referenceDateTime": "@{utcNow()}",
-                  "region": "@{body('Get_BusinessDay_Config')?['region']}",
-                  "startTime": "@{body('Get_BusinessDay_Config')?['startTime']}",
-                  "endTime": "@{body('Get_BusinessDay_Config')?['endTime']}",
-                  "businessDays": "@body('Get_BusinessDay_Config')?['businessDays']"
-                }
-              }
-            },
-
-            "Parse_Current_Business_Status": {
-              "runAfter": {
-                "Check_Current_Business_Hours": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ParseJson",
-              "inputs": {
-                "content": "@body('Check_Current_Business_Hours')",
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "referenceDateTime": {
-                      "type": "string"
-                    },
-                    "region": {
-                      "type": "string"
-                    },
-                    "isBusinessDay": {
-                      "type": "boolean"
-                    },
-                    "isBusinessHour": {
-                      "type": "boolean"
-                    },
-                    "isBusinessDayAndHour": {
-                      "type": "boolean"
-                    },
-                    "customBusinessHours": {
-                      "type": "object",
-                      "properties": {
-                        "startTime": {
-                          "type": "string"
-                        },
-                        "endTime": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "customBusinessDays": {
-                      "type": "array",
-                      "items": {
-                        "type": "integer"
-                      }
-                    }
-                  }
-                }
-              }
-            },
-
-            "Get_Skip_Business_Day_Config": {
-              "runAfter": {
-                "Parse_Current_Business_Status": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
-                  }
-                },
-                "method": "get",
-                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('AppConfiguration')}/entities(PartitionKey='@{encodeURIComponent('Scoping')}',RowKey='@{encodeURIComponent('SkipBusinessDayCheck')}')"
-              }
-            },
-
-            "Check_If_Within_Business_Hours": {
-              "runAfter": {
-                "Get_Skip_Business_Day_Config": [
-                  "Succeeded"
-                ]
-              },
-              "type": "If",
-              "expression": {
-                "and": [
-                  {
-                    "equals": [
-                      "@body('Parse_Current_Business_Status')?['isBusinessDayAndHour']",
-                      true
-                    ]
-                  }
-                ]
-              },
-
-              "actions": {
-                "Schedule_Immediate_Execution": {
-                  "type": "ApiConnection",
-                  "inputs": {
-                    "host": {
-                      "connection": {
-                        "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
-                      }
-                    },
-                    "method": "post",
-                    "body": "{\"id\":\"@{guid()}\",\"cycleId\":\"@{variables('cycleId')}\",\"scheduledTime\":\"@{utcNow()}\",\"executeAfter\":\"@{utcNow()}\",\"sourceLogicApp\":\"LA-Scoping-00\",\"targetLogicApp\":\"LA-Scoping-01\",\"parameters\":{\"cmdbSource\":\"@{variables('cmdbSource')}\",\"targetFolder\":\"@{variables('targetFolder')}\",\"fileName\":\"@{variables('fileName')}\",\"enableQualysIntegration\":true},\"status\":\"Scheduled\"}",
-                    "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('scopingScheduleQueueName'))}/messages"
-                  }
-                },
-
-                "Log_Immediate_Scheduling": {
-                  "runAfter": {
-                    "Schedule_Immediate_Execution": [
-                      "Succeeded"
-                    ]
-                  },
-                  "type": "ApiConnection",
-                  "inputs": {
-                    "host": {
-                      "connection": {
-                        "name": "@parameters('$connections')['azuretables-1']['connectionId']"
-                      }
-                    },
-                    "method": "post",
-                    "body": {
-                      "PartitionKey": "Scoping",
-                      "RowKey": "@{guid()}",
-                      "Timestamp": "@{utcNow()}",
-                      "WorkflowName": "ScopingPhase-MonthlyScheduler",
-                      "CycleId": "@{variables('cycleId')}",
-                      "ActionType": "ImmediateScheduling",
-                      "Description": "@{concat('Scheduled immediate scoping task for cycle ', variables('cycleId'), ' - Currently within business hours')}",
-                      "Status": "Scheduled",
-                      "FileName": "@{variables('fileName')}",
-                      "FilePath": "@{variables('targetFolder')}",
-                      "ExecutionDate": "@{utcNow()}",
-                      "IsBusinessDay": "@{body('Parse_Current_Business_Status')?['isBusinessDay']}",
-                      "IsBusinessHour": "@{body('Parse_Current_Business_Status')?['isBusinessHour']}"
-                    },
-                    "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
-                  }
-                }
-              },
-
-              "else": {
-                "actions": {
-                  "Get_Next_Business_Day_and_Hours": {
-                    "type": "Http",
-                    "inputs": {
-                      "uri": "@parameters('getNextBusinessDayUrl')",
-                      "method": "POST",
-                      "headers": {
-                        "Content-Type": "application/json"
-                      },
-                      "body": {
-                        "referenceDateTime": "@{utcNow()}",
-                        "region": "@{body('Get_BusinessDay_Config')?['region']}",
-                        "startTime": "@{body('Get_BusinessDay_Config')?['startTime']}",
-                        "endTime": "@{body('Get_BusinessDay_Config')?['endTime']}",
-                        "businessDays": "@body('Get_BusinessDay_Config')?['businessDays']"
-                      }
-                    }
-                  },
-
-                  "Parse_Next_Business_Day": {
-                    "runAfter": {
-                      "Get_Next_Business_Day_and_Hours": [
-                        "Succeeded"
-                      ]
-                    },
-                    "type": "ParseJson",
-                    "inputs": {
-                      "content": "@body('Get_Next_Business_Day_and_Hours')",
-                      "schema": {
-                        "type": "object",
-                        "properties": {
-                          "referenceDateTime": {
-                            "type": "string"
-                          },
-                          "nextBusinessDay": {
-                            "type": "string"
-                          },
-                          "nextBusinessDateTime": {
-                            "type": "string"
-                          },
-                          "nextBusinessDateTimeRegion": {
-                            "type": "string"
-                          },
-                          "region": {
-                            "type": "string"
-                          },
-                          "isWithinBusinessHours": {
-                            "type": "boolean"
-                          },
-                          "waitTime": {
-                            "type": "object",
-                            "properties": {
-                              "days": {
-                                "type": "integer"
-                              },
-                              "hours": {
-                                "type": "integer"
-                              },
-                              "minutes": {
-                                "type": "integer"
-                              },
-                              "totalMinutes": {
-                                "type": "integer"
-                              },
-                              "totalHours": {
-                                "type": "number"
-                              },
-                              "visibilityTimeoutSeconds": {
-                                "type": "integer"
-                              }
-                            }
-                          },
-                          "customBusinessHours": {
-                            "type": "object",
-                            "properties": {
-                              "startTime": {
-                                "type": "string"
-                              },
-                              "endTime": {
-                                "type": "string"
-                              }
-                            }
-                          },
-                          "customBusinessDays": {
-                            "type": "array",
-                            "items": {
-                              "type": "integer"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  },
-
-                  "Set_Next_Execution_Date": {
-                    "runAfter": {
-                      "Parse_Next_Business_Day": [
-                        "Succeeded"
-                      ]
-                    },
-                    "type": "SetVariable",
-                    "inputs": {
-                      "name": "nextExecutionDate",
-                      "value": "@body('Parse_Next_Business_Day')?['nextBusinessDay']"
-                    }
-                  },
-
-                  "Set_Visibility_Timeout": {
-                    "runAfter": {
-                      "Set_Next_Execution_Date": [
-                        "Succeeded"
-                      ]
-                    },
-                    "type": "SetVariable",
-                    "inputs": {
-                      "name": "visibilityTimeoutSeconds",
-                      "value": "@body('Parse_Next_Business_Day')?['waitTime']?['visibilityTimeoutSeconds']"
-                    }
-                  },
-
-                  "Schedule_For_Next_Business_Hours": {
-                    "runAfter": {
-                      "Set_Visibility_Timeout": [
-                        "Succeeded"
-                      ]
-                    },
-                    "type": "ApiConnection",
-                    "inputs": {
-                      "host": {
-                        "connection": {
-                          "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
-                        }
-                      },
-                      "method": "post",
-                      "body": "{\n  \"id\": \"@{guid()}\",\n  \"cycleId\": \"@{variables('cycleId')}\",\n  \"scheduledTime\": \"@{utcNow()}\",\n  \"executeAfter\": \"@{variables('nextExecutionDate')}\",\n  \"sourceLogicApp\": \"LA-Scoping-00\",\n  \"targetLogicApp\": \"LA-Scoping-01\",\n  \"parameters\": {\n    \"cmdbSource\": \"@{variables('cmdbSource')}\",\n    \"targetFolder\": \"@{variables('targetFolder')}\",\n    \"fileName\": \"@{variables('fileName')}\",\n    \"enableQualysIntegration\": true\n  },\n  \"status\": \"Scheduled\"\n}",
-                      "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('scopingScheduleQueueName'))}/messages",
-                      "queries": {
-                        "visibilitytimeout": "@variables('visibilityTimeoutSeconds')"
-                      }
-                    }
-                  },
-
-                  "Log_Deferred_Scheduling": {
-                    "runAfter": {
-                      "Schedule_For_Next_Business_Hours": [
-                        "Succeeded"
-                      ]
-                    },
-                    "type": "ApiConnection",
-                    "inputs": {
-                      "host": {
-                        "connection": {
-                          "name": "@parameters('$connections')['azuretables-1']['connectionId']"
-                        }
-                      },
-                      "method": "post",
-                      "body": {
-                        "PartitionKey": "Scoping",
-                        "RowKey": "@{guid()}",
-                        "Timestamp": "@{utcNow()}",
-                        "WorkflowName": "ScopingPhase-MonthlyScheduler",
-                        "CycleId": "@{variables('cycleId')}",
-                        "ActionType": "DeferredScheduling",
-                        "Description": "@{concat('Scheduled scoping task for cycle ', variables('cycleId'), ' to execute at next business hours: ', variables('nextExecutionDate'))}",
-                        "Status": "Scheduled",
-                        "FileName": "@{variables('fileName')}",
-                        "FilePath": "@{variables('targetFolder')}",
-                        "ExecutionDate": "@{variables('nextExecutionDate')}",
-                        "WaitTimeDays": "@{body('Parse_Next_Business_Day')?['waitTime']?['days']}",
-                        "WaitTimeHours": "@{body('Parse_Next_Business_Day')?['waitTime']?['hours']}",
-                        "WaitTimeMinutes": "@{body('Parse_Next_Business_Day')?['waitTime']?['minutes']}",
-                        "VisibilityTimeoutSeconds": "@{variables('visibilityTimeoutSeconds')}",
-                        "IsBusinessDay": "@{body('Parse_Current_Business_Status')?['isBusinessDay']}",
-                        "IsBusinessHour": "@{body('Parse_Current_Business_Status')?['isBusinessHour']}"
-                      },
-                      "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
-                    }
-                  }
-                }
-              }
-            }
-          },
-
-          "outputs": {}
-        },
-
-        "parameters": {
-          "$connections": {
-            "value": "[parameters('$connections')]"
-          },
-
-          "storageAccountName": {
-            "value": "[parameters('storageAccountName')]"
-          },
-
-          "scopingScheduleQueueName": {
-            "value": "[parameters('scopingScheduleQueueName')]"
-          },
-
-          "configServiceUrl": {
-            "value": "[parameters('configServiceUrl')]"
-          },
-
-          "completionLogicAppUrl": {
-            "value": "[parameters('completionLogicAppUrl')]"
-          },
-
-          "callbackSecretKey": {
-            "value": "[parameters('callbackSecretKey')]"
-          },
-
-          "notificationLogTableName": {
-            "value": "[parameters('notificationLogTableName')]"
-          },
-
-          "businessDayHourStatusUrl": {
-            "value": "[parameters('businessDayHourStatusUrl')]"
-          },
-
-          "getNextBusinessDayUrl": {
-            "value": "[parameters('getNextBusinessDayUrl')]"
-          },
-
-          "notificationServiceUrl": {
-            "value": "[parameters('notificationServiceUrl')]"
-          }
-        }
-      }
-    },
-
-    {
-      "type": "Microsoft.Logic/workflows",
-      "apiVersion": "2019-05-01",
-      "name": "[parameters('scoping01LogicAppName')]",
-      "location": "[parameters('location')]",
-
-      "properties": {
-        "state": "Enabled",
-
-        "definition": {
-          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-          "contentVersion": "1.0.0.0",
-
-          "parameters": {
-            "$connections": {
-              "type": "Object",
-              "defaultValue": {}
-            },
-
-            "storageAccountName": {
-              "type": "String"
-            },
-
-            "scopingScheduleQueueName": {
-              "type": "String"
-            },
-
-            "configServiceUrl": {
-              "type": "String"
-            },
-
-            "callAzureFunctionUrl": {
-              "type": "String"
-            },
-
-            "completionLogicAppUrl": {
-              "type": "String"
-            },
-
-            "callbackSecretKey": {
-              "type": "String"
-            },
-
-            "notificationLogTableName": {
-              "type": "String"
-            },
-
-            "NotificationStatus": {
-              "type": "String"
-            },
-
-            "notificationServiceUrl": {
-              "type": "String"
-            },
-
-            "sharePointUrl": {
-              "type": "String"
-            }
-          },
-
-          "triggers": {
-            "When_a_message_is_received_in_a_queue": {
-              "type": "ApiConnection",
-              "recurrence": {
-                "frequency": "Minute",
-                "interval": 1
-              },
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
-                  }
-                },
-                "method": "get",
-                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('scopingScheduleQueueName'))}/messages"
-              }
-            }
-          },
-
-          "actions": {
-            "Parse_Queue_Message": {
-              "runAfter": {},
-              "type": "ParseJson",
-              "inputs": {
-                "content": "@json(triggerBody()?['QueueMessagesList']?['QueueMessage']?[0]?['MessageText'])",
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "cycleId": {
-                      "type": "string"
-                    },
-                    "scheduledTime": {
-                      "type": "string"
-                    },
-                    "executeAfter": {
-                      "type": "string"
-                    },
-                    "sourceLogicApp": {
-                      "type": "string"
-                    },
-                    "targetLogicApp": {
-                      "type": "string"
-                    },
-                    "parameters": {
-                      "type": "object",
-                      "properties": {
-                        "cmdbSource": {
-                          "type": "string"
-                        },
-                        "targetFolder": {
-                          "type": "string"
-                        },
-                        "fileName": {
-                          "type": "string"
-                        },
-                        "enableQualysIntegration": {
-                          "type": "boolean"
-                        }
-                      }
-                    },
-                    "status": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            },
-
-            "Initialize_Request_ID": {
-              "runAfter": {
-                "Parse_Queue_Message": [
-                  "Succeeded"
-                ]
-              },
-              "type": "InitializeVariable",
-              "inputs": {
-                "variables": [
-                  {
-                    "name": "requestId",
-                    "type": "string",
-                    "value": "@{guid()}"
-                  }
-                ]
-              }
-            },
-
-            "Initialize_Variables": {
-              "runAfter": {
-                "Initialize_Request_ID": [
-                  "Succeeded"
-                ]
-              },
-              "type": "InitializeVariable",
-              "inputs": {
-                "variables": [
-                  {
-                    "name": "folderPath",
-                    "type": "string"
-                  },
-                  {
-                    "name": "completionUrl",
-                    "type": "string"
-                  },
-                  {
-                    "name": "cmdbRequest",
-                    "type": "object"
-                  },
-                  {
-                    "name": "processingSummary",
-                    "type": "object"
-                  },
-                  {
-                    "name": "missingIPsList",
-                    "type": "array",
-                    "value": []
-                  },
-                  {
-                    "name": "cmdbReportUrl",
-                    "type": "string"
-                  },
-                  {
-                    "name": "cycleRowKey",
-                    "type": "string",
-                   "value": "@{concat(formatDateTime(utcNow(), 'yyyy-MM'), '-CYCLE')}"
-                  }
-                ]
-              }
-            },
-
-            "Get_Configuration": {
-              "runAfter": {
-                "Initialize_Variables": [
-                  "Succeeded"
-                ]
-              },
-              "type": "Http",
-              "inputs": {
-                "uri": "@replace(parameters('configServiceUrl'), '{partition}', 'Scoping')",
-                "method": "GET"
-              }
-            },
-
-            "Set_Completion_URL": {
-              "runAfter": {
-                "Get_Configuration": [
-                  "Succeeded"
-                ]
-              },
-              "type": "SetVariable",
-              "inputs": {
-                "name": "completionUrl",
-                "value": "@replace(replace(replace(parameters('completionLogicAppUrl'), '%7BtaskId%7D', encodeURIComponent(variables('requestId'))), '%7BworkflowName%7D', encodeURIComponent('ScopingPhase-DataRetrieval')), '%7Btoken%7D', encodeURIComponent(base64(concat(variables('requestId'), ':', 'ScopingPhase-DataRetrieval', ':', parameters('callbackSecretKey')))))"
-              }
-            },
-
-            "Get_CMDB_Report_content": {
-              "runAfter": {
-                "Set_Completion_URL": [
-                  "Succeeded"
-                ]
-              },
-              "metadata": {
-                "%252fShared%2bDocuments%252freport%252fcmdb_ci_server.xlsx": "/Shared Documents/report/cmdb_ci_server.xlsx"
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
-                  }
-                },
-                "method": "get",
-                "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointUrl')))}/files/@{encodeURIComponent('%252fShared%2bDocuments%252freport%252fcmdb_ci_server.xlsx')}/content",
-                "queries": {
-                  "inferContentType": true
-                }
-              }
-            },
-
-            "Set_SharePoint_Folder_Path_Value": {
-              "runAfter": {
-                "Get_CMDB_Report_content": [
-                  "Succeeded"
-                ]
-              },
-              "type": "SetVariable",
-              "inputs": {
-                "name": "folderPath",
-                "value": "@trim(if(empty(body('Parse_Queue_Message')?['parameters']?['targetFolder']), concat('Scoping/', body('Parse_Queue_Message')?['cycleId']), body('Parse_Queue_Message')?['parameters']?['targetFolder']))"
-              }
-            },
-
-            "Get_Cycle_Info_from_Table": {
-              "runAfter": {
-                "Set_SharePoint_Folder_Path_Value": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
-                  }
-                },
-                "method": "get",
-                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('Cycles')}/entities(PartitionKey='@{encodeURIComponent('Cycle')}',RowKey='@{encodeURIComponent(variables('cycleRowKey'))}')"
-              }
-            },
-
-            "Set_CMDB_Report_URL": {
-              "runAfter": {
-                "Get_Cycle_Info_from_Table": [
-                  "Succeeded"
-                ]
-              },
-              "type": "SetVariable",
-              "inputs": {
-                "name": "cmdbReportUrl",
-                "value": "@body('Get_Cycle_Info_from_Table')?['CMDBReportURL']"
-              }
-            },
-
-            "Get_Existing_CMDB_Report": {
-              "runAfter": {
-                "Set_CMDB_Report_URL": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
-                  }
-                },
-                "method": "get",
-                "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointUrl')))}/GetFileContentByPath",
-                "queries": {
-                  "path": "/Shared Documents/report/cmdb_ci_server.xlsx",
-                  "inferContentType": true
-                }
-              }
-            },
-
-            "Log_Task_Start": {
-              "runAfter": {
-                "Get_Existing_CMDB_Report": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
-                  }
-                },
-                "method": "post",
-                "body": {
-                  "PartitionKey": "Scoping",
-                  "RowKey": "@{concat(utcNow('yyyy-MM-ddTHH:mm:ss'), '_dataretrieval_start')}",
-                  "Timestamp": "@{utcNow()}",
-                  "WorkflowName": "ScopingPhase-DataRetrieval",
-                  "CycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
-                  "Action": "TaskStart",
-                  "Description": "Started CMDB data retrieval for cycle @{body('Parse_Queue_Message')?['cycleId']}",
-                  "Status": "Started",
-                  "TaskId": "@{variables('requestId')}",
-                  "FileName": "@{body('Parse_Queue_Message')?['parameters']?['fileName']}",
-                  "FilePath": "@{body('Parse_Queue_Message')?['parameters']?['targetFolder']}"
-                },
-                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
-              }
-            },
-
-            "Call_Azure_Function_with_Qualys_Integration": {
-              "runAfter": {
-                "Log_Task_Start": [
-                  "Succeeded"
-                ]
-              },
-              "type": "Http",
-              "inputs": {
-                "uri": "@parameters('callAzureFunctionUrl')",
-                "method": "POST",
-                "headers": {
-                  "Content-Type": "application/json"
-                },
-                "body": {
-                  "source": "@{body('Parse_Queue_Message')?['parameters']?['cmdbSource']}",
-                  "table": "cmdb_ci_server",
-                  "fields": "@split(coalesce(body('Get_Configuration')?['CMDB:Fields'], 'IP Address,Name,Owned by,Value Stream,Sub Value Stream,Operating System,Install Status,Classification,Server Tier,Class,Application Notes,Support group,Location,Category,Subcategory,Attributes,Assigned to,Operational status,Host name,Tags,Asset tag,Company'), ',')",
-                  "filter": "@{coalesce(body('Get_Configuration')?['CMDB:Filter'], 'install_status=In Use^operational_status=Operational')}",
-                  "excludefilter": "@{coalesce(body('Get_Configuration')?['CMDB:ExcludeFilter'], 'Install Status=*Decommisioned')}",
-                  "limit": "@{int(coalesce(body('Get_Configuration')?['CMDB:Limit'], '10000'))}",
-                  "format": "excel",
-                  "filename": "@{body('Parse_Queue_Message')?['parameters']['fileName']}",
-                  "excelFileContent": "@{base64(body('Get_CMDB_Report_content'))}",
-                  "existingExcelContent": "@{base64(body('Get_Existing_CMDB_Report'))}",
-                  "enableQualysIntegration": "@{coalesce(body('Parse_Queue_Message')?['parameters']?['enableQualysIntegration'], true)}",
-                  "enableTagComparison": true,
-                  "addSkipStatus": true,
-                  "comparisonColumn": "Tags",
-                  "keyColumns": [
-                    "Name",
-                    "IP Address"
-                  ]
-                }
-              }
-            },
-
-            "Parse_Function_Response_Headers": {
-              "runAfter": {
-                "Call_Azure_Function_with_Qualys_Integration": [
-                  "Succeeded"
-                ]
-              },
-              "type": "Compose",
-              "inputs": {
-                "rowCount": "@int(coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Row-Count'], '0'))",
-                "originalCount": "@int(coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Original-Count'], '0'))",
-                "updatedTags": "@int(coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Updated-Tags'], '0'))",
-                "qualysUpdatedTags": "@int(coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Qualys-Updated-Tags'], '0'))",
-                "missingIPsCount": "@int(coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Missing-IPs-Count'], '0'))",
-                "missingIPs": "@coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Missing-IPs'], 'none')",
-                "uniqueIPs": "@int(coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Unique-IPs'], '0'))",
-                "missingIPsList": "@if(equals(coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Missing-IPs'], 'none'), 'none'), json('[]'), split(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Missing-IPs'], ','))"
-              }
-            },
-
-            "Set_Processing_Summary": {
-              "runAfter": {
-                "Parse_Function_Response_Headers": [
-                  "Succeeded"
-                ]
-              },
-              "type": "SetVariable",
-              "inputs": {
-                "name": "processingSummary",
-                "value": {
-                  "cycleId": "@body('Parse_Queue_Message')?['cycleId']",
-                  "fileName": "@body('Parse_Queue_Message')?['parameters']?['fileName']",
-                  "processedAt": "@utcNow()",
-                  "totalRows": "@outputs('Parse_Function_Response_Headers')['rowCount']",
-                  "originalRows": "@outputs('Parse_Function_Response_Headers')['originalCount']",
-                  "tagsUpdatedFromExisting": "@outputs('Parse_Function_Response_Headers')['updatedTags']",
-                  "tagsUpdatedFromQualys": "@outputs('Parse_Function_Response_Headers')['qualysUpdatedTags']",
-                  "missingTagsCount": "@outputs('Parse_Function_Response_Headers')['missingIPsCount']"
-                }
-              }
-            },
-
-            "Set_Missing_IPs_List": {
-              "runAfter": {
-                "Set_Processing_Summary": [
-                  "Succeeded"
-                ]
-              },
-              "type": "SetVariable",
-              "inputs": {
-                "name": "missingIPsList",
-                "value": "@if(empty(outputs('Parse_Function_Response_Headers')['missingIPs']), json('[]'), split(outputs('Parse_Function_Response_Headers')['missingIPs'], ','))"
-              }
-            },
-
-            "Create_Monthly_Folder": {
-              "runAfter": {
-                "Set_Missing_IPs_List": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
-                  }
-                },
-                "method": "post",
-                "body": {
-                  "path": "@variables('folderPath')"
-                },
-                "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointUrl')))}/tables/@{encodeURIComponent(encodeURIComponent('1192fe56-94f9-45f8-96c7-de365883a61c'))}/createnewfolder"
-              }
-            },
-
-            "Log_Folder_Creation": {
-              "runAfter": {
-                "Create_Monthly_Folder": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
-                  }
-                },
-                "method": "post",
-                "body": {
-                  "PartitionKey": "Scoping",
-                  "RowKey": "@{concat(utcNow('yyyy-MM-ddTHH:mm:ss'), '_folder_creation')}",
-                  "Timestamp": "@{utcNow()}",
-                  "WorkflowName": "ScopingPhase-DataRetrieval",
-                  "CycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
-                  "Action": "FolderCreation",
-                  "Description": "@{concat('Created folder ', variables('folderPath'))}",
-                  "Status": "Success",
-                  "TaskId": "@{variables('requestId')}"
-                },
-                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
-              }
-            },
-
-            "Create_Excel_File_in_SharePoint": {
-              "runAfter": {
-                "Log_Folder_Creation": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
-                  }
-                },
-                "method": "post",
-                "body": "@body('Call_Azure_Function_with_Qualys_Integration')",
-                "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointUrl')))}/files",
-                "queries": {
-                  "folderPath": "/Shared Documents/@{variables('folderPath')}",
-                  "name": "@body('Parse_Queue_Message')?['parameters']?['fileName']",
-                  "queryParametersSingleEncoded": true
-                }
-              },
-              "runtimeConfiguration": {
-                "contentTransfer": {
-                  "transferMode": "Chunked"
-                }
-              }
-            },
-
-            "Log_File_Creation": {
-              "runAfter": {
-                "Create_Excel_File_in_SharePoint": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
-                  }
-                },
-                "method": "post",
-                "body": {
-                  "PartitionKey": "Scoping",
-                  "RowKey": "@{concat(utcNow('yyyy-MM-ddTHH:mm:ss'), '_file_creation')}",
-                  "Timestamp": "@{utcNow()}",
-                  "WorkflowName": "ScopingPhase-DataRetrieval",
-                  "CycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
-                  "Action": "FileCreation",
-                  "Description": "@{concat('Created CMDB Excel file ', body('Parse_Queue_Message')?['parameters']?['fileName'])}",
-                  "Status": "Success",
-                  "TaskId": "@{variables('requestId')}",
-                  "FileName": "@{body('Parse_Queue_Message')?['parameters']?['fileName']}",
-                  "FilePath": "@{variables('folderPath')}"
-                },
-                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
-              }
-            },
-
-            "Update_Cycles_Table_With_CMDB_URL": {
-              "runAfter": {
-                "Log_File_Creation": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
-                  }
-                },
-                "method": "put",
-                "body": {
-                  "PartitionKey": "Cycle",
-                  "RowKey": "@{body('Parse_Queue_Message')?['cycleId']}",
-                  "CMDBReportUrl": "@{concat(parameters('sharePointUrl'), '/Shared%20Documents/', variables('folderPath'), '/', body('Parse_Queue_Message')?['parameters']?['fileName'])}",
-                  "UpdatedAt": "@{utcNow()}",
-                  "Status": "ReportCreated"
-                },
-                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('Cycles')}/entities(PartitionKey='@{encodeURIComponent('Cycle')}',RowKey='@{encodeURIComponent(body('Parse_Queue_Message')?['cycleId'])}')"
-              }
-            },
-
-            "Check_Missing_IPs_and_Send_Enhanced_Notification": {
-              "runAfter": {
-                "Update_Cycles_Table_With_CMDB_URL": [
-                  "Succeeded"
-                ]
-              },
-              "type": "If",
-              "expression": {
-                "and": [
-                  {
-                    "greater": [
-                      "@int(outputs('Parse_Function_Response_Headers')['missingIPsCount'])",
-                      0
-                    ]
-                  }
-                ]
-              },
-
-              "actions": {
-                "Log_Missing_IPs_to_Table": {
-                  "type": "ApiConnection",
-                  "inputs": {
-                    "host": {
-                      "connection": {
-                        "name": "@parameters('$connections')['azuretables-1']['connectionId']"
-                      }
-                    },
-                    "method": "post",
-                    "body": {
-                      "PartitionKey": "Scoping",
-                      "RowKey": "@{formatDateTime(utcNow(), 'yyyyMMdd-HHmmss')}",
-                      "Timestamp": "@{utcNow()}",
-                      "WorkflowName": "ScopingPhase-MissingTags",
-                      "Action": "CMDB Missing tags",
-                      "CycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
-                      "FileName": "@{body('Parse_Queue_Message')?['parameters']?['fileName']}",
-                      "MissingIPsCount": "@{length(variables('missingIPsList'))}",
-                      "MissingIPsList": "@{join(take(variables('missingIPsList'), 500), ',')}",
-                      "MissingIPsListTruncated": "@{greater(length(variables('missingIPsList')), 500)}",
-                      "ProcessedAt": "@{utcNow()}",
-                      "TotalProcessedRows": "@{variables('processingSummary')['totalRows']}",
-                      "TagsUpdatedFromQualys": "@{variables('processingSummary')['tagsUpdatedFromQualys']}",
-                      "NotificationSent": true
-                    },
-                    "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
-                  }
-                },
-
-                "Send_Enhanced_Email_Notification": {
-                  "runAfter": {
-                    "Log_Missing_IPs_to_Table": [
-                      "Succeeded"
-                    ]
-                  },
-                  "type": "Http",
-                  "inputs": {
-                    "uri": "@parameters('notificationServiceUrl')",
-                    "method": "POST",
-                    "headers": {
-                      "Content-Type": "application/json"
-                    },
-                    "body": {
-                      "WorkflowName": "ScopingDataRetrieval",
-                      "NotificationType": "ActionRequired",
-                      "NotificationTitle": "⚠️ Action Required: @{length(variables('missingIPsList'))} IP Addresses Missing Tags - Cycle @{body('Parse_Queue_Message')?['cycleId']}",
-                       "NotificationContent": "<html><body><h2>📋 Scoping Data Retrieval Completed</h2><p>CMDB data retrieval with Qualys tag integration has been completed successfully.</p><p><strong>Cycle ID:</strong> @{body('Parse_Queue_Message')?['cycleId']}</p><p><strong>File:</strong> @{body('Parse_Queue_Message')?['parameters']?['fileName']}</p><p><strong>Total Processed Rows:</strong> @{variables('processingSummary')['totalRows']}</p><p><strong>Tags Updated from Qualys:</strong> @{variables('processingSummary')['tagsUpdatedFromQualys']}</p><p><strong>Missing Tags Count:</strong> @{length(variables('missingIPsList'))}</p><p><strong>Missing IPs:</strong></p><p>@{join(variables('missingIPsList'), '<br>')}</p><p><strong>File Location:</strong> <a href=\"https://cyberpwn.sharepoint.com/sites/demo/Shared%20Documents/@{encodeUriComponent(variables('folderPath'))}/@{encodeUriComponent(body('Parse_Queue_Message')?['parameters']?['fileName'])}\">@{body('Parse_Queue_Message')?['parameters']?['fileName']}</a></p><p><a href=\"@{variables('completionUrl')}\">✓ Mark as Completed</a></p></body></html>",
-                      "RecipientList": [
-                        "IVM_Team"
-                      ],
-                      "TeamsList": [
-                        "IVM_Team"
-                      ],
-                      "TemplateVariables": [
-                        {
-                          "key": "missingIPsCount",
-                          "value": "@{length(variables('missingIPsList'))}"
-                        },
-                        {
-                          "key": "cycleId",
-                          "value": "@{body('Parse_Queue_Message')?['cycleId']}"
-                        },
-                        {
-                          "key": "fileName",
-                          "value": "@{body('Parse_Queue_Message')?['parameters']?['fileName']}"
-                        },
-                        {
-                          "key": "totalRows",
-                          "value": "@{variables('processingSummary')['totalRows']}"
-                        },
-                        {
-                          "key": "tagsUpdatedFromQualys",
-                          "value": "@{variables('processingSummary')['tagsUpdatedFromQualys']}"
-                        },
-                        {
-                          "key": "tagsUpdatedFromExisting",
-                          "value": "@{variables('processingSummary')['tagsUpdatedFromExisting']}"
-                        },
-                        {
-                          "key": "fileUrl",
-                          "value": "@{concat(parameters('sharePointUrl'), '/Shared%20Documents/', encodeUriComponent(variables('folderPath')), '/', encodeUriComponent(body('Parse_Queue_Message')?['parameters']?['fileName']))}"
-                        },
-                        {
-                          "key": "completionUrl",
-                          "value": "@{variables('completionUrl')}"
-                        },
-                        {
-                          "key": "requestId",
-                          "value": "@{variables('requestId')}"
-                        },
-                        {
-                          "key": "processedDateTime",
-                          "value": "@{formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss')}"
-                        }
-                      ],
-                      "NotificationChannels": [
-                        "Email"
-                      ],
-                      "TemplateId": "SCOP-01",
-                      "Importance": "High",
-                      "Attachments": []
-                    }
-                  },
-                  "runtimeConfiguration": {
-                    "contentTransfer": {
-                      "transferMode": "Chunked"
-                    }
-                  }
-                }
-              },
-
-              "else": {
-                "actions": {
-                  "Send_Standard_Email_Notification": {
-                    "type": "Http",
-                    "inputs": {
-                      "uri": "@parameters('notificationServiceUrl')",
-                      "method": "POST",
-                      "headers": {
-                        "Content-Type": "application/json"
-                      },
-                      "body": {
-                        "WorkflowName": "ScopingDataRetrieval",
-                        "NotificationType": "ActionRequired",
-                        "NotificationTitle": "Action Required: Scoping Data Retrieval Completed - ID: @{variables('requestId')}",
-                        "NotificationContent": "<html><body><h2>📋 Scoping Data Retrieval Completed</h2><p>CMDB data retrieval with Qualys integration has been completed successfully.</p><p><strong>Task ID:</strong> @{variables('requestId')}</p><p><strong>Cycle ID:</strong> @{body('Parse_Queue_Message')?['cycleId']}</p><p><strong>File:</strong> @{body('Parse_Queue_Message')?['parameters']?['fileName']}</p><p><strong>Total Rows:</strong> @{variables('processingSummary')['totalRows']}</p><p><strong>Tags Updated from Qualys:</strong> @{variables('processingSummary')['tagsUpdatedFromQualys']}</p><p><strong>Completed:</strong> @{formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss')} UTC</p><p>✅ All IP addresses have been successfully tagged with criticality information from Qualys.</p><p><a href=\"@{variables('completionUrl')}\">✓ Mark as Completed</a></p></body></html>",
-                        "RecipientList": [
-                          "IVM_Team"
-                        ],
-                        "TeamsList": [
-                          "IVM_Team"
-                        ],
-                        "TemplateVariables": [
-                          {
-                            "key": "requestId",
-                            "value": "@{variables('requestId')}"
-                          },
-                          {
-                            "key": "cycleId",
-                            "value": "@{body('Parse_Queue_Message')?['cycleId']}"
-                          },
-                          {
-                            "key": "fileName",
-                            "value": "@{body('Parse_Queue_Message')?['parameters']?['fileName']}"
-                          },
-                          {
-                            "key": "folderPath",
-                            "value": "@{variables('folderPath')}"
-                          },
-                          {
-                            "key": "totalRows",
-                            "value": "@{variables('processingSummary')['totalRows']}"
-                          },
-                          {
-                            "key": "tagsUpdatedFromQualys",
-                            "value": "@{variables('processingSummary')['tagsUpdatedFromQualys']}"
-                          },
-                          {
-                            "key": "missingTagsCount",
-                            "value": "@{length(variables('missingIPsList'))}"
-                          },
-                          {
-                            "key": "completedDateTime",
-                            "value": "@{formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss')}"
-                          },
-                          {
-                            "key": "completionUrl",
-                            "value": "@{variables('completionUrl')}"
-                          },
-                          {
-                            "key": "fileUrl",
-                            "value": "@{concat(parameters('sharePointUrl'), '/Shared%20Documents/', encodeUriComponent(variables('folderPath')), '/', encodeUriComponent(body('Parse_Queue_Message')?['parameters']?['fileName']))}"
-                          },
-                          {
-                            "key": "folderUrl",
-                            "value": "@{concat(parameters('sharePointUrl'), '/Shared%20Documents/', encodeUriComponent(variables('folderPath')))}"
-                          },
-                          {
-                            "key": "statusClass",
-                            "value": "@{if(greater(length(variables('missingIPsList')), 0), 'warning', 'success')}"
-                          },
-                          {
-                            "key": "statusTitle",
-                            "value": "@{if(equals(variables('processingSummary')['tagsUpdatedFromQualys'], 0), '⚠️ Qualys Integration Issue', '✅ Processing Complete')}"
-                          },
-                          {
-                            "key": "statusMessage",
-                            "value": "@{if(equals(variables('processingSummary')['tagsUpdatedFromQualys'], 0), 'No tags were updated from Qualys. Please verify Qualys connectivity and data availability for this cycle.', 'All IP addresses have been successfully tagged with criticality information from Qualys.')}"
-                          }
-                        ],
-                        "NotificationChannels": [
-                          "Email"
-                        ],
-                        "TemplateId": "SCOP-02",
-                        "Importance": "High",
-                        "Attachments": []
-                      }
-                    },
-                    "runtimeConfiguration": {
-                      "contentTransfer": {
-                        "transferMode": "Chunked"
-                      }
-                    }
-                  }
-                }
-              }
-            },
-
-            "Log_Callback_Registration": {
-              "runAfter": {
-                "Check_Missing_IPs_and_Send_Enhanced_Notification": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
-                  }
-                },
-                "method": "post",
-                "body": {
-                  "PartitionKey": "Scoping",
-                  "RowKey": "@{concat(utcNow('yyyy-MM-ddTHH:mm:ss'), '_callback_registered')}",
-                  "Timestamp": "@{utcNow()}",
-                  "WorkflowName": "ScopingPhase-DataRetrieval",
-                  "CycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
-                  "Action": "RegisterCallback",
-                  "Description": "Registered callback for asset tagging and grouping via Notification Follow-up service with Qualys integration summary",
-                  "Status": "Registered",
-                  "TaskId": "@{variables('requestId')}",
-                  "FileName": "@{body('Parse_Queue_Message')?['parameters']?['fileName']}",
-                  "FilePath": "@{variables('folderPath')}",
-                  "QualysTagsUpdated": "@{variables('processingSummary')['tagsUpdatedFromQualys']}",
-                  "MissingTagsCount": "@{length(variables('missingIPsList'))}"
-                },
-                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
-              }
-            },
-
-            "Log_Task_Completion": {
-              "runAfter": {
-                "Log_Callback_Registration": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
-                  }
-                },
-                "method": "post",
-                "body": {
-                  "PartitionKey": "Scoping",
-                  "RowKey": "@{concat(utcNow('yyyy-MM-ddTHH:mm:ss'), '_workflow_complete')}",
-                  "Timestamp": "@{utcNow()}",
-                  "WorkflowName": "ScopingPhase-DataRetrieval",
-                  "Action": "WorkflowComplete",
-                  "CycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
-                  "Description": "Completed data retrieval workflow with Qualys integration",
-                  "Status": "Success",
-                  "TaskId": "@{variables('requestId')}",
-                  "CallbackRegistered": "Yes",
-                  "QualysTagsUpdated": "@{variables('processingSummary')['tagsUpdatedFromQualys']}",
-                  "MissingTagsCount": "@{length(variables('missingIPsList'))}"
-                },
-                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
-              }
-            },
-
-            "Call_Scoping-02": {
-              "runAfter": {
-                "Log_Task_Completion": [
-                  "Succeeded"
-                ]
-              },
-              "type": "Http",
-              "inputs": {
-                "uri": "@parameters('completionLogicAppUrl')",
-                "method": "POST",
-                "headers": {
-                  "Content-Type": "application/json"
-                },
-                "body": {
-                  "id": "@{variables('requestId')}",
-                  "cycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
-                  "sourceFileName": "@{body('Parse_Queue_Message')?['parameters']?['fileName']}",
-                  "sourceFolder": "@{variables('folderPath')}",
-                  "qualysTagsUpdated": "@{variables('processingSummary')['tagsUpdatedFromQualys']}",
-                  "missingTagsCount": "@{length(variables('missingIPsList'))}"
-                }
-              },
-              "runtimeConfiguration": {
-                "contentTransfer": {
-                  "transferMode": "Chunked"
-                }
-              }
-            },
-
-            "Delete_message_(V2)": {
-              "runAfter": {
-                "Call_Scoping-02": [
-                  "Succeeded"
-                ]
-              },
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
-                  }
-                },
-                "method": "delete",
-                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('scopingScheduleQueueName'))}/messages/@{encodeURIComponent(triggerBody()?['QueueMessagesList']?['QueueMessage']?[0]?['MessageId'])}",
-                "queries": {
-                  "popreceipt": "@triggerBody()?['QueueMessagesList']?['QueueMessage']?[0]?['PopReceipt']"
-                }
-              }
-            }
-          },
-
-          "outputs": {}
-        },
-
-        "parameters": {
-          "$connections": {
-            "value": "[parameters('$connections')]"
-          },
-
-          "storageAccountName": {
-            "value": "[parameters('storageAccountName')]"
-          },
-
-          "scopingScheduleQueueName": {
-            "value": "[parameters('scopingScheduleQueueName')]"
-          },
-
-          "configServiceUrl": {
-            "value": "[parameters('configServiceUrl')]"
-          },
-
-          "completionLogicAppUrl": {
-            "value": "[parameters('completionLogicAppUrl')]"
-          },
-
-          "callbackSecretKey": {
-            "value": "[parameters('callbackSecretKey')]"
-          },
-
-          "notificationLogTableName": {
-            "value": "[parameters('notificationLogTableName')]"
-          },
-
-          "NotificationStatus": {
-            "value": "[parameters('NotificationStatus')]"
-          },
-
-          "notificationServiceUrl": {
-            "value": "[parameters('notificationServiceUrl')]"
-          },
-
-          "sharePointUrl": {
-            "value": "[parameters('sharePointUrl')]"
-          },
-
-          "callAzureFunctionUrl": {
-            "value": "[parameters('callAzureFunctionUrl')]"
-          }
-        }
-      }
-    },
-    {
+        {
   "type": "Microsoft.Logic/workflows",
   "apiVersion": "2019-05-01",
   "name": "[parameters('scoping02LogicAppName')]",
@@ -2780,7 +1259,1539 @@
 }
 }
   }
-}
+},
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[parameters('location')]",
+
+      "properties": {
+        "state": "Enabled",
+
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+
+          "parameters": {
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            },
+
+            "configServiceUrl": {
+              "type": "String"
+            },
+
+            "storageAccountName": {
+              "type": "String"
+            },
+
+            "notificationLogTableName": {
+              "type": "String"
+            },
+
+            "businessDayHourStatusUrl": {
+              "type": "String"
+            },
+
+            "getNextBusinessDayUrl": {
+              "type": "String"
+            },
+
+            "scopingScheduleQueueName": {
+              "type": "String"
+            },
+
+            "completionLogicAppUrl": {
+              "type": "String"
+            },
+
+            "callbackSecretKey": {
+              "type": "String"
+            },
+
+            "notificationServiceUrl": {
+              "type": "String"
+            }
+          },
+
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Month",
+                "interval": 1,
+                "schedule": {
+                  "hours": [
+                    0
+                  ],
+                  "minutes": [
+                    1
+                  ],
+                  "monthDays": [
+                    1
+                  ]
+                },
+                "timeZone": "India Standard Time"
+              }
+            }
+          },
+
+          "actions": {
+            "Get_Configuration": {
+              "runAfter": {},
+              "type": "Http",
+              "inputs": {
+                "uri": "@replace(parameters('configServiceUrl'), '{partition}', 'Scoping')",
+                "method": "GET"
+              }
+            },
+
+            "Initialize_Variables": {
+              "runAfter": {
+                "Get_Configuration": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "currentDate",
+                    "type": "string",
+                    "value": "@{utcNow('yyyy-MM-dd')}"
+                  },
+                  {
+                    "name": "cycleId",
+                    "type": "string",
+                    "value": "@{concat(formatDateTime(utcNow(), 'yyyy-MM'), '-CYCLE')}"
+                  },
+                  {
+                    "name": "fileName",
+                    "type": "string",
+                    "value": "@{concat('Scoping-', formatDateTime(utcNow(), 'yyyy-MM'), '-CYCLE-', formatDateTime(utcNow(), 'yyyyMMdd-HHmmss'), '.xlsx')}"
+                  },
+                  {
+                    "name": "targetFolder",
+                    "type": "string",
+                    "value": "@{body('Get_Configuration')?['SharePoint:ScopingFolderPath']}"
+                  },
+                  {
+                    "name": "cmdbSource",
+                    "type": "string",
+                    "value": "@{body('Get_Configuration')?['ServiceNow:CmdbSource']}"
+                  },
+                  {
+                    "name": "visibilityTimeoutSeconds",
+                    "type": "integer",
+                    "value": 0
+                  },
+                  {
+                    "name": "nextExecutionDate",
+                    "type": "string",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+
+            "Create_Cycle_Entry": {
+              "runAfter": {
+                "Initialize_Variables": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "put",
+                "body": {
+                  "PartitionKey": "Cycle",
+                  "RowKey": "@{variables('cycleId')}",
+                  "StartDate": "@{variables('currentDate')}",
+                  "CurrentPhase": "Scoping",
+                  "Status": "Scheduled",
+                  "LastUpdatedDate": "@{utcNow()}",
+                  "ScheduledBy": "LA-Scoping-00-MonthlyScheduler",
+                  "TriggerTime": "@{utcNow()}"
+                },
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('Cycles')}/entities(PartitionKey='@{encodeURIComponent('Cycle')}',RowKey='@{encodeURIComponent(variables('cycleId'))}')"
+              }
+            },
+
+            "Get_BusinessDay_Config": {
+              "runAfter": {
+                "Create_Cycle_Entry": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('AppConfiguration')}/entities(PartitionKey='@{encodeURIComponent('BusinessDay')}',RowKey='@{encodeURIComponent('WorkingDayandHour')}')"
+              }
+            },
+
+            "Check_Current_Business_Hours": {
+              "runAfter": {
+                "Get_BusinessDay_Config": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "uri": "@parameters('businessDayHourStatusUrl')",
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "referenceDateTime": "@{utcNow()}",
+                  "region": "@{body('Get_BusinessDay_Config')?['region']}",
+                  "startTime": "@{body('Get_BusinessDay_Config')?['startTime']}",
+                  "endTime": "@{body('Get_BusinessDay_Config')?['endTime']}",
+                  "businessDays": "@body('Get_BusinessDay_Config')?['businessDays']"
+                }
+              }
+            },
+
+            "Parse_Current_Business_Status": {
+              "runAfter": {
+                "Check_Current_Business_Hours": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Check_Current_Business_Hours')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "referenceDateTime": {
+                      "type": "string"
+                    },
+                    "region": {
+                      "type": "string"
+                    },
+                    "isBusinessDay": {
+                      "type": "boolean"
+                    },
+                    "isBusinessHour": {
+                      "type": "boolean"
+                    },
+                    "isBusinessDayAndHour": {
+                      "type": "boolean"
+                    },
+                    "customBusinessHours": {
+                      "type": "object",
+                      "properties": {
+                        "startTime": {
+                          "type": "string"
+                        },
+                        "endTime": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "customBusinessDays": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+
+            "Get_Skip_Business_Day_Config": {
+              "runAfter": {
+                "Parse_Current_Business_Status": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('AppConfiguration')}/entities(PartitionKey='@{encodeURIComponent('Scoping')}',RowKey='@{encodeURIComponent('SkipBusinessDayCheck')}')"
+              }
+            },
+
+            "Check_If_Within_Business_Hours": {
+              "runAfter": {
+                "Get_Skip_Business_Day_Config": [
+                  "Succeeded"
+                ]
+              },
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@body('Parse_Current_Business_Status')?['isBusinessDayAndHour']",
+                      true
+                    ]
+                  }
+                ]
+              },
+
+              "actions": {
+                "Schedule_Immediate_Execution": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "body": "{\"id\":\"@{guid()}\",\"cycleId\":\"@{variables('cycleId')}\",\"scheduledTime\":\"@{utcNow()}\",\"executeAfter\":\"@{utcNow()}\",\"sourceLogicApp\":\"LA-Scoping-00\",\"targetLogicApp\":\"LA-Scoping-01\",\"parameters\":{\"cmdbSource\":\"@{variables('cmdbSource')}\",\"targetFolder\":\"@{variables('targetFolder')}\",\"fileName\":\"@{variables('fileName')}\",\"enableQualysIntegration\":true},\"status\":\"Scheduled\"}",
+                    "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('scopingScheduleQueueName'))}/messages"
+                  }
+                },
+
+                "Log_Immediate_Scheduling": {
+                  "runAfter": {
+                    "Schedule_Immediate_Execution": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "body": {
+                      "PartitionKey": "Scoping",
+                      "RowKey": "@{guid()}",
+                      "Timestamp": "@{utcNow()}",
+                      "WorkflowName": "ScopingPhase-MonthlyScheduler",
+                      "CycleId": "@{variables('cycleId')}",
+                      "ActionType": "ImmediateScheduling",
+                      "Description": "@{concat('Scheduled immediate scoping task for cycle ', variables('cycleId'), ' - Currently within business hours')}",
+                      "Status": "Scheduled",
+                      "FileName": "@{variables('fileName')}",
+                      "FilePath": "@{variables('targetFolder')}",
+                      "ExecutionDate": "@{utcNow()}",
+                      "IsBusinessDay": "@{body('Parse_Current_Business_Status')?['isBusinessDay']}",
+                      "IsBusinessHour": "@{body('Parse_Current_Business_Status')?['isBusinessHour']}"
+                    },
+                    "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+                  }
+                }
+              },
+
+              "else": {
+                "actions": {
+                  "Get_Next_Business_Day_and_Hours": {
+                    "type": "Http",
+                    "inputs": {
+                      "uri": "@parameters('getNextBusinessDayUrl')",
+                      "method": "POST",
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "referenceDateTime": "@{utcNow()}",
+                        "region": "@{body('Get_BusinessDay_Config')?['region']}",
+                        "startTime": "@{body('Get_BusinessDay_Config')?['startTime']}",
+                        "endTime": "@{body('Get_BusinessDay_Config')?['endTime']}",
+                        "businessDays": "@body('Get_BusinessDay_Config')?['businessDays']"
+                      }
+                    }
+                  },
+
+                  "Parse_Next_Business_Day": {
+                    "runAfter": {
+                      "Get_Next_Business_Day_and_Hours": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "ParseJson",
+                    "inputs": {
+                      "content": "@body('Get_Next_Business_Day_and_Hours')",
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "referenceDateTime": {
+                            "type": "string"
+                          },
+                          "nextBusinessDay": {
+                            "type": "string"
+                          },
+                          "nextBusinessDateTime": {
+                            "type": "string"
+                          },
+                          "nextBusinessDateTimeRegion": {
+                            "type": "string"
+                          },
+                          "region": {
+                            "type": "string"
+                          },
+                          "isWithinBusinessHours": {
+                            "type": "boolean"
+                          },
+                          "waitTime": {
+                            "type": "object",
+                            "properties": {
+                              "days": {
+                                "type": "integer"
+                              },
+                              "hours": {
+                                "type": "integer"
+                              },
+                              "minutes": {
+                                "type": "integer"
+                              },
+                              "totalMinutes": {
+                                "type": "integer"
+                              },
+                              "totalHours": {
+                                "type": "number"
+                              },
+                              "visibilityTimeoutSeconds": {
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          "customBusinessHours": {
+                            "type": "object",
+                            "properties": {
+                              "startTime": {
+                                "type": "string"
+                              },
+                              "endTime": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "customBusinessDays": {
+                            "type": "array",
+                            "items": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+
+                  "Set_Next_Execution_Date": {
+                    "runAfter": {
+                      "Parse_Next_Business_Day": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "nextExecutionDate",
+                      "value": "@body('Parse_Next_Business_Day')?['nextBusinessDay']"
+                    }
+                  },
+
+                  "Set_Visibility_Timeout": {
+                    "runAfter": {
+                      "Set_Next_Execution_Date": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "visibilityTimeoutSeconds",
+                      "value": "@body('Parse_Next_Business_Day')?['waitTime']?['visibilityTimeoutSeconds']"
+                    }
+                  },
+
+                  "Schedule_For_Next_Business_Hours": {
+                    "runAfter": {
+                      "Set_Visibility_Timeout": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "body": "{\n  \"id\": \"@{guid()}\",\n  \"cycleId\": \"@{variables('cycleId')}\",\n  \"scheduledTime\": \"@{utcNow()}\",\n  \"executeAfter\": \"@{variables('nextExecutionDate')}\",\n  \"sourceLogicApp\": \"LA-Scoping-00\",\n  \"targetLogicApp\": \"LA-Scoping-01\",\n  \"parameters\": {\n    \"cmdbSource\": \"@{variables('cmdbSource')}\",\n    \"targetFolder\": \"@{variables('targetFolder')}\",\n    \"fileName\": \"@{variables('fileName')}\",\n    \"enableQualysIntegration\": true\n  },\n  \"status\": \"Scheduled\"\n}",
+                      "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('scopingScheduleQueueName'))}/messages",
+                      "queries": {
+                        "visibilitytimeout": "@variables('visibilityTimeoutSeconds')"
+                      }
+                    }
+                  },
+
+                  "Log_Deferred_Scheduling": {
+                    "runAfter": {
+                      "Schedule_For_Next_Business_Hours": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "body": {
+                        "PartitionKey": "Scoping",
+                        "RowKey": "@{guid()}",
+                        "Timestamp": "@{utcNow()}",
+                        "WorkflowName": "ScopingPhase-MonthlyScheduler",
+                        "CycleId": "@{variables('cycleId')}",
+                        "ActionType": "DeferredScheduling",
+                        "Description": "@{concat('Scheduled scoping task for cycle ', variables('cycleId'), ' to execute at next business hours: ', variables('nextExecutionDate'))}",
+                        "Status": "Scheduled",
+                        "FileName": "@{variables('fileName')}",
+                        "FilePath": "@{variables('targetFolder')}",
+                        "ExecutionDate": "@{variables('nextExecutionDate')}",
+                        "WaitTimeDays": "@{body('Parse_Next_Business_Day')?['waitTime']?['days']}",
+                        "WaitTimeHours": "@{body('Parse_Next_Business_Day')?['waitTime']?['hours']}",
+                        "WaitTimeMinutes": "@{body('Parse_Next_Business_Day')?['waitTime']?['minutes']}",
+                        "VisibilityTimeoutSeconds": "@{variables('visibilityTimeoutSeconds')}",
+                        "IsBusinessDay": "@{body('Parse_Current_Business_Status')?['isBusinessDay']}",
+                        "IsBusinessHour": "@{body('Parse_Current_Business_Status')?['isBusinessHour']}"
+                      },
+                      "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+                    }
+                  }
+                }
+              }
+            }
+          },
+
+          "outputs": {}
+        },
+
+        "parameters": {
+          "$connections": {
+            "value": "[parameters('$connections')]"
+          },
+
+          "storageAccountName": {
+            "value": "[parameters('storageAccountName')]"
+          },
+
+          "scopingScheduleQueueName": {
+            "value": "[parameters('scopingScheduleQueueName')]"
+          },
+
+          "configServiceUrl": {
+            "value": "[parameters('configServiceUrl')]"
+          },
+
+          "completionLogicAppUrl": {
+            "value": "[parameters('completionLogicAppUrl')]"
+          },
+
+          "callbackSecretKey": {
+            "value": "[parameters('callbackSecretKey')]"
+          },
+
+          "notificationLogTableName": {
+            "value": "[parameters('notificationLogTableName')]"
+          },
+
+          "businessDayHourStatusUrl": {
+            "value": "[parameters('businessDayHourStatusUrl')]"
+          },
+
+          "getNextBusinessDayUrl": {
+            "value": "[parameters('getNextBusinessDayUrl')]"
+          },
+
+          "notificationServiceUrl": {
+            "value": "[parameters('notificationServiceUrl')]"
+          }
+        }
+      }
+    },
+
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('scoping01LogicAppName')]",
+      "location": "[parameters('location')]",
+
+      "properties": {
+        "state": "Enabled",
+
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+
+          "parameters": {
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            },
+
+            "storageAccountName": {
+              "type": "String"
+            },
+
+            "scopingScheduleQueueName": {
+              "type": "String"
+            },
+
+            "configServiceUrl": {
+              "type": "String"
+            },
+
+            "callAzureFunctionUrl": {
+              "type": "String"
+            },
+
+            "completionLogicAppUrl": {
+              "type": "String"
+            },
+
+            "callbackSecretKey": {
+              "type": "String"
+            },
+"scoping02LogicAppUrl": {
+  "type": "string"
+},
+            "notificationLogTableName": {
+              "type": "String"
+            },
+
+            "NotificationStatus": {
+              "type": "String"
+            },
+
+            "notificationServiceUrl": {
+              "type": "String"
+            },
+
+            "sharePointUrl": {
+              "type": "String"
+            }
+          },
+
+          "triggers": {
+            "When_a_message_is_received_in_a_queue": {
+              "type": "ApiConnection",
+              "recurrence": {
+                "frequency": "Minute",
+                "interval": 1
+              },
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('scopingScheduleQueueName'))}/messages"
+              }
+            }
+          },
+
+          "actions": {
+            "Parse_Queue_Message": {
+              "runAfter": {},
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@json(triggerBody()?['QueueMessagesList']?['QueueMessage']?[0]?['MessageText'])",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "cycleId": {
+                      "type": "string"
+                    },
+                    "scheduledTime": {
+                      "type": "string"
+                    },
+                    "executeAfter": {
+                      "type": "string"
+                    },
+                    "sourceLogicApp": {
+                      "type": "string"
+                    },
+                    "targetLogicApp": {
+                      "type": "string"
+                    },
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "cmdbSource": {
+                          "type": "string"
+                        },
+                        "targetFolder": {
+                          "type": "string"
+                        },
+                        "fileName": {
+                          "type": "string"
+                        },
+                        "enableQualysIntegration": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+
+            "Initialize_Request_ID": {
+              "runAfter": {
+                "Parse_Queue_Message": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "requestId",
+                    "type": "string",
+                    "value": "@{guid()}"
+                  }
+                ]
+              }
+            },
+
+            "Initialize_Variables": {
+              "runAfter": {
+                "Initialize_Request_ID": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "folderPath",
+                    "type": "string"
+                  },
+                  {
+                    "name": "completionUrl",
+                    "type": "string"
+                  },
+                  {
+                    "name": "cmdbRequest",
+                    "type": "object"
+                  },
+                  {
+                    "name": "processingSummary",
+                    "type": "object"
+                  },
+                  {
+                    "name": "missingIPsList",
+                    "type": "array",
+                    "value": []
+                  },
+                  {
+                    "name": "cmdbReportUrl",
+                    "type": "string"
+                  },
+                  {
+                    "name": "cycleRowKey",
+                    "type": "string",
+                   "value": "@{concat(formatDateTime(utcNow(), 'yyyy-MM'), '-CYCLE')}"
+                  }
+                ]
+              }
+            },
+
+            "Get_Configuration": {
+              "runAfter": {
+                "Initialize_Variables": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "uri": "@replace(parameters('configServiceUrl'), '{partition}', 'Scoping')",
+                "method": "GET"
+              }
+            },
+
+            "Set_Completion_URL": {
+              "runAfter": {
+                "Get_Configuration": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "completionUrl",
+                "value": "@replace(replace(replace(parameters('completionLogicAppUrl'), '%7BtaskId%7D', encodeURIComponent(variables('requestId'))), '%7BworkflowName%7D', encodeURIComponent('ScopingPhase-DataRetrieval')), '%7Btoken%7D', encodeURIComponent(base64(concat(variables('requestId'), ':', 'ScopingPhase-DataRetrieval', ':', parameters('callbackSecretKey')))))"
+              }
+            },
+
+            "Get_CMDB_Report_content": {
+              "runAfter": {
+                "Set_Completion_URL": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "%252fShared%2bDocuments%252freport%252fcmdb_ci_server.xlsx": "/Shared Documents/report/cmdb_ci_server.xlsx"
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointUrl')))}/files/@{encodeURIComponent('%252fShared%2bDocuments%252freport%252fcmdb_ci_server.xlsx')}/content",
+                "queries": {
+                  "inferContentType": true
+                }
+              }
+            },
+
+            "Set_SharePoint_Folder_Path_Value": {
+              "runAfter": {
+                "Get_CMDB_Report_content": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "folderPath",
+                "value": "@trim(if(empty(body('Parse_Queue_Message')?['parameters']?['targetFolder']), concat('Scoping/', body('Parse_Queue_Message')?['cycleId']), body('Parse_Queue_Message')?['parameters']?['targetFolder']))"
+              }
+            },
+
+            "Get_Cycle_Info_from_Table": {
+              "runAfter": {
+                "Set_SharePoint_Folder_Path_Value": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('Cycles')}/entities(PartitionKey='@{encodeURIComponent('Cycle')}',RowKey='@{encodeURIComponent(variables('cycleRowKey'))}')"
+              }
+            },
+
+            "Set_CMDB_Report_URL": {
+              "runAfter": {
+                "Get_Cycle_Info_from_Table": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "cmdbReportUrl",
+                "value": "@body('Get_Cycle_Info_from_Table')?['CMDBReportURL']"
+              }
+            },
+
+            "Get_Existing_CMDB_Report": {
+              "runAfter": {
+                "Set_CMDB_Report_URL": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointUrl')))}/GetFileContentByPath",
+                "queries": {
+                  "path": "/Shared Documents/report/cmdb_ci_server.xlsx",
+                  "inferContentType": true
+                }
+              }
+            },
+
+            "Log_Task_Start": {
+              "runAfter": {
+                "Get_Existing_CMDB_Report": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "PartitionKey": "Scoping",
+                  "RowKey": "@{concat(utcNow('yyyy-MM-ddTHH:mm:ss'), '_dataretrieval_start')}",
+                  "Timestamp": "@{utcNow()}",
+                  "WorkflowName": "ScopingPhase-DataRetrieval",
+                  "CycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
+                  "Action": "TaskStart",
+                  "Description": "Started CMDB data retrieval for cycle @{body('Parse_Queue_Message')?['cycleId']}",
+                  "Status": "Started",
+                  "TaskId": "@{variables('requestId')}",
+                  "FileName": "@{body('Parse_Queue_Message')?['parameters']?['fileName']}",
+                  "FilePath": "@{body('Parse_Queue_Message')?['parameters']?['targetFolder']}"
+                },
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+              }
+            },
+
+            "Call_Azure_Function_with_Qualys_Integration": {
+              "runAfter": {
+                "Log_Task_Start": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "uri": "@parameters('callAzureFunctionUrl')",
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "source": "@{body('Parse_Queue_Message')?['parameters']?['cmdbSource']}",
+                  "table": "cmdb_ci_server",
+                  "fields": "@split(coalesce(body('Get_Configuration')?['CMDB:Fields'], 'IP Address,Name,Owned by,Value Stream,Sub Value Stream,Operating System,Install Status,Classification,Server Tier,Class,Application Notes,Support group,Location,Category,Subcategory,Attributes,Assigned to,Operational status,Host name,Tags,Asset tag,Company'), ',')",
+                  "filter": "@{coalesce(body('Get_Configuration')?['CMDB:Filter'], 'install_status=In Use^operational_status=Operational')}",
+                  "excludefilter": "@{coalesce(body('Get_Configuration')?['CMDB:ExcludeFilter'], 'Install Status=*Decommisioned')}",
+                  "limit": "@{int(coalesce(body('Get_Configuration')?['CMDB:Limit'], '10000'))}",
+                  "format": "excel",
+                  "filename": "@{body('Parse_Queue_Message')?['parameters']['fileName']}",
+                  "excelFileContent": "@{base64(body('Get_CMDB_Report_content'))}",
+                  "existingExcelContent": "@{base64(body('Get_Existing_CMDB_Report'))}",
+                  "enableQualysIntegration": "@{coalesce(body('Parse_Queue_Message')?['parameters']?['enableQualysIntegration'], true)}",
+                  "enableTagComparison": true,
+                  "addSkipStatus": true,
+                  "comparisonColumn": "Tags",
+                  "keyColumns": [
+                    "Name",
+                    "IP Address"
+                  ]
+                }
+              }
+            },
+
+            "Parse_Function_Response_Headers": {
+              "runAfter": {
+                "Call_Azure_Function_with_Qualys_Integration": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": {
+                "rowCount": "@int(coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Row-Count'], '0'))",
+                "originalCount": "@int(coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Original-Count'], '0'))",
+                "updatedTags": "@int(coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Updated-Tags'], '0'))",
+                "qualysUpdatedTags": "@int(coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Qualys-Updated-Tags'], '0'))",
+                "missingIPsCount": "@int(coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Missing-IPs-Count'], '0'))",
+                "missingIPs": "@coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Missing-IPs'], 'none')",
+                "uniqueIPs": "@int(coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Unique-IPs'], '0'))",
+                "missingIPsList": "@if(equals(coalesce(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Missing-IPs'], 'none'), 'none'), json('[]'), split(outputs('Call_Azure_Function_with_Qualys_Integration')['headers']['X-Missing-IPs'], ','))"
+              }
+            },
+
+            "Set_Processing_Summary": {
+              "runAfter": {
+                "Parse_Function_Response_Headers": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "processingSummary",
+                "value": {
+                  "cycleId": "@body('Parse_Queue_Message')?['cycleId']",
+                  "fileName": "@body('Parse_Queue_Message')?['parameters']?['fileName']",
+                  "processedAt": "@utcNow()",
+                  "totalRows": "@outputs('Parse_Function_Response_Headers')['rowCount']",
+                  "originalRows": "@outputs('Parse_Function_Response_Headers')['originalCount']",
+                  "tagsUpdatedFromExisting": "@outputs('Parse_Function_Response_Headers')['updatedTags']",
+                  "tagsUpdatedFromQualys": "@outputs('Parse_Function_Response_Headers')['qualysUpdatedTags']",
+                  "missingTagsCount": "@outputs('Parse_Function_Response_Headers')['missingIPsCount']"
+                }
+              }
+            },
+
+            "Set_Missing_IPs_List": {
+              "runAfter": {
+                "Set_Processing_Summary": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "missingIPsList",
+                "value": "@if(empty(outputs('Parse_Function_Response_Headers')['missingIPs']), json('[]'), split(outputs('Parse_Function_Response_Headers')['missingIPs'], ','))"
+              }
+            },
+
+            "Create_Monthly_Folder": {
+              "runAfter": {
+                "Set_Missing_IPs_List": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "path": "@variables('folderPath')"
+                },
+                "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointUrl')))}/tables/@{encodeURIComponent(encodeURIComponent('1192fe56-94f9-45f8-96c7-de365883a61c'))}/createnewfolder"
+              }
+            },
+
+            "Log_Folder_Creation": {
+              "runAfter": {
+                "Create_Monthly_Folder": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "PartitionKey": "Scoping",
+                  "RowKey": "@{concat(utcNow('yyyy-MM-ddTHH:mm:ss'), '_folder_creation')}",
+                  "Timestamp": "@{utcNow()}",
+                  "WorkflowName": "ScopingPhase-DataRetrieval",
+                  "CycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
+                  "Action": "FolderCreation",
+                  "Description": "@{concat('Created folder ', variables('folderPath'))}",
+                  "Status": "Success",
+                  "TaskId": "@{variables('requestId')}"
+                },
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+              }
+            },
+
+            "Create_Excel_File_in_SharePoint": {
+              "runAfter": {
+                "Log_Folder_Creation": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": "@body('Call_Azure_Function_with_Qualys_Integration')",
+                "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointUrl')))}/files",
+                "queries": {
+                  "folderPath": "/Shared Documents/@{variables('folderPath')}",
+                  "name": "@body('Parse_Queue_Message')?['parameters']?['fileName']",
+                  "queryParametersSingleEncoded": true
+                }
+              },
+              "runtimeConfiguration": {
+                "contentTransfer": {
+                  "transferMode": "Chunked"
+                }
+              }
+            },
+
+            "Log_File_Creation": {
+              "runAfter": {
+                "Create_Excel_File_in_SharePoint": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "PartitionKey": "Scoping",
+                  "RowKey": "@{concat(utcNow('yyyy-MM-ddTHH:mm:ss'), '_file_creation')}",
+                  "Timestamp": "@{utcNow()}",
+                  "WorkflowName": "ScopingPhase-DataRetrieval",
+                  "CycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
+                  "Action": "FileCreation",
+                  "Description": "@{concat('Created CMDB Excel file ', body('Parse_Queue_Message')?['parameters']?['fileName'])}",
+                  "Status": "Success",
+                  "TaskId": "@{variables('requestId')}",
+                  "FileName": "@{body('Parse_Queue_Message')?['parameters']?['fileName']}",
+                  "FilePath": "@{variables('folderPath')}"
+                },
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+              }
+            },
+
+            "Update_Cycles_Table_With_CMDB_URL": {
+              "runAfter": {
+                "Log_File_Creation": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "put",
+                "body": {
+                  "PartitionKey": "Cycle",
+                  "RowKey": "@{body('Parse_Queue_Message')?['cycleId']}",
+                  "CMDBReportUrl": "@{concat(parameters('sharePointUrl'), '/Shared%20Documents/', variables('folderPath'), '/', body('Parse_Queue_Message')?['parameters']?['fileName'])}",
+                  "UpdatedAt": "@{utcNow()}",
+                  "Status": "ReportCreated"
+                },
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('Cycles')}/entities(PartitionKey='@{encodeURIComponent('Cycle')}',RowKey='@{encodeURIComponent(body('Parse_Queue_Message')?['cycleId'])}')"
+              }
+            },
+
+            "Check_Missing_IPs_and_Send_Enhanced_Notification": {
+              "runAfter": {
+                "Update_Cycles_Table_With_CMDB_URL": [
+                  "Succeeded"
+                ]
+              },
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "greater": [
+                      "@int(outputs('Parse_Function_Response_Headers')['missingIPsCount'])",
+                      0
+                    ]
+                  }
+                ]
+              },
+
+              "actions": {
+                "Log_Missing_IPs_to_Table": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "body": {
+                      "PartitionKey": "Scoping",
+                      "RowKey": "@{formatDateTime(utcNow(), 'yyyyMMdd-HHmmss')}",
+                      "Timestamp": "@{utcNow()}",
+                      "WorkflowName": "ScopingPhase-MissingTags",
+                      "Action": "CMDB Missing tags",
+                      "CycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
+                      "FileName": "@{body('Parse_Queue_Message')?['parameters']?['fileName']}",
+                      "MissingIPsCount": "@{length(variables('missingIPsList'))}",
+                      "MissingIPsList": "@{join(take(variables('missingIPsList'), 500), ',')}",
+                      "MissingIPsListTruncated": "@{greater(length(variables('missingIPsList')), 500)}",
+                      "ProcessedAt": "@{utcNow()}",
+                      "TotalProcessedRows": "@{variables('processingSummary')['totalRows']}",
+                      "TagsUpdatedFromQualys": "@{variables('processingSummary')['tagsUpdatedFromQualys']}",
+                      "NotificationSent": true
+                    },
+                    "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+                  }
+                },
+
+                "Send_Enhanced_Email_Notification": {
+                  "runAfter": {
+                    "Log_Missing_IPs_to_Table": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "uri": "@parameters('notificationServiceUrl')",
+                    "method": "POST",
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "WorkflowName": "ScopingDataRetrieval",
+                      "NotificationType": "ActionRequired",
+                      "NotificationTitle": "⚠️ Action Required: @{length(variables('missingIPsList'))} IP Addresses Missing Tags - Cycle @{body('Parse_Queue_Message')?['cycleId']}",
+                       "NotificationContent": "<html><body><h2>📋 Scoping Data Retrieval Completed</h2><p>CMDB data retrieval with Qualys tag integration has been completed successfully.</p><p><strong>Cycle ID:</strong> @{body('Parse_Queue_Message')?['cycleId']}</p><p><strong>File:</strong> @{body('Parse_Queue_Message')?['parameters']?['fileName']}</p><p><strong>Total Processed Rows:</strong> @{variables('processingSummary')['totalRows']}</p><p><strong>Tags Updated from Qualys:</strong> @{variables('processingSummary')['tagsUpdatedFromQualys']}</p><p><strong>Missing Tags Count:</strong> @{length(variables('missingIPsList'))}</p><p><strong>Missing IPs:</strong></p><p>@{join(variables('missingIPsList'), '<br>')}</p><p><strong>File Location:</strong> <a href=\"https://cyberpwn.sharepoint.com/sites/demo/Shared%20Documents/@{encodeUriComponent(variables('folderPath'))}/@{encodeUriComponent(body('Parse_Queue_Message')?['parameters']?['fileName'])}\">@{body('Parse_Queue_Message')?['parameters']?['fileName']}</a></p><p><a href=\"@{variables('completionUrl')}\">✓ Mark as Completed</a></p></body></html>",
+                      "RecipientList": [
+                        "IVM_Team"
+                      ],
+                      "TeamsList": [
+                        "IVM_Team"
+                      ],
+                      "TemplateVariables": [
+                        {
+                          "key": "missingIPsCount",
+                          "value": "@{length(variables('missingIPsList'))}"
+                        },
+                        {
+                          "key": "cycleId",
+                          "value": "@{body('Parse_Queue_Message')?['cycleId']}"
+                        },
+                        {
+                          "key": "fileName",
+                          "value": "@{body('Parse_Queue_Message')?['parameters']?['fileName']}"
+                        },
+                        {
+                          "key": "totalRows",
+                          "value": "@{variables('processingSummary')['totalRows']}"
+                        },
+                        {
+                          "key": "tagsUpdatedFromQualys",
+                          "value": "@{variables('processingSummary')['tagsUpdatedFromQualys']}"
+                        },
+                        {
+                          "key": "tagsUpdatedFromExisting",
+                          "value": "@{variables('processingSummary')['tagsUpdatedFromExisting']}"
+                        },
+                        {
+                          "key": "fileUrl",
+                          "value": "@{concat(parameters('sharePointUrl'), '/Shared%20Documents/', encodeUriComponent(variables('folderPath')), '/', encodeUriComponent(body('Parse_Queue_Message')?['parameters']?['fileName']))}"
+                        },
+                        {
+                          "key": "completionUrl",
+                          "value": "@{variables('completionUrl')}"
+                        },
+                        {
+                          "key": "requestId",
+                          "value": "@{variables('requestId')}"
+                        },
+                        {
+                          "key": "processedDateTime",
+                          "value": "@{formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss')}"
+                        }
+                      ],
+                      "NotificationChannels": [
+                        "Email"
+                      ],
+                      "TemplateId": "SCOP-01",
+                      "Importance": "High",
+                      "Attachments": []
+                    }
+                  },
+                  "runtimeConfiguration": {
+                    "contentTransfer": {
+                      "transferMode": "Chunked"
+                    }
+                  }
+                }
+              },
+
+              "else": {
+                "actions": {
+                  "Send_Standard_Email_Notification": {
+                    "type": "Http",
+                    "inputs": {
+                      "uri": "@parameters('notificationServiceUrl')",
+                      "method": "POST",
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "WorkflowName": "ScopingDataRetrieval",
+                        "NotificationType": "ActionRequired",
+                        "NotificationTitle": "Action Required: Scoping Data Retrieval Completed - ID: @{variables('requestId')}",
+                        "NotificationContent": "<html><body><h2>📋 Scoping Data Retrieval Completed</h2><p>CMDB data retrieval with Qualys integration has been completed successfully.</p><p><strong>Task ID:</strong> @{variables('requestId')}</p><p><strong>Cycle ID:</strong> @{body('Parse_Queue_Message')?['cycleId']}</p><p><strong>File:</strong> @{body('Parse_Queue_Message')?['parameters']?['fileName']}</p><p><strong>Total Rows:</strong> @{variables('processingSummary')['totalRows']}</p><p><strong>Tags Updated from Qualys:</strong> @{variables('processingSummary')['tagsUpdatedFromQualys']}</p><p><strong>Completed:</strong> @{formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss')} UTC</p><p>✅ All IP addresses have been successfully tagged with criticality information from Qualys.</p><p><a href=\"@{variables('completionUrl')}\">✓ Mark as Completed</a></p></body></html>",
+                        "RecipientList": [
+                          "IVM_Team"
+                        ],
+                        "TeamsList": [
+                          "IVM_Team"
+                        ],
+                        "TemplateVariables": [
+                          {
+                            "key": "requestId",
+                            "value": "@{variables('requestId')}"
+                          },
+                          {
+                            "key": "cycleId",
+                            "value": "@{body('Parse_Queue_Message')?['cycleId']}"
+                          },
+                          {
+                            "key": "fileName",
+                            "value": "@{body('Parse_Queue_Message')?['parameters']?['fileName']}"
+                          },
+                          {
+                            "key": "folderPath",
+                            "value": "@{variables('folderPath')}"
+                          },
+                          {
+                            "key": "totalRows",
+                            "value": "@{variables('processingSummary')['totalRows']}"
+                          },
+                          {
+                            "key": "tagsUpdatedFromQualys",
+                            "value": "@{variables('processingSummary')['tagsUpdatedFromQualys']}"
+                          },
+                          {
+                            "key": "missingTagsCount",
+                            "value": "@{length(variables('missingIPsList'))}"
+                          },
+                          {
+                            "key": "completedDateTime",
+                            "value": "@{formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss')}"
+                          },
+                          {
+                            "key": "completionUrl",
+                            "value": "@{variables('completionUrl')}"
+                          },
+                          {
+                            "key": "fileUrl",
+                            "value": "@{concat(parameters('sharePointUrl'), '/Shared%20Documents/', encodeUriComponent(variables('folderPath')), '/', encodeUriComponent(body('Parse_Queue_Message')?['parameters']?['fileName']))}"
+                          },
+                          {
+                            "key": "folderUrl",
+                            "value": "@{concat(parameters('sharePointUrl'), '/Shared%20Documents/', encodeUriComponent(variables('folderPath')))}"
+                          },
+                          {
+                            "key": "statusClass",
+                            "value": "@{if(greater(length(variables('missingIPsList')), 0), 'warning', 'success')}"
+                          },
+                          {
+                            "key": "statusTitle",
+                            "value": "@{if(equals(variables('processingSummary')['tagsUpdatedFromQualys'], 0), '⚠️ Qualys Integration Issue', '✅ Processing Complete')}"
+                          },
+                          {
+                            "key": "statusMessage",
+                            "value": "@{if(equals(variables('processingSummary')['tagsUpdatedFromQualys'], 0), 'No tags were updated from Qualys. Please verify Qualys connectivity and data availability for this cycle.', 'All IP addresses have been successfully tagged with criticality information from Qualys.')}"
+                          }
+                        ],
+                        "NotificationChannels": [
+                          "Email"
+                        ],
+                        "TemplateId": "SCOP-02",
+                        "Importance": "High",
+                        "Attachments": []
+                      }
+                    },
+                    "runtimeConfiguration": {
+                      "contentTransfer": {
+                        "transferMode": "Chunked"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+
+            "Log_Callback_Registration": {
+              "runAfter": {
+                "Check_Missing_IPs_and_Send_Enhanced_Notification": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "PartitionKey": "Scoping",
+                  "RowKey": "@{concat(utcNow('yyyy-MM-ddTHH:mm:ss'), '_callback_registered')}",
+                  "Timestamp": "@{utcNow()}",
+                  "WorkflowName": "ScopingPhase-DataRetrieval",
+                  "CycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
+                  "Action": "RegisterCallback",
+                  "Description": "Registered callback for asset tagging and grouping via Notification Follow-up service with Qualys integration summary",
+                  "Status": "Registered",
+                  "TaskId": "@{variables('requestId')}",
+                  "FileName": "@{body('Parse_Queue_Message')?['parameters']?['fileName']}",
+                  "FilePath": "@{variables('folderPath')}",
+                  "QualysTagsUpdated": "@{variables('processingSummary')['tagsUpdatedFromQualys']}",
+                  "MissingTagsCount": "@{length(variables('missingIPsList'))}"
+                },
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+              }
+            },
+
+            "Log_Task_Completion": {
+              "runAfter": {
+                "Log_Callback_Registration": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "PartitionKey": "Scoping",
+                  "RowKey": "@{concat(utcNow('yyyy-MM-ddTHH:mm:ss'), '_workflow_complete')}",
+                  "Timestamp": "@{utcNow()}",
+                  "WorkflowName": "ScopingPhase-DataRetrieval",
+                  "Action": "WorkflowComplete",
+                  "CycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
+                  "Description": "Completed data retrieval workflow with Qualys integration",
+                  "Status": "Success",
+                  "TaskId": "@{variables('requestId')}",
+                  "CallbackRegistered": "Yes",
+                  "QualysTagsUpdated": "@{variables('processingSummary')['tagsUpdatedFromQualys']}",
+                  "MissingTagsCount": "@{length(variables('missingIPsList'))}"
+                },
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+              }
+            },
+
+            "Call_Scoping-02": {
+              "runAfter": {
+                "Log_Task_Completion": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "uri": "@parameters('scoping02LogicAppUrl')",
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "id": "@{variables('requestId')}",
+                  "cycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
+                  "sourceFileName": "@{body('Parse_Queue_Message')?['parameters']?['fileName']}",
+                  "sourceFolder": "@{variables('folderPath')}",
+                  "qualysTagsUpdated": "@{variables('processingSummary')['tagsUpdatedFromQualys']}",
+                  "missingTagsCount": "@{length(variables('missingIPsList'))}"
+                }
+              },
+              "runtimeConfiguration": {
+                "contentTransfer": {
+                  "transferMode": "Chunked"
+                }
+              }
+            },
+
+            "Delete_message_(V2)": {
+              "runAfter": {
+                "Call_Scoping-02": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
+                  }
+                },
+                "method": "delete",
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('scopingScheduleQueueName'))}/messages/@{encodeURIComponent(triggerBody()?['QueueMessagesList']?['QueueMessage']?[0]?['MessageId'])}",
+                "queries": {
+                  "popreceipt": "@triggerBody()?['QueueMessagesList']?['QueueMessage']?[0]?['PopReceipt']"
+                }
+              }
+            }
+          },
+
+          "outputs": {}
+        },
+
+        "parameters": {
+          "$connections": {
+            "value": "[parameters('$connections')]"
+          },
+
+          "storageAccountName": {
+            "value": "[parameters('storageAccountName')]"
+          },
+
+          "scopingScheduleQueueName": {
+            "value": "[parameters('scopingScheduleQueueName')]"
+          },
+
+          "configServiceUrl": {
+            "value": "[parameters('configServiceUrl')]"
+          },
+
+          "completionLogicAppUrl": {
+            "value": "[parameters('completionLogicAppUrl')]"
+          },
+
+          "callbackSecretKey": {
+            "value": "[parameters('callbackSecretKey')]"
+          },
+
+          "notificationLogTableName": {
+            "value": "[parameters('notificationLogTableName')]"
+          },
+
+          "NotificationStatus": {
+            "value": "[parameters('NotificationStatus')]"
+          },
+
+          "notificationServiceUrl": {
+            "value": "[parameters('notificationServiceUrl')]"
+          },
+
+          "sharePointUrl": {
+            "value": "[parameters('sharePointUrl')]"
+          },
+
+          "callAzureFunctionUrl": {
+            "value": "[parameters('callAzureFunctionUrl')]"
+          },
+           "scoping02LogicAppUrl": {
+            "value": "[parameters('scoping02LogicAppUrl')]"
+          }
+        }
+      }
+    }
   ]
 }
 

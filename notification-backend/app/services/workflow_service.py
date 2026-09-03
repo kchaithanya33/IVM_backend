@@ -15,6 +15,10 @@ class WorkflowService:
 
         table_names = [
 
+            # ------------------------------------------------
+            # Notification tables
+            # ------------------------------------------------
+
             "AppConfiguration",
 
             "EmailRecipientConfiguration",
@@ -34,22 +38,43 @@ class WorkflowService:
             "NotificationLogs",
 
             "NotificationStatus",
+
+            # ------------------------------------------------
+            # Auth Scan tables
+            # ------------------------------------------------
+
+            "AuthScanResults",
         ]
 
         # ====================================================
         # QUEUES
         # ====================================================
         #
-        # Queue names are also managed internally.
+        # Queue names are managed internally.
+        # User does not need to provide them.
         #
 
         queue_names = [
+
+            # ------------------------------------------------
+            # Existing queues
+            # ------------------------------------------------
 
             "scopingschedulequeue",
 
             "authscan00",
 
             "taskreminder",
+
+            # ------------------------------------------------
+            # Qualys / Vulnerability Scan queues
+            # ------------------------------------------------
+
+            "qualysscanstatusqueue",
+
+            "vulnscan00",
+
+            "authscanresultshandlerqueue",
         ]
 
         # ====================================================
@@ -58,9 +83,17 @@ class WorkflowService:
 
         deployment = NotificationDeployment(
 
+            # ------------------------------------------------
+            # Azure Subscription
+            # ------------------------------------------------
+
             subscription_id=(
                 request.subscription_id
             ),
+
+            # ------------------------------------------------
+            # Resource Group
+            # ------------------------------------------------
 
             resource_group_name=(
                 request.resource_group_name
@@ -70,6 +103,10 @@ class WorkflowService:
                 request.resource_group_location
             ),
 
+            # ------------------------------------------------
+            # Storage Account
+            # ------------------------------------------------
+
             storage_account_name=(
                 request.storage_account_name
             ),
@@ -78,13 +115,25 @@ class WorkflowService:
                 request.storage_account_location
             ),
 
+            # ------------------------------------------------
+            # Function App
+            # ------------------------------------------------
+
             function_app_name=(
                 request.function_app_name
             ),
 
+            # ------------------------------------------------
+            # Storage Tables
+            # ------------------------------------------------
+
             table_names=(
                 table_names
             ),
+
+            # ------------------------------------------------
+            # Storage Queues
+            # ------------------------------------------------
 
             queue_names=(
                 queue_names

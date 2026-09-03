@@ -1,10 +1,11 @@
 
+
 import json
 import logging
 import uuid
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 from urllib.parse import quote, urlparse
 
 import requests
@@ -21,17 +22,13 @@ class ScopingAzureManager:
     """
     Azure manager for Scoping deployment.
 
-    Responsibilities:
+    Deployment order:
 
-        1. Resolve Azure Tables connection.
-        2. Resolve Azure Queues connection.
-        3. Resolve SharePoint connection.
-        4. Retrieve Function metadata.
-        5. Retrieve Function keys.
-        6. Build Function URLs.
-        7. Resolve Logic App callback URLs.
-        8. Build ARM deployment parameters.
-        9. Deploy arm/scoping.json.
+        1. Resolve existing resources
+        2. Deploy Scoping-02
+        3. Resolve Scoping-02 callback URL
+        4. Deploy Scoping-00 + Scoping-01
+           using the Scoping-02 callback URL
     """
 
     MANAGEMENT_API_VERSION = "2022-03-01"
@@ -43,6 +40,7 @@ class ScopingAzureManager:
     )
 
     def __init__(self) -> None:
+
         self.credential = DefaultAzureCredential()
 
     # ============================================================
@@ -104,6 +102,7 @@ class ScopingAzureManager:
             return {}
 
         try:
+
             result = response.json()
 
         except ValueError as exc:
@@ -236,12 +235,8 @@ class ScopingAzureManager:
         )
 
         return {
-            "table": (
-                f"{base}/azuretables"
-            ),
-            "queue": (
-                f"{base}/azurequeues"
-            ),
+            "table": f"{base}/azuretables",
+            "queue": f"{base}/azurequeues",
             "sharepoint": (
                 f"{base}/sharepointonline"
             ),
@@ -270,13 +265,6 @@ class ScopingAzureManager:
             f"/functions/"
             f"{quote(function_name, safe='')}"
             f"?api-version={self.MANAGEMENT_API_VERSION}"
-        )
-
-        logger.info(
-            "Retrieving Function metadata: "
-            "app=%s function=%s",
-            function_app_name,
-            function_name,
         )
 
         try:
@@ -371,11 +359,13 @@ class ScopingAzureManager:
         function_name: str,
     ) -> str:
 
-        function_resource = self.get_function_resource(
-            subscription_id=subscription_id,
-            resource_group_name=resource_group_name,
-            function_app_name=function_app_name,
-            function_name=function_name,
+        function_resource = (
+            self.get_function_resource(
+                subscription_id=subscription_id,
+                resource_group_name=resource_group_name,
+                function_app_name=function_app_name,
+                function_name=function_name,
+            )
         )
 
         properties = function_resource.get(
@@ -391,7 +381,6 @@ class ScopingAzureManager:
         )
 
         if not route:
-
             route = properties.get(
                 "invoke_url_template"
             )
@@ -409,10 +398,6 @@ class ScopingAzureManager:
             route = f"/api/{function_name}"
 
         route = str(route)
-
-        # ========================================================
-        # FUNCTION APP HOSTNAME
-        # ========================================================
 
         site_url = (
             f"{self.ARM_MANAGEMENT_URL}"
@@ -446,12 +431,9 @@ class ScopingAzureManager:
         if not hostname:
 
             hostname = (
-                f"{function_app_name}.azurewebsites.net"
+                f"{function_app_name}"
+                ".azurewebsites.net"
             )
-
-        # ========================================================
-        # NORMALIZE ROUTE
-        # ========================================================
 
         if route.startswith(
             ("http://", "https://")
@@ -462,7 +444,6 @@ class ScopingAzureManager:
             route = parsed.path
 
             if parsed.query:
-
                 route = (
                     f"{route}?{parsed.query}"
                 )
@@ -473,15 +454,13 @@ class ScopingAzureManager:
         if not route.startswith("/api/"):
             route = "/api" + route
 
-        # ========================================================
-        # FUNCTION KEY
-        # ========================================================
-
-        function_key = self.get_function_key(
-            subscription_id=subscription_id,
-            resource_group_name=resource_group_name,
-            function_app_name=function_app_name,
-            function_name=function_name,
+        function_key = (
+            self.get_function_key(
+                subscription_id=subscription_id,
+                resource_group_name=resource_group_name,
+                function_app_name=function_app_name,
+                function_name=function_name,
+            )
         )
 
         separator = (
@@ -516,16 +495,7 @@ class ScopingAzureManager:
         check_working_hours_function_name: str,
     ) -> Dict[str, str]:
 
-        logger.info(
-            "Resolving Function URLs from Function App: %s",
-            function_app_name,
-        )
-
         return {
-
-            # ----------------------------------------------------
-            # Existing Scoping functions
-            # ----------------------------------------------------
 
             "config_service_url": (
                 self.get_function_url(
@@ -562,10 +532,6 @@ class ScopingAzureManager:
                     call_azure_function_name,
                 )
             ),
-
-            # ----------------------------------------------------
-            # Scoping-02 functions
-            # ----------------------------------------------------
 
             "process_asset_data_url": (
                 self.get_function_url(
@@ -627,11 +593,6 @@ class ScopingAzureManager:
             f"?api-version={self.LOGIC_APP_API_VERSION}"
         )
 
-        logger.info(
-            "Retrieving Logic App triggers: %s",
-            logic_app_name,
-        )
-
         try:
 
             return self._management_request(
@@ -678,15 +639,11 @@ class ScopingAzureManager:
                 f"Logic App '{logic_app_name}'."
             )
 
-        selected_trigger: Optional[
-            Dict[str, Any]
-        ] = None
+        selected_trigger = None
 
-        requested = trigger_name.strip().lower()
-
-        # ========================================================
-        # EXACT NAME
-        # ========================================================
+        requested = (
+            trigger_name.strip().lower()
+        )
 
         for trigger in triggers:
 
@@ -694,7 +651,10 @@ class ScopingAzureManager:
                 continue
 
             current_name = str(
-                trigger.get("name", "")
+                trigger.get(
+                    "name",
+                    "",
+                )
             )
 
             if (
@@ -704,10 +664,6 @@ class ScopingAzureManager:
 
                 selected_trigger = trigger
                 break
-
-        # ========================================================
-        # DISPLAY NAME / TITLE
-        # ========================================================
 
         if selected_trigger is None:
 
@@ -721,10 +677,7 @@ class ScopingAzureManager:
                     {},
                 )
 
-                if not isinstance(
-                    properties,
-                    dict,
-                ):
+                if not isinstance(properties, dict):
                     continue
 
                 candidates = [
@@ -751,10 +704,6 @@ class ScopingAzureManager:
                 if selected_trigger:
                     break
 
-        # ========================================================
-        # SINGLE REQUEST TRIGGER FALLBACK
-        # ========================================================
-
         if selected_trigger is None:
 
             request_triggers = []
@@ -769,10 +718,7 @@ class ScopingAzureManager:
                     {},
                 )
 
-                if not isinstance(
-                    properties,
-                    dict,
-                ):
+                if not isinstance(properties, dict):
                     continue
 
                 trigger_type = str(
@@ -783,20 +729,10 @@ class ScopingAzureManager:
                 ).lower()
 
                 if trigger_type == "request":
-
-                    request_triggers.append(
-                        trigger
-                    )
+                    request_triggers.append(trigger)
 
             if len(request_triggers) == 1:
-
-                selected_trigger = (
-                    request_triggers[0]
-                )
-
-        # ========================================================
-        # TRIGGER NOT FOUND
-        # ========================================================
+                selected_trigger = request_triggers[0]
 
         if selected_trigger is None:
 
@@ -815,20 +751,9 @@ class ScopingAzureManager:
                 f"{available_triggers}"
             )
 
-        actual_trigger_name = (
-            selected_trigger.get("name")
+        actual_trigger_name = selected_trigger.get(
+            "name"
         )
-
-        if not actual_trigger_name:
-
-            raise ValueError(
-                f"Logic App trigger '{trigger_name}' "
-                "does not contain a valid name."
-            )
-
-        # ========================================================
-        # LIST CALLBACK URL
-        # ========================================================
 
         callback_url = (
             f"{self.ARM_MANAGEMENT_URL}"
@@ -857,7 +782,6 @@ class ScopingAzureManager:
         )
 
         if not resolved_url:
-
             resolved_url = callback_response.get(
                 "callbackUrl"
             )
@@ -865,94 +789,54 @@ class ScopingAzureManager:
         if not resolved_url:
 
             raise ValueError(
-                f"Azure did not return a callback URL for "
-                f"trigger '{actual_trigger_name}' in "
-                f"Logic App '{logic_app_name}'."
+                f"Azure did not return a callback URL "
+                f"for trigger '{actual_trigger_name}' "
+                f"in Logic App '{logic_app_name}'."
             )
 
         return str(resolved_url)
 
     # ============================================================
-    # LOGIC APP URLS
-    # ============================================================
-
-    def get_logic_app_urls(
-        self,
-        subscription_id: str,
-        resource_group_name: str,
-        notification_logic_app_name: str,
-        notification_logic_app_action_name: str,
-        completion_logic_app_name: str,
-        completion_logic_app_action_name: str,
-    ) -> Dict[str, str]:
-
-        notification_service_url = (
-            self.get_logic_app_callback_url(
-                subscription_id=subscription_id,
-                resource_group_name=resource_group_name,
-                logic_app_name=(
-                    notification_logic_app_name
-                ),
-                trigger_name=(
-                    notification_logic_app_action_name
-                ),
-            )
-        )
-
-        completion_logic_app_url = (
-            self.get_logic_app_callback_url(
-                subscription_id=subscription_id,
-                resource_group_name=resource_group_name,
-                logic_app_name=(
-                    completion_logic_app_name
-                ),
-                trigger_name=(
-                    completion_logic_app_action_name
-                ),
-            )
-        )
-
-        return {
-            "notification_service_url": (
-                notification_service_url
-            ),
-            "completion_logic_app_url": (
-                completion_logic_app_url
-            ),
-        }
-
-    # ============================================================
-    # DEPLOY
+    # DEPLOYMENT
     # ============================================================
 
     def deploy(
         self,
         request: Any,
         connections: Dict[str, str],
-        function_urls: Optional[
-            Dict[str, str]
-        ] = None,
-        logic_app_urls: Optional[
-            Dict[str, str]
-        ] = None,
+        function_urls: Dict[str, str],
+        notification_service_url: str,
+        completion_logic_app_url: str,
+        scoping02_logic_app_url: Optional[str] = None,
+        stages: Optional[Set[str]] = None,
     ) -> Dict[str, Any]:
 
-        logger.info(
-            "Starting Scoping ARM deployment: "
-            "logic_app=%s scoping01=%s scoping02=%s",
-            request.logic_app_name,
-            request.scoping01_logic_app_name,
-            request.scoping02_logic_app_name,
-        )
+        """
+        Deploy selected Scoping Logic Apps.
+
+        stages can contain:
+
+            {"scoping02"}
+
+        or:
+
+            {"scoping00", "scoping01"}
+
+        or all three.
+        """
+
+        if stages is None:
+
+            stages = {
+                "scoping02",
+                "scoping00",
+                "scoping01",
+            }
 
         resource_client = ResourceManagementClient(
             self.credential,
             request.subscription_id,
         )
-
-        # ========================================================
-        # TEMPLATE
-        # ========================================================
 
         template_path = (
             Path(__file__).resolve().parent.parent.parent
@@ -967,30 +851,61 @@ class ScopingAzureManager:
                 f"{template_path}"
             )
 
-        try:
+        with open(
+            template_path,
+            "r",
+            encoding="utf-8",
+        ) as file:
 
-            with open(
-                template_path,
-                "r",
-                encoding="utf-8",
-            ) as file:
-
-                template = json.load(file)
-
-        except json.JSONDecodeError as exc:
-
-            raise ValueError(
-                f"Invalid JSON in Scoping ARM template: "
-                f"{template_path}"
-            ) from exc
+            template = json.load(file)
 
         # ========================================================
-        # DEPLOYMENT NAME
+        # FILTER ARM RESOURCES
         # ========================================================
 
-        deployment_name = (
-            f"scoping-{uuid.uuid4().hex[:8]}"
+        resources = template.get(
+            "resources",
+            [],
         )
+
+        filtered_resources = []
+
+        for resource in resources:
+
+            resource_name = str(
+                resource.get("name", "")
+            )
+
+            if (
+                resource_name
+                == "[parameters('scoping02LogicAppName')]"
+            ):
+
+                if "scoping02" in stages:
+                    filtered_resources.append(resource)
+
+            elif (
+                resource_name
+                == "[parameters('logicAppName')]"
+            ):
+
+                if "scoping00" in stages:
+                    filtered_resources.append(resource)
+
+            elif (
+                resource_name
+                == "[parameters('scoping01LogicAppName')]"
+            ):
+
+                if "scoping01" in stages:
+                    filtered_resources.append(resource)
+
+            else:
+
+                # Preserve any non-Logic-App resources
+                filtered_resources.append(resource)
+
+        template["resources"] = filtered_resources
 
         # ========================================================
         # CONNECTION IDS
@@ -1035,127 +950,55 @@ class ScopingAzureManager:
         )
 
         # ========================================================
-        # FUNCTION URLS
+        # REQUIRED FUNCTION URLS
         # ========================================================
 
-        function_urls = function_urls or {}
+        required_function_urls = {
 
-        config_service_url = function_urls.get(
-            "config_service_url"
-        )
+            "Config Service Function URL":
+                function_urls.get(
+                    "config_service_url"
+                ),
 
-        business_day_hour_status_url = (
-            function_urls.get(
-                "business_day_hour_status_url"
-            )
-        )
+            "Business Day Hour Status Function URL":
+                function_urls.get(
+                    "business_day_hour_status_url"
+                ),
 
-        get_next_business_day_url = (
-            function_urls.get(
-                "get_next_business_day_url"
-            )
-        )
+            "Get Next Business Day Function URL":
+                function_urls.get(
+                    "get_next_business_day_url"
+                ),
 
-        call_azure_function_url = (
-            function_urls.get(
-                "call_azure_function_url"
-            )
-        )
+            "Call Azure Function URL":
+                function_urls.get(
+                    "call_azure_function_url"
+                ),
 
-        # --------------------------------------------------------
-        # NEW SCOPING-02 URLs
-        # --------------------------------------------------------
+            "Process Asset Data Function URL":
+                function_urls.get(
+                    "process_asset_data_url"
+                ),
 
-        process_asset_data_url = (
-            function_urls.get(
-                "process_asset_data_url"
-            )
-        )
+            "Create Asset Groups Function URL":
+                function_urls.get(
+                    "create_asset_groups_url"
+                ),
 
-        create_asset_groups_url = (
-            function_urls.get(
-                "create_asset_groups_url"
-            )
-        )
+            "Error Processor Function URL":
+                function_urls.get(
+                    "error_processor_url"
+                ),
 
-        error_processor_url = (
-            function_urls.get(
-                "error_processor_url"
-            )
-        )
-
-        check_working_hours_url = (
-            function_urls.get(
-                "check_working_hours_url"
-            )
-        )
-
-        # ========================================================
-        # LOGIC APP URLS
-        # ========================================================
-
-        logic_app_urls = logic_app_urls or {}
-
-        notification_service_url = (
-            logic_app_urls.get(
-                "notification_service_url"
-            )
-        )
-
-        completion_logic_app_url = (
-            logic_app_urls.get(
-                "completion_logic_app_url"
-            )
-        )
-
-        # ========================================================
-        # VALIDATE URLS
-        # ========================================================
-
-        required_urls = {
-
-            "Notification Logic App callback URL": (
-                notification_service_url
-            ),
-
-            "Completion Logic App callback URL": (
-                completion_logic_app_url
-            ),
-
-            "Config Service Function URL": (
-                config_service_url
-            ),
-
-            "Business Day Hour Status Function URL": (
-                business_day_hour_status_url
-            ),
-
-            "Get Next Business Day Function URL": (
-                get_next_business_day_url
-            ),
-
-            "Call Azure Function URL": (
-                call_azure_function_url
-            ),
-
-            "Process Asset Data Function URL": (
-                process_asset_data_url
-            ),
-
-            "Create Asset Groups Function URL": (
-                create_asset_groups_url
-            ),
-
-            "Error Processor Function URL": (
-                error_processor_url
-            ),
-
-            "Check Working Hours Function URL": (
-                check_working_hours_url
-            ),
+            "Check Working Hours Function URL":
+                function_urls.get(
+                    "check_working_hours_url"
+                ),
         }
 
-        for description, value in required_urls.items():
+        for description, value in (
+            required_function_urls.items()
+        ):
 
             if not value:
 
@@ -1164,14 +1007,26 @@ class ScopingAzureManager:
                 )
 
         # ========================================================
+        # SCOPING-02 CALLBACK
+        # ========================================================
+
+        if (
+            "scoping00" in stages
+            or "scoping01" in stages
+        ):
+
+            if not scoping02_logic_app_url:
+
+                raise ValueError(
+                    "Scoping-02 callback URL is required "
+                    "before deploying Scoping-00/01."
+                )
+
+        # ========================================================
         # ARM PARAMETERS
         # ========================================================
 
         parameters: Dict[str, Any] = {
-
-            # ----------------------------------------------------
-            # LOGIC APPS
-            # ----------------------------------------------------
 
             "logicAppName": {
                 "value": request.logic_app_name,
@@ -1185,17 +1040,9 @@ class ScopingAzureManager:
                 "value": request.scoping02_logic_app_name,
             },
 
-            # ----------------------------------------------------
-            # LOCATION
-            # ----------------------------------------------------
-
             "location": {
                 "value": request.location,
             },
-
-            # ----------------------------------------------------
-            # STORAGE
-            # ----------------------------------------------------
 
             "storageAccountName": {
                 "value": request.storage_account_name,
@@ -1213,10 +1060,6 @@ class ScopingAzureManager:
                 ),
             },
 
-            # ----------------------------------------------------
-            # NOTIFICATION
-            # ----------------------------------------------------
-
             "NotificationStatus": {
                 "value": request.notification_status,
             },
@@ -1225,66 +1068,64 @@ class ScopingAzureManager:
                 "value": notification_service_url,
             },
 
-            # ----------------------------------------------------
-            # EXISTING FUNCTION URLS
-            # ----------------------------------------------------
-
             "configServiceUrl": {
-                "value": config_service_url,
+                "value": function_urls[
+                    "config_service_url"
+                ],
             },
 
             "businessDayHourStatusUrl": {
-                "value": (
-                    business_day_hour_status_url
-                ),
+                "value": function_urls[
+                    "business_day_hour_status_url"
+                ],
             },
 
             "getNextBusinessDayUrl": {
-                "value": (
-                    get_next_business_day_url
-                ),
+                "value": function_urls[
+                    "get_next_business_day_url"
+                ],
             },
 
             "callAzureFunctionUrl": {
-                "value": (
-                    call_azure_function_url
-                ),
+                "value": function_urls[
+                    "call_azure_function_url"
+                ],
             },
 
-            # ----------------------------------------------------
-            # SCOPING-02 FUNCTION URLS
-            #
-            # These names MUST match the parameters in
-            # arm/scoping.json
-            # ----------------------------------------------------
-
             "processAssetDataUrl": {
-                "value": process_asset_data_url,
+                "value": function_urls[
+                    "process_asset_data_url"
+                ],
             },
 
             "createAssetGroupsUrl": {
-                "value": create_asset_groups_url,
+                "value": function_urls[
+                    "create_asset_groups_url"
+                ],
             },
 
             "errorProcessorUrl": {
-                "value": error_processor_url,
+                "value": function_urls[
+                    "error_processor_url"
+                ],
             },
 
             "checkWorkingHoursUrl": {
-                "value": check_working_hours_url,
+                "value": function_urls[
+                    "check_working_hours_url"
+                ],
             },
 
-            # ----------------------------------------------------
-            # SHAREPOINT
-            # ----------------------------------------------------
+            "scoping02LogicAppUrl": {
+                "value": (
+                    scoping02_logic_app_url
+                    or ""
+                ),
+            },
 
             "sharePointUrl": {
                 "value": request.share_point_url,
             },
-
-            # ----------------------------------------------------
-            # COMPLETION
-            # ----------------------------------------------------
 
             "completionLogicAppUrl": {
                 "value": completion_logic_app_url,
@@ -1294,49 +1135,48 @@ class ScopingAzureManager:
                 "value": request.callback_secret_key,
             },
 
-            # ----------------------------------------------------
-            # API CONNECTIONS
-            # ----------------------------------------------------
-
             "$connections": {
                 "value": {
 
                     request.table_connection_name: {
-                        "connectionId": (
-                            table_connection_id
-                        ),
-                        "connectionName": (
-                            request.table_connection_name
-                        ),
-                        "id": managed_api_ids["table"],
+                        "connectionId":
+                            table_connection_id,
+
+                        "connectionName":
+                            request.table_connection_name,
+
+                        "id":
+                            managed_api_ids["table"],
                     },
 
                     request.queue_connection_name: {
-                        "connectionId": (
-                            queue_connection_id
-                        ),
-                        "connectionName": (
-                            request.queue_connection_name
-                        ),
-                        "id": managed_api_ids["queue"],
+                        "connectionId":
+                            queue_connection_id,
+
+                        "connectionName":
+                            request.queue_connection_name,
+
+                        "id":
+                            managed_api_ids["queue"],
                     },
 
                     request.sharepoint_connection_name: {
-                        "connectionId": (
-                            sharepoint_connection_id
-                        ),
-                        "connectionName": (
-                            request.sharepoint_connection_name
-                        ),
-                        "id": managed_api_ids["sharepoint"],
+                        "connectionId":
+                            sharepoint_connection_id,
+
+                        "connectionName":
+                            request.sharepoint_connection_name,
+
+                        "id":
+                            managed_api_ids["sharepoint"],
                     },
                 }
             },
         }
 
-        # ========================================================
-        # DEPLOYMENT BODY
-        # ========================================================
+        deployment_name = (
+            f"scoping-{uuid.uuid4().hex[:8]}"
+        )
 
         deployment_body = {
             "properties": {
@@ -1346,36 +1186,10 @@ class ScopingAzureManager:
             }
         }
 
-        # ========================================================
-        # SAFE LOGGING
-        # ========================================================
-
         logger.info(
-            "Deploying Scoping ARM template: "
-            "deployment=%s",
-            deployment_name,
+            "Deploying Scoping stage: %s",
+            sorted(stages),
         )
-
-        logger.info(
-            "Scoping-00 Logic App: %s",
-            request.logic_app_name,
-        )
-
-        logger.info(
-            "Scoping-01 Logic App: %s",
-            request.scoping01_logic_app_name,
-        )
-
-        logger.info(
-            "Scoping-02 Logic App: %s",
-            request.scoping02_logic_app_name,
-        )
-
-        # NEVER log actual Function or callback URLs.
-
-        # ========================================================
-        # START DEPLOYMENT
-        # ========================================================
 
         try:
 
@@ -1390,7 +1204,7 @@ class ScopingAzureManager:
 
             result = deployment.result()
 
-            provisioning_state: Optional[str] = None
+            provisioning_state = None
 
             if result.properties:
 
@@ -1399,22 +1213,18 @@ class ScopingAzureManager:
                 )
 
             logger.info(
-                "Scoping deployment completed: "
-                "name=%s state=%s",
+                "Scoping stage completed: "
+                "deployment=%s state=%s",
                 deployment_name,
                 provisioning_state,
             )
-
-            # ====================================================
-            # FAILED
-            # ====================================================
 
             if provisioning_state not in {
                 "Succeeded",
                 "succeeded",
             }:
 
-                error_message: Optional[str] = None
+                error_message = None
 
                 if result.properties:
 
@@ -1428,26 +1238,23 @@ class ScopingAzureManager:
                         error_message = str(error)
 
                 return {
-                    "deployment_name": deployment_name,
-                    "provisioning_state": (
-                        provisioning_state
-                        or "Failed"
-                    ),
-                    "error": (
+                    "deployment_name":
+                        deployment_name,
+
+                    "provisioning_state":
+                        provisioning_state or "Failed",
+
+                    "error":
                         error_message
-                        or "ARM deployment failed."
-                    ),
+                        or "ARM deployment failed.",
                 }
 
-            # ====================================================
-            # SUCCESS
-            # ====================================================
-
             return {
-                "deployment_name": deployment_name,
-                "provisioning_state": (
-                    provisioning_state
-                ),
+                "deployment_name":
+                    deployment_name,
+
+                "provisioning_state":
+                    provisioning_state,
             }
 
         except Exception as exc:
@@ -1457,7 +1264,12 @@ class ScopingAzureManager:
             )
 
             return {
-                "deployment_name": deployment_name,
-                "provisioning_state": "Failed",
-                "error": str(exc),
+                "deployment_name":
+                    deployment_name,
+
+                "provisioning_state":
+                    "Failed",
+
+                "error":
+                    str(exc),
             }
