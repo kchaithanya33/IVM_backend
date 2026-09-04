@@ -17,13 +17,6 @@ logger = logging.getLogger(__name__)
 class VulnAzureService:
     """
     Azure operations for Vulnerability Scan Logic Apps.
-
-    Responsibilities:
-
-      - Resolve Azure API connections.
-      - Resolve Azure Function URLs.
-      - Resolve Logic App trigger callback URLs.
-      - Deploy individual Logic Apps from the Vulnerability Scan ARM template.
     """
 
     MANAGEMENT_API_VERSION = "2022-03-01"
@@ -52,12 +45,6 @@ class VulnAzureService:
         url: str,
         body: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-
-        logger.debug(
-            "Azure Management API request: %s %s",
-            method,
-            url,
-        )
 
         response = requests.request(
             method=method,
@@ -323,8 +310,7 @@ class VulnAzureService:
 
         raise ValueError(
             f"No function key found for function "
-            f"'{function_name}' in Function App "
-            f"'{function_app_name}'."
+            f"'{function_name}'."
         )
 
     # ============================================================
@@ -338,33 +324,12 @@ class VulnAzureService:
         function_app_name: str,
         function_name: str,
     ) -> str:
-        """
-        Resolve an Azure Function HTTP URL.
-
-        The caller supplies:
-            Function App name
-            Function name
-
-        The backend obtains:
-            Function route
-            Function host name
-            Function access key
-
-        Result:
-            https://<function-app>.azurewebsites.net/api/<function>?code=<key>
-        """
-
-        logger.info(
-            "Resolving Function URL: app=%s function=%s",
-            function_app_name,
-            function_name,
-        )
 
         resource = self.get_function_resource(
-            subscription_id=subscription_id,
-            resource_group_name=resource_group_name,
-            function_app_name=function_app_name,
-            function_name=function_name,
+            subscription_id,
+            resource_group_name,
+            function_app_name,
+            function_name,
         )
 
         props = resource.get(
@@ -375,23 +340,16 @@ class VulnAzureService:
         route = None
 
         if isinstance(props, dict):
+
             route = (
                 props.get("invokeUrlTemplate")
                 or props.get("invoke_url_template")
             )
 
-        # --------------------------------------------------------
-        # FALLBACK ROUTE
-        # --------------------------------------------------------
-
         if not route:
             route = f"/api/{function_name}"
 
         route = str(route)
-
-        # --------------------------------------------------------
-        # NORMALIZE ABSOLUTE URL
-        # --------------------------------------------------------
 
         if route.startswith(
             ("http://", "https://")
@@ -403,19 +361,11 @@ class VulnAzureService:
             if parsed.query:
                 route += f"?{parsed.query}"
 
-        # --------------------------------------------------------
-        # NORMALIZE ROUTE
-        # --------------------------------------------------------
-
         if not route.startswith("/"):
             route = "/" + route
 
         if not route.startswith("/api/"):
             route = "/api" + route
-
-        # --------------------------------------------------------
-        # GET FUNCTION APP
-        # --------------------------------------------------------
 
         site_url = (
             f"{self.ARM_MANAGEMENT_URL}/subscriptions/"
@@ -449,20 +399,12 @@ class VulnAzureService:
                 f"{function_app_name}.azurewebsites.net"
             )
 
-        # --------------------------------------------------------
-        # GET FUNCTION KEY
-        # --------------------------------------------------------
-
         key = self.get_function_key(
-            subscription_id=subscription_id,
-            resource_group_name=resource_group_name,
-            function_app_name=function_app_name,
-            function_name=function_name,
+            subscription_id,
+            resource_group_name,
+            function_app_name,
+            function_name,
         )
-
-        # --------------------------------------------------------
-        # ADD FUNCTION KEY
-        # --------------------------------------------------------
 
         separator = (
             "&"
@@ -470,21 +412,12 @@ class VulnAzureService:
             else "?"
         )
 
-        final_url = (
+        return (
             f"https://{hostname}"
             f"{route}"
             f"{separator}"
             f"code={quote(key, safe='')}"
         )
-
-        logger.info(
-            "Function URL resolved successfully: "
-            "app=%s function=%s",
-            function_app_name,
-            function_name,
-        )
-
-        return final_url
 
     # ============================================================
     # LOGIC APP TRIGGERS
@@ -524,29 +457,11 @@ class VulnAzureService:
         logic_app_name: str,
         trigger_name: str,
     ) -> str:
-        """
-        Resolve the callback URL for a specific Logic App trigger.
-
-        The caller explicitly supplies:
-
-            Logic App name
-            Trigger name
-
-        This method does NOT infer the Logic App from any other
-        Logic App name such as vuln04_logic_app_name.
-        """
-
-        logger.info(
-            "Resolving Logic App callback URL: "
-            "logic_app=%s trigger=%s",
-            logic_app_name,
-            trigger_name,
-        )
 
         response = self.get_logic_app_triggers(
-            subscription_id=subscription_id,
-            resource_group_name=resource_group_name,
-            logic_app_name=logic_app_name,
+            subscription_id,
+            resource_group_name,
+            logic_app_name,
         )
 
         triggers = response.get(
@@ -719,13 +634,6 @@ class VulnAzureService:
                 f"in Logic App '{logic_app_name}'."
             )
 
-        logger.info(
-            "Logic App callback URL resolved successfully: "
-            "logic_app=%s trigger=%s",
-            logic_app_name,
-            actual_name,
-        )
-
         return str(value)
 
     # ============================================================
@@ -742,10 +650,13 @@ class VulnAzureService:
         deployment_prefix: str,
     ) -> Dict[str, Any]:
 
-        # --------------------------------------------------------
-        # ARM TEMPLATE LOCATION
-        # --------------------------------------------------------
-
+        # IMPORTANT:
+        # Put the ARM file here:
+        #
+        # project/
+        #   arm/
+        #       LA-VulnScan-Merged.json
+        #
         candidates = [
             Path(__file__).resolve().parents[2]
             / "arm"
@@ -774,8 +685,8 @@ class VulnAzureService:
 
         if not isinstance(resources, list):
             raise ValueError(
-                "Vulnerability Scan ARM template "
-                "does not contain a resources array."
+                "LA-VulnScan-Merged.json does not "
+                "contain a resources array."
             )
 
         if template_resource_index not in range(
@@ -820,10 +731,6 @@ class VulnAzureService:
                     f"parameter '{name}' is required "
                     "but the backend did not supply it."
                 )
-
-        # --------------------------------------------------------
-        # ONLY PASS PARAMETERS THAT EXIST IN ARM TEMPLATE
-        # --------------------------------------------------------
 
         deployment_parameters = {
             name: value

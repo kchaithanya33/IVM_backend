@@ -28,11 +28,12 @@ def deploy_vuln(
 
     logger.info(
         "Received Vulnerability Scan deployment request: "
-        "vuln15=%s vuln01=%s vuln04=%s "
+        "vuln15=%s vuln01=%s vuln04=%s vuln155=%s "
         "notification=%s callback=%s",
         request.vuln15_logic_app_name,
         request.vuln01_logic_app_name,
         request.vuln04_logic_app_name,
+        request.vuln155_logic_app_name,
         request.notification_logic_app_name,
         request.callback_logic_app_name,
     )
@@ -61,6 +62,18 @@ def deploy_vuln(
         "logic_app=%s trigger=%s",
         request.callback_logic_app_name,
         request.callback_logic_app_trigger_name,
+    )
+
+    logger.info(
+        "Vuln 1.55 callback configuration: "
+        "vuln155_logic_app=%s "
+        "completion_logic_app=%s completion_trigger=%s "
+        "chg_approval_logic_app=%s chg_approval_trigger=%s",
+        request.vuln155_logic_app_name,
+        request.completion_logic_app_name,
+        request.completion_http_action_name,
+        request.vuln_scan_chg_approval_logic_app_name,
+        request.vuln_scan_chg_approval_http_action_name,
     )
 
     try:

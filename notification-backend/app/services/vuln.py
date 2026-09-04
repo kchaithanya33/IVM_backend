@@ -23,11 +23,14 @@ class VulnDeploymentService:
       2. Resolve all required Function URLs.
       3. Resolve Notification Logic App callback URL.
       4. Resolve explicitly selected callback Logic App URL.
-      5. Deploy LA-VulnScan-01.5.
-      6. Get LA-VulnScan-01.5/manual callback URL.
-      7. Deploy LA-VulnScan-01 using that URL as httpEndpointUrl.
-      8. Deploy LA-VulnScan-04 using the resolved Function URLs
-         and explicitly selected callbackUri.
+      5. Resolve Vuln 1.55 completion Logic App URL.
+      6. Resolve Vuln 1.55 CHG approval callback URL.
+      7. Deploy LA-VulnScan-01.5.
+      8. Get LA-VulnScan-01.5/manual callback URL.
+      9. Deploy LA-VulnScan-01 using that URL as httpEndpointUrl.
+      10. Deploy LA-VulnScan-04 using the resolved Function URLs
+          and explicitly selected callbackUri.
+      11. Deploy LA-VulnScan-01.55.
     """
 
     def __init__(self) -> None:
@@ -44,11 +47,13 @@ class VulnDeploymentService:
 
         logger.info(
             "Starting Vulnerability Scan deployment: "
-            "vuln15=%s vuln01=%s vuln04=%s notification=%s "
+            "vuln15=%s vuln01=%s vuln04=%s "
+            "vuln155=%s notification=%s "
             "callback_logic_app=%s",
             request.vuln15_logic_app_name,
             request.vuln01_logic_app_name,
             request.vuln04_logic_app_name,
+            request.vuln155_logic_app_name,
             request.notification_logic_app_name,
             request.callback_logic_app_name,
         )
@@ -185,7 +190,7 @@ class VulnDeploymentService:
         # 4. RESOLVE EXPLICIT CALLBACK LOGIC APP URL
         # ========================================================
         #
-        # IMPORTANT:
+        # EXISTING LOGIC - UNCHANGED
         #
         # This is completely independent of vuln04_logic_app_name.
         #
@@ -214,6 +219,85 @@ class VulnDeploymentService:
         )
 
         # ========================================================
+        # 5. RESOLVE VULN 1.55 COMPLETION LOGIC APP URL
+        # ========================================================
+        #
+        # NEW LOGIC
+        #
+        # User provides:
+        #
+        #   completion_logic_app_name
+        #   completion_http_action_name
+        #
+        # Backend resolves:
+        #
+        #   completionLogicAppUrl
+        #
+        # ========================================================
+
+        logger.info(
+            "Resolving Vuln 1.55 completion Logic App URL: "
+            "%s/%s",
+            request.completion_logic_app_name,
+            request.completion_http_action_name,
+        )
+
+        completion_logic_app_url = (
+            self.azure.get_logic_app_callback_url(
+                subscription_id=request.subscription_id,
+                resource_group_name=request.resource_group_name,
+                logic_app_name=request.completion_logic_app_name,
+                trigger_name=request.completion_http_action_name,
+            )
+        )
+
+        logger.info(
+            "Vuln 1.55 completion Logic App URL resolved successfully."
+        )
+
+        # ========================================================
+        # 6. RESOLVE VULN 1.55 CHG APPROVAL CALLBACK URL
+        # ========================================================
+        #
+        # NEW LOGIC
+        #
+        # User provides:
+        #
+        #   vuln_scan_chg_approval_logic_app_name
+        #   vuln_scan_chg_approval_http_action_name
+        #
+        # Backend resolves:
+        #
+        #   vulnScanChgApprovalCallbackUrl
+        #
+        # ========================================================
+
+        logger.info(
+            "Resolving Vuln 1.55 CHG approval callback URL: "
+            "%s/%s",
+            request.vuln_scan_chg_approval_logic_app_name,
+            request.vuln_scan_chg_approval_http_action_name,
+        )
+
+        vuln_scan_chg_approval_callback_url = (
+            self.azure.get_logic_app_callback_url(
+                subscription_id=request.subscription_id,
+                resource_group_name=request.resource_group_name,
+                logic_app_name=(
+                    request.vuln_scan_chg_approval_logic_app_name
+                ),
+                trigger_name=(
+                    request.vuln_scan_chg_approval_http_action_name
+                ),
+            )
+        )
+
+        logger.info(
+            "Vuln 1.55 CHG approval callback URL "
+            "resolved successfully."
+        )
+
+        # ========================================================
         # COMMON ARM PARAMETERS
         # ========================================================
 
@@ -233,6 +317,30 @@ class VulnDeploymentService:
 
             "vuln04logicAppName": {
                 "value": request.vuln04_logic_app_name
+            },
+
+            # ----------------------------------------------------
+            # Vuln 1.55 Logic App name
+            # ----------------------------------------------------
+
+            "Vuln1.55logicAppName": {
+                "value": request.vuln155_logic_app_name
+            },
+
+            # ----------------------------------------------------
+            # Vuln 1.55 completion URL
+            # ----------------------------------------------------
+
+            "completionLogicAppUrl": {
+                "value": completion_logic_app_url
+            },
+
+            # ----------------------------------------------------
+            # Vuln 1.55 CHG approval callback URL
+            # ----------------------------------------------------
+
+            "vulnScanChgApprovalCallbackUrl": {
+                "value": vuln_scan_chg_approval_callback_url
             },
 
             # ----------------------------------------------------
@@ -320,7 +428,7 @@ class VulnDeploymentService:
         }
 
         # ========================================================
-        # 5. DEPLOY LA-VULNSCAN-01.5
+        # 7. DEPLOY LA-VULNSCAN-01.5
         # ========================================================
 
         logger.info(
@@ -366,6 +474,9 @@ class VulnDeploymentService:
                 vuln04_logic_app_name=(
                     request.vuln04_logic_app_name
                 ),
+                vuln155_logic_app_name=(
+                    request.vuln155_logic_app_name
+                ),
                 notification_logic_app_name=(
                     request.notification_logic_app_name
                 ),
@@ -395,13 +506,19 @@ class VulnDeploymentService:
                     notification_logic_app_url
                 ),
                 callback_uri=callback_uri,
+                completion_logic_app_url=(
+                    completion_logic_app_url
+                ),
+                vuln_scan_chg_approval_callback_url=(
+                    vuln_scan_chg_approval_callback_url
+                ),
                 arm_connections=(
                     connections.get("arm_connections")
                 ),
             )
 
         # ========================================================
-        # 6. GET LA-VULNSCAN-01.5/MANUAL CALLBACK URL
+        # 8. GET LA-VULNSCAN-01.5/MANUAL CALLBACK URL
         # ========================================================
 
         logger.info(
@@ -424,7 +541,7 @@ class VulnDeploymentService:
         )
 
         # ========================================================
-        # 7. PASS FIRST LOGIC APP URL TO SECOND LOGIC APP
+        # 9. PASS FIRST LOGIC APP URL TO SECOND LOGIC APP
         # ========================================================
 
         base_params["httpEndpointUrl"] = {
@@ -432,7 +549,7 @@ class VulnDeploymentService:
         }
 
         # ========================================================
-        # 8. DEPLOY LA-VULNSCAN-01
+        # 10. DEPLOY LA-VULNSCAN-01
         # ========================================================
 
         logger.info(
@@ -478,6 +595,9 @@ class VulnDeploymentService:
                 vuln04_logic_app_name=(
                     request.vuln04_logic_app_name
                 ),
+                vuln155_logic_app_name=(
+                    request.vuln155_logic_app_name
+                ),
                 notification_logic_app_name=(
                     request.notification_logic_app_name
                 ),
@@ -515,19 +635,31 @@ class VulnDeploymentService:
                         notification_logic_app_url
                     ),
                     callback_logic_app_url=callback_uri,
+                    completion_logic_app_url=(
+                        completion_logic_app_url
+                    ),
+                    vuln_scan_chg_approval_callback_url=(
+                        vuln_scan_chg_approval_callback_url
+                    ),
                 ),
                 http_endpoint_url=http_endpoint_url,
                 notification_logic_app_url=(
                     notification_logic_app_url
                 ),
                 callback_uri=callback_uri,
+                completion_logic_app_url=(
+                    completion_logic_app_url
+                ),
+                vuln_scan_chg_approval_callback_url=(
+                    vuln_scan_chg_approval_callback_url
+                ),
                 arm_connections=(
                     connections.get("arm_connections")
                 ),
             )
 
         # ========================================================
-        # 9. DEPLOY LA-VULNSCAN-04
+        # 11. DEPLOY LA-VULNSCAN-04
         # ========================================================
 
         logger.info(
@@ -549,10 +681,51 @@ class VulnDeploymentService:
             "Failed",
         )
 
+        # ========================================================
+        # 12. DEPLOY LA-VULNSCAN-01.55
+        # ========================================================
+        #
+        # NEW LOGIC
+        #
+        # Resource index 3 must be the Vuln 1.55 Logic App
+        # in arm/vuln.json.
+        #
+        # The following parameters are already in base_params:
+        #
+        #   Vuln1.55logicAppName
+        #   completionLogicAppUrl
+        #   vulnScanChgApprovalCallbackUrl
+        #
+        # ========================================================
+
+        logger.info(
+            "Deploying fourth Logic App: %s",
+            request.vuln155_logic_app_name,
+        )
+
+        deployment155 = self.azure.deploy(
+            subscription_id=request.subscription_id,
+            resource_group_name=request.resource_group_name,
+            location=request.location,
+            template_resource_index=3,
+            parameters=base_params,
+            deployment_prefix="vulnscan155",
+        )
+
+        state155 = deployment155.get(
+            "provisioning_state",
+            "Failed",
+        )
+
+        # ========================================================
+        # FINAL SUCCESS
+        # ========================================================
+
         success = (
             str(state15).lower() == "succeeded"
             and str(state01).lower() == "succeeded"
             and str(state04).lower() == "succeeded"
+            and str(state155).lower() == "succeeded"
         )
 
         # ========================================================
@@ -564,12 +737,19 @@ class VulnDeploymentService:
 
             message=(
                 "LA-VulnScan-01.5, "
-                "LA-VulnScan-01 and "
-                "LA-VulnScan-04 deployed successfully."
+                "LA-VulnScan-01, "
+                "LA-VulnScan-04 and "
+                "LA-VulnScan-01.55 deployed successfully."
                 if success
-                else deployment04.get(
-                    "error",
-                    "LA-VulnScan-04 deployment failed.",
+                else (
+                    deployment155.get(
+                        "error",
+                        deployment04.get(
+                            "error",
+                            "Vulnerability Scan Logic App "
+                            "deployment failed.",
+                        ),
+                    )
                 )
             ),
 
@@ -589,6 +769,10 @@ class VulnDeploymentService:
 
             vuln04_logic_app_name=(
                 request.vuln04_logic_app_name
+            ),
+
+            vuln155_logic_app_name=(
+                request.vuln155_logic_app_name
             ),
 
             notification_logic_app_name=(
@@ -615,11 +799,17 @@ class VulnDeploymentService:
                 deployment04.get("deployment_name")
             ),
 
+            vuln155_deployment_name=(
+                deployment155.get("deployment_name")
+            ),
+
             vuln15_provisioning_state=state15,
 
             vuln01_provisioning_state=state01,
 
             vuln04_provisioning_state=state04,
+
+            vuln155_provisioning_state=state155,
 
             table_connection_id=(
                 connections.get("table_connection_id")
@@ -645,6 +835,12 @@ class VulnDeploymentService:
                     notification_logic_app_url
                 ),
                 callback_logic_app_url=callback_uri,
+                completion_logic_app_url=(
+                    completion_logic_app_url
+                ),
+                vuln_scan_chg_approval_callback_url=(
+                    vuln_scan_chg_approval_callback_url
+                ),
             ),
 
             http_endpoint_url=http_endpoint_url,
@@ -654,6 +850,14 @@ class VulnDeploymentService:
             ),
 
             callback_uri=callback_uri,
+
+            completion_logic_app_url=(
+                completion_logic_app_url
+            ),
+
+            vuln_scan_chg_approval_callback_url=(
+                vuln_scan_chg_approval_callback_url
+            ),
 
             arm_connections=(
                 connections.get("arm_connections")

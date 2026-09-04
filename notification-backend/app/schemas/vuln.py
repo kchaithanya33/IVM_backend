@@ -8,6 +8,12 @@ class VulnLogicAppUrls(BaseModel):
     notification_logic_app_url: str
     callback_logic_app_url: Optional[str] = None
 
+    # ------------------------------------------------------------
+    # VULN 1.55 URLS
+    # ------------------------------------------------------------
+    completion_logic_app_url: Optional[str] = None
+    vuln_scan_chg_approval_callback_url: Optional[str] = None
+
 
 class VulnFunctionUrls(BaseModel):
     config_service_url: str
@@ -34,6 +40,15 @@ class VulnDeploymentRequest(BaseModel):
         - notificationLogicAppUrl
         - callbackUri
         - httpEndpointUrl from LA-VulnScan-01.5/manual
+
+      Vuln 1.55:
+        - completionLogicAppUrl is resolved from:
+            completion_logic_app_name
+            completion_http_action_name
+
+        - vulnScanChgApprovalCallbackUrl is resolved from:
+            vuln_scan_chg_approval_logic_app_name
+            vuln_scan_chg_approval_http_action_name
 
       Azure API connection IDs:
         - table connection
@@ -66,7 +81,7 @@ class VulnDeploymentRequest(BaseModel):
     )
 
     # ------------------------------------------------------------
-    # FIRST LOGIC APP
+    # FIRST LOGIC APP - VULN 1.5
     # ------------------------------------------------------------
 
     vuln15_logic_app_name: str = Field(
@@ -95,6 +110,68 @@ class VulnDeploymentRequest(BaseModel):
     vuln04_logic_app_name: str = Field(
         default="LA-VulnScan-04",
         description="Vulnerability Scan 04 Logic App name.",
+    )
+
+    # ------------------------------------------------------------
+    # VULN 1.55 LOGIC APP
+    # ------------------------------------------------------------
+
+    vuln155_logic_app_name: str = Field(
+        default="LA-VulnScan-01.55",
+        description="Vulnerability Scan 01.55 Logic App name.",
+    )
+
+    # ------------------------------------------------------------
+    # VULN 1.55 - COMPLETION LOGIC APP URL RESOLUTION
+    # ------------------------------------------------------------
+    #
+    # These two values are used by the backend to find the
+    # existing Logic App HTTP action and resolve completionLogicAppUrl.
+    #
+    # They are NOT the URL itself.
+    # ------------------------------------------------------------
+
+    completion_logic_app_name: str = Field(
+        default="",
+        description=(
+            "Existing Logic App name used to resolve "
+            "completionLogicAppUrl."
+        ),
+    )
+
+    completion_http_action_name: str = Field(
+        default="",
+        description=(
+            "HTTP action/trigger name in the completion Logic App "
+            "used to resolve completionLogicAppUrl."
+        ),
+    )
+
+    # ------------------------------------------------------------
+    # VULN 1.55 - CHANGE APPROVAL CALLBACK URL RESOLUTION
+    # ------------------------------------------------------------
+    #
+    # These two values are used by the backend to find the
+    # existing Logic App HTTP action and resolve
+    # vulnScanChgApprovalCallbackUrl.
+    #
+    # They are NOT the URL itself.
+    # ------------------------------------------------------------
+
+    vuln_scan_chg_approval_logic_app_name: str = Field(
+        default="",
+        description=(
+            "Existing Logic App name used to resolve "
+            "vulnScanChgApprovalCallbackUrl."
+        ),
+    )
+
+    vuln_scan_chg_approval_http_action_name: str = Field(
+        default="",
+        description=(
+            "HTTP action/trigger name in the Change Approval Logic App "
+            "used to resolve vulnScanChgApprovalCallbackUrl."
+        ),
     )
 
     # ------------------------------------------------------------
@@ -227,6 +304,12 @@ class VulnDeploymentResponse(BaseModel):
     vuln01_logic_app_name: str
     vuln04_logic_app_name: str
 
+    # ------------------------------------------------------------
+    # VULN 1.55
+    # ------------------------------------------------------------
+
+    vuln155_logic_app_name: Optional[str] = None
+
     notification_logic_app_name: str
 
     callback_logic_app_name: Optional[str] = None
@@ -237,9 +320,21 @@ class VulnDeploymentResponse(BaseModel):
     vuln01_deployment_name: Optional[str] = None
     vuln04_deployment_name: Optional[str] = None
 
+    # ------------------------------------------------------------
+    # VULN 1.55 DEPLOYMENT
+    # ------------------------------------------------------------
+
+    vuln155_deployment_name: Optional[str] = None
+
     vuln15_provisioning_state: Optional[str] = None
     vuln01_provisioning_state: Optional[str] = None
     vuln04_provisioning_state: Optional[str] = None
+
+    # ------------------------------------------------------------
+    # VULN 1.55 PROVISIONING STATE
+    # ------------------------------------------------------------
+
+    vuln155_provisioning_state: Optional[str] = None
 
     table_connection_id: Optional[str] = None
     queue_connection_id: Optional[str] = None
@@ -248,10 +343,23 @@ class VulnDeploymentResponse(BaseModel):
     function_urls: Optional[VulnFunctionUrls] = None
     logic_app_urls: Optional[VulnLogicAppUrls] = None
 
-    # URLs resolved by the backend.
+    # ------------------------------------------------------------
+    # EXISTING RESOLVED URLS
+    # ------------------------------------------------------------
+
     http_endpoint_url: Optional[str] = None
     notification_logic_app_url: Optional[str] = None
     callback_uri: Optional[str] = None
 
-    # ARM connection object actually supplied to deployment.
+    # ------------------------------------------------------------
+    # VULN 1.55 RESOLVED URLS
+    # ------------------------------------------------------------
+
+    completion_logic_app_url: Optional[str] = None
+    vuln_scan_chg_approval_callback_url: Optional[str] = None
+
+    # ------------------------------------------------------------
+    # ARM CONNECTION OBJECT
+    # ------------------------------------------------------------
+
     arm_connections: Optional[Dict[str, Dict[str, str]]] = None
