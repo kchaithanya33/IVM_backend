@@ -50,7 +50,54 @@
     "followupQueueName": {
   "type": "String",
   "defaultValue": "taskreminder"
-}
+},
+"qualysScanStatusLogicAppName": {
+  "type": "string",
+  "defaultValue": "LA-QualysScan-Status",
+  "metadata": {
+    "description": "Name of the Logic App used to monitor Qualys scan status"
+  }
+},
+
+"qualysScanStatusQueueName": {
+  "type": "string",
+  "defaultValue": "qualysscanstatusqueue",
+  "metadata": {
+    "description": "Queue used for Qualys scan status polling"
+  }
+},
+
+
+
+
+
+
+"scanStatusLogTableName": {
+  "type": "string",
+  "defaultValue": "ScanStatusLog",
+  "metadata": {
+    "description": "Azure Table used for Qualys scan status logging"
+  }
+},
+
+"scanCompletionLogTableName": {
+  "type": "string",
+  "defaultValue": "ScanCompletionLog",
+  "metadata": {
+    "description": "Azure Table used for Qualys scan completion logging"
+  }
+},
+
+"qualysIntegrationUrl": {
+  "type": "string",
+  "metadata": {
+    "description": "URL of the Qualys Integration Function App"
+  }
+},
+ "notificationServiceUrl": {
+           
+              "type": "String"
+            }
 
 },
   "resources": [
@@ -1215,7 +1262,7 @@
           "MaxReminders": "@{outputs('Calculate_Dynamic_Escalation_Details')?['maxReminders']}",
           "Status": "Stopped - Maximum reminders reached"
         },
-        "path": "/Tables/@{encodeURIComponent(parameters('auditLogTableName'))}/entities"
+        "path": "/Tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
       }
     },
     "Delete_Final_Queue_Message": {
@@ -2174,6 +2221,1020 @@
       "outputs": {}
     }
   }
-}
+},
+ {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('qualysScanStatusLogicAppName')]",
+      "location": "[parameters('location')]",
+
+      "properties": {
+        "state": "Enabled",
+
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+
+          "triggers": {
+            "When_a_message_is_received_in_a_queue": {
+              "recurrence": {
+                "interval": 15,
+                "frequency": "Second"
+              },
+              "evaluatedRecurrence": {
+                "interval": 15,
+                "frequency": "Second"
+              },
+              "splitOn": "@triggerBody()?['QueueMessagesList']?['QueueMessage']",
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('qualysScanStatusQueueName'))}/message_trigger"
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "runs": 1
+                }
+              }
+            }
+          },
+
+          "actions": {
+            "Parse_Queue_Message": {
+              "runAfter": {},
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@triggerBody()?['messageText']",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "cycleId": {
+                      "type": "string"
+                    },
+                    "scanId": {
+                      "type": "string"
+                    },
+                    "batchId": {
+                      "type": "string"
+                    },
+                    "assetGroupName": {
+                      "type": "string"
+                    },
+                    "workflowName": {
+                      "type": "string"
+                    },
+                    "taskId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    },
+                    "maxRetryCount": {
+                      "type": "integer"
+                    },
+                    "currentRetryCount": {
+                      "type": "integer"
+                    },
+                    "retryIntervalMinutes": {
+                      "type": "integer"
+                    },
+                    "initialRetryIntervalMinutes": {
+                      "type": "integer"
+                    },
+                    "subsequentRetryIntervalMinutes": {
+                      "type": "integer"
+                    },
+                    "callbackType": {
+                      "type": "string"
+                    },
+                    "callbackUri": {
+                      "type": "string"
+                    },
+                    "callbackParameters": {
+                      "type": "object"
+                    },
+                    "scheduledTime": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+
+            "Debug_Message_Content": {
+              "runAfter": {
+                "Parse_Queue_Message": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": {
+                "OriginalMessage": "@triggerBody()?['messageText']",
+                "ParsedMessage": "@body('Parse_Queue_Message')",
+                "CallbackParams": "@body('Parse_Queue_Message')?['callbackParameters']",
+                "AssetGroupName": "@body('Parse_Queue_Message')?['callbackParameters']?['assetGroupName']",
+                "CycleId": "@body('Parse_Queue_Message')?['callbackParameters']?['cycleId']",
+                "MainCycleId": "@body('Parse_Queue_Message')?['cycleId']"
+              }
+            },
+
+            "Log_Check_Start": {
+              "runAfter": {
+                "Debug_Message_Content": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "PartitionKey": "@{body('Parse_Queue_Message')?['workflowName']}",
+                  "RowKey": "@{concat(formatDateTime(utcNow(),'yyyyMMddHHmmss'),'_',replace(replace(replace(replace(toLower(string(body('Parse_Queue_Message')?['callbackParameters']?['reference'])),'/', '_'),'\\', '_'),'#', '_'),'?', '_'), '_', string(body('Parse_Queue_Message')?['currentRetryCount']))}",
+                  "ScanRef": "@{body('Parse_Queue_Message')?['callbackParameters']?['reference']}",
+                  "TaskId": "@{body('Parse_Queue_Message')?['taskId']}",
+                  "ActionType": "ScanStatusCheck",
+                  "ActionTime": "@{utcNow()}",
+                  "RetryCount": "@{body('Parse_Queue_Message')?['currentRetryCount']}",
+                  "CycleId": "@{body('Parse_Queue_Message')?['cycleId']}"
+                },
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+              }
+            },
+
+            "Check_Scan_Status": {
+              "runAfter": {
+                "Log_Check_Start": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "uri": "@parameters('qualysIntegrationUrl')",
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "scan_ref": "@{body('Parse_Queue_Message')?['callbackParameters']?['reference']}"
+                }
+              }
+            },
+
+            "Initialize_Scan_Status": {
+              "runAfter": {
+                "Check_Scan_Status": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "scanStatus",
+                    "type": "string",
+                    "value": "@{body('Check_Scan_Status')?['status']}"
+                  }
+                ]
+              }
+            },
+
+            "Initialize_Asset_Group_Name": {
+              "runAfter": {
+                "Initialize_Scan_Status": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "assetGroupName",
+                    "type": "string",
+                    "value": "@{if(empty(body('Parse_Queue_Message')?['callbackParameters']?['assetGroupName']), 'DefaultAssetGroup', body('Parse_Queue_Message')?['callbackParameters']?['assetGroupName'])}"
+                  }
+                ]
+              }
+            },
+
+            "Initialize_Cycle_Id": {
+              "runAfter": {
+                "Initialize_Asset_Group_Name": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "cycleId",
+                    "type": "string",
+                    "value": "@{if(empty(body('Parse_Queue_Message')?['callbackParameters']?['cycleId']), body('Parse_Queue_Message')?['cycleId'], body('Parse_Queue_Message')?['callbackParameters']?['cycleId'])}"
+                  }
+                ]
+              }
+            },
+
+            "Log_Status_Check_Result": {
+              "runAfter": {
+                "Initialize_Cycle_Id": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "PartitionKey": "ScanStatus",
+                  "RowKey": "@{concat(formatDateTime(utcNow(),'yyyyMMddHHmmss'),'_',replace(replace(replace(replace(toLower(string(body('Parse_Queue_Message')?['callbackParameters']?['reference'])),'/', '_'),'\\', '_'),'#', '_'),'?', '_'), '_', string(body('Parse_Queue_Message')?['currentRetryCount']))}",
+                  "ScanRef": "@{body('Parse_Queue_Message')?['callbackParameters']?['reference']}",
+                  "CycleId": "@{variables('cycleId')}",
+                  "WorkflowName": "@{body('Parse_Queue_Message')?['workflowName']}",
+                  "Status": "@{variables('scanStatus')}",
+                  "CheckTime": "@{utcNow()}",
+                  "RetryCount": "@{body('Parse_Queue_Message')?['currentRetryCount']}",
+                  "AssetGroupName": "@{variables('assetGroupName')}"
+                },
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('scanStatusLogTableName'))}/entities"
+              }
+            },
+
+            "Check_If_Scan_Completed": {
+              "runAfter": {
+                "Log_Status_Check_Result": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "or": [
+                  {
+                    "equals": [
+                      "@variables('scanStatus')",
+                      "Finished"
+                    ]
+                  },
+                  {
+                    "equals": [
+                      "@variables('scanStatus')",
+                      "Canceled"
+                    ]
+                  },
+                  {
+                    "equals": [
+                      "@variables('scanStatus')",
+                      "Error"
+                    ]
+                  }
+                ]
+              },
+              "type": "If",
+
+              "actions": {
+                "Process_Completed_Scan": {
+                  "type": "Scope",
+                  "actions": {
+                    "Prepare_Callback_Body": {
+                      "type": "Compose",
+                      "inputs": {
+                        "requestType": "scanResults",
+                        "scanId": "@{body('Parse_Queue_Message')?['scanId']}",
+                        "cycleId": "@{variables('cycleId')}",
+                        "assetGroupName": "@{variables('assetGroupName')}",
+                        "scanStatus": "@{if(equals(variables('scanStatus'), 'Finished'), 'Completed', if(equals(variables('scanStatus'), 'Error'), 'Failed', variables('scanStatus')))}",
+                        "reference": "@{body('Parse_Queue_Message')?['callbackParameters']?['reference']}",
+                        "scanResults": {
+                          "summary": "@{coalesce(body('Check_Scan_Status')?['summary'], 'Scan completed')}",
+                          "hostCount": "@{coalesce(body('Check_Scan_Status')?['hostCount'], 0)}",
+                          "vulnCount": "@{coalesce(body('Check_Scan_Status')?['vulnCount'], 0)}"
+                        }
+                      }
+                    },
+
+                    "Determine_Callback_Type": {
+                      "runAfter": {
+                        "Prepare_Callback_Body": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Compose",
+                      "inputs": "@coalesce(body('Parse_Queue_Message')?['callbackType'], 'http')"
+                    },
+
+                    "Log_Callback_Payload": {
+                      "runAfter": {
+                        "Determine_Callback_Type": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "body": {
+                          "PartitionKey": "CallbackPayload",
+                          "RowKey": "@{concat(formatDateTime(utcNow(),'yyyyMMddHHmmss'),'_',body('Parse_Queue_Message')?['scanId'])}",
+                          "ScanId": "@{body('Parse_Queue_Message')?['scanId']}",
+                          "CycleId": "@{variables('cycleId')}",
+                          "AssetGroupName": "@{variables('assetGroupName')}",
+                          "CallbackType": "@{outputs('Determine_Callback_Type')}",
+                          "CallbackPayload": "@{string(outputs('Prepare_Callback_Body'))}",
+                          "CreatedTime": "@{utcNow()}"
+                        },
+                        "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+                      }
+                    },
+
+                    "Check_Callback_Type": {
+                      "runAfter": {
+                        "Log_Callback_Payload": [
+                          "Succeeded"
+                        ]
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@outputs('Determine_Callback_Type')",
+                              "queue"
+                            ]
+                          }
+                        ]
+                      },
+                      "type": "If",
+
+                      "actions": {
+                        "Prepare_Queue_Message": {
+                          "type": "Compose",
+                          "inputs": "@union(body('Parse_Queue_Message')?['callbackParameters'], outputs('Prepare_Callback_Body'))"
+                        },
+
+                        "Add_Message_To_Callback_Queue": {
+                          "runAfter": {
+                            "Prepare_Queue_Message": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": "@outputs('Prepare_Queue_Message')",
+                            "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent('vulnscanbatchqueue')}/messages"
+                          }
+                        },
+
+                        "Log_Queue_Callback": {
+                          "runAfter": {
+                            "Add_Message_To_Callback_Queue": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "PartitionKey": "CallbackExecution",
+                              "RowKey": "@{concat(formatDateTime(utcNow(),'yyyyMMddHHmmss'),'_',body('Parse_Queue_Message')?['scanId'])}",
+                              "ScanId": "@{body('Parse_Queue_Message')?['scanId']}",
+                              "CycleId": "@{variables('cycleId')}",
+                              "CallbackType": "Queue",
+                              "QueueName": "@{coalesce(body('Parse_Queue_Message')?['callbackParameters']?['callbackQueueName'], 'defaultcallbackqueue')}",
+                              "ExecutionTime": "@{utcNow()}",
+                              "Status": "Success",
+                              "AssetGroupName": "@{variables('assetGroupName')}"
+                            },
+                            "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+                          }
+                        }
+                      },
+
+                      "else": {
+                        "actions": {
+                          "Prepare_HTTP_Callback_Body": {
+                            "type": "Compose",
+                            "inputs": "@union(body('Parse_Queue_Message')?['callbackParameters'], outputs('Prepare_Callback_Body'))"
+                          },
+
+                          "Invoke_HTTP_Callback": {
+                            "runAfter": {
+                              "Prepare_HTTP_Callback_Body": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                              "uri": "@{body('Parse_Queue_Message')?['callbackUri']}",
+                              "method": "POST",
+                              "headers": {
+                                "Content-Type": "application/json"
+                              },
+                              "body": "@outputs('Prepare_HTTP_Callback_Body')"
+                            }
+                          },
+
+                          "Log_HTTP_Callback": {
+                            "runAfter": {
+                              "Invoke_HTTP_Callback": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "body": {
+                                "PartitionKey": "CallbackExecution",
+                                "RowKey": "@{concat(formatDateTime(utcNow(),'yyyyMMddHHmmss'),'_',body('Parse_Queue_Message')?['scanId'])}",
+                                "ScanId": "@{body('Parse_Queue_Message')?['scanId']}",
+                                "CycleId": "@{variables('cycleId')}",
+                                "CallbackType": "HTTP",
+                                "CallbackUri": "@{body('Parse_Queue_Message')?['callbackUri']}",
+                                "ExecutionTime": "@{utcNow()}",
+                                "Status": "Success",
+                                "AssetGroupName": "@{variables('assetGroupName')}"
+                              },
+                              "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+                            }
+                          }
+                        }
+                      }
+                    },
+
+                    "Delete_Qualys_Scan_Status_Queue_message": {
+                      "runAfter": {
+                        "Check_Callback_Type": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
+                          }
+                        },
+                        "method": "delete",
+                        "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('qualysScanStatusQueueName'))}/messages/@{encodeURIComponent(triggerBody()?['MessageId'])}",
+                        "queries": {
+                          "popreceipt": "@triggerBody()?['PopReceipt']"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+
+              "else": {
+                "actions": {
+                  "Check_Retry_Count": {
+                    "runAfter": {},
+                    "expression": {
+                      "and": [
+                        {
+                          "less": [
+                            "@body('Parse_Queue_Message')?['currentRetryCount']",
+                            "@body('Parse_Queue_Message')?['maxRetryCount']"
+                          ]
+                        }
+                      ]
+                    },
+                    "type": "If",
+
+                    "actions": {
+                      "Get_Retry_Configuration": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                            }
+                          },
+                          "method": "get",
+                          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('AppConfiguration')}/entities(PartitionKey='@{encodeURIComponent(body('Parse_Queue_Message')?['workflowName'])}',RowKey='@{encodeURIComponent('QualysScan')}')"
+                        }
+                      },
+
+                      "Parse_Retry_Intervals": {
+                        "runAfter": {
+                          "Get_Retry_Configuration": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "ParseJson",
+                        "inputs": {
+                          "content": "@body('Get_Retry_Configuration')?['Value']",
+                          "schema": {
+                            "type": "array",
+                            "items": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      },
+
+                      "Calculate_Appropriate_Interval": {
+                        "runAfter": {
+                          "Parse_Retry_Intervals": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Compose",
+                        "inputs": "@if(less(body('Parse_Queue_Message')?['currentRetryCount'], length(body('Parse_Retry_Intervals'))), body('Parse_Retry_Intervals')[body('Parse_Queue_Message')?['currentRetryCount']], last(body('Parse_Retry_Intervals')))"
+                      },
+
+                      "Calculate_Next_Retry_Count": {
+                        "runAfter": {
+                          "Calculate_Appropriate_Interval": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Compose",
+                        "inputs": "@add(body('Parse_Queue_Message')?['currentRetryCount'], 1)"
+                      },
+
+                      "Calculate_Next_Check_Time": {
+                        "runAfter": {
+                          "Calculate_Next_Retry_Count": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Compose",
+                        "inputs": "@addMinutes(utcNow(), outputs('Calculate_Appropriate_Interval'))"
+                      },
+
+                      "Calculate_Visibility_Timeout_Seconds": {
+                        "runAfter": {
+                          "Calculate_Next_Check_Time": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Compose",
+                        "inputs": "@mul(outputs('Calculate_Appropriate_Interval'), 60)",
+                        "description": "Convert minutes to seconds for queue visibility timeout"
+                      },
+
+                      "Generate_New_Queue_Message": {
+                        "runAfter": {
+                          "Calculate_Visibility_Timeout_Seconds": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Compose",
+                        "inputs": "@setProperty(body('Parse_Queue_Message'), 'currentRetryCount', outputs('Calculate_Next_Retry_Count'))"
+                      },
+
+                      "Delete_Existing_QualysScanStatus_Queue_message": {
+                        "runAfter": {
+                          "Generate_New_Queue_Message": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
+                            }
+                          },
+                          "method": "delete",
+                          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('qualysScanStatusQueueName'))}/messages/@{encodeURIComponent(triggerBody()?['MessageId'])}",
+                          "queries": {
+                            "popreceipt": "@triggerBody()?['PopReceipt']"
+                          }
+                        }
+                      },
+
+                      "Add_to_QualysScanStatusQueue": {
+                        "runAfter": {
+                          "Delete_Existing_QualysScanStatus_Queue_message": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "body": "@outputs('Generate_New_Queue_Message')",
+                          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('qualysScanStatusQueueName'))}/messages",
+                          "queries": {
+                            "visibilitytimeout": "@outputs('Calculate_Visibility_Timeout_Seconds')"
+                          }
+                        }
+                      },
+
+                      "Log_Next_Check_Scheduled": {
+                        "runAfter": {
+                          "Add_to_QualysScanStatusQueue": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "body": {
+                            "PartitionKey": "ScanStatusScheduled",
+                            "RowKey": "@{concat(formatDateTime(utcNow(),'yyyyMMddHHmmss'),'_',replace(replace(replace(replace(toLower(string(body('Parse_Queue_Message')?['callbackParameters']?['reference'])),'/', '_'),'\\', '_'),'#', '_'),'?', '_'), '_', string(outputs('Calculate_Next_Retry_Count')))}",
+                            "ScanRef": "@{body('Parse_Queue_Message')?['callbackParameters']?['reference']}",
+                            "CycleId": "@{variables('cycleId')}",
+                            "WorkflowName": "@{body('Parse_Queue_Message')?['workflowName']}",
+                            "CurrentStatus": "@{variables('scanStatus')}",
+                            "NextRetryCount": "@outputs('Calculate_Next_Retry_Count')",
+                            "NextCheckTime": "@{outputs('Calculate_Next_Check_Time')}",
+                            "IntervalUsed": "@{outputs('Calculate_Appropriate_Interval')}",
+                            "AssetGroupName": "@{variables('assetGroupName')}"
+                          },
+                          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('scanStatusLogTableName'))}/entities"
+                        }
+                      }
+                    },
+
+                    "else": {
+                      "actions": {
+                        "Send_Max_Retries_Notification": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@parameters('notificationServiceUrl')",
+                            "method": "POST",
+                            "body": {
+                              "WorkflowName": "AuthScanning",
+                              "NotificationType": "Info",
+                              "NotificationContent": "@{concat('The authenticated security scan for cycle ', variables('cycleId'), ' has not been completed. Scan ref: ', body('Parse_Queue_Message')?['callbackParameters']?['reference'], '. Asset Group: ', variables('assetGroupName'), '.')}",
+                              "NotificationTitle": "Authenticated Scan Not Completed",
+                              "RecipientList": [
+                                "loganathan.sekar@diageo.com"
+                              ],
+                              "channels": [
+                                "Email",
+                                "Teams"
+                              ],
+                              "RelatedEntityId": "@{triggerBody()?['scanId']}",
+                              "CycleName": "@{variables('cycleId')}",
+                              "Importance": "Normal",
+                              "Attachments": [],
+                              "TemplateId": "AUTH-07",
+                              "ReportDate": "@{formatDateTime(addDays(utcNow(), 2), 'yyyy-MM-dd')}",
+                              "parameters": {
+                                "ScanRef": "@{body('Parse_Queue_Message')?['callbackParameters']?['reference']}",
+                                "CycleId": "@{variables('cycleId')}",
+                                "WorkflowName": "@{body('Parse_Queue_Message')?['workflowName']}",
+                                "MaxRetries": "@{body('Parse_Queue_Message')?['maxRetryCount']}",
+                                "CurrentStatus": "@{variables('scanStatus')}",
+                                "LastCheckTime": "@{utcNow()}",
+                                "AssetGroupName": "@{variables('assetGroupName')}"
+                              }
+                            }
+                          }
+                        },
+
+                        "Log_Max_Retries_Exceeded": {
+                          "runAfter": {
+                            "Send_Max_Retries_Notification": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "PartitionKey": "ScanStatusMaxRetries",
+                              "RowKey": "@{concat(formatDateTime(utcNow(),'yyyyMMddHHmmss'),'_',replace(replace(replace(replace(toLower(string(body('Parse_Queue_Message')?['callbackParameters']?['reference'])),'/', '_'),'\\', '_'),'#', '_'),'?', '_'), '_', string(body('Parse_Queue_Message')?['currentRetryCount']))}",
+                              "ScanRef": "@{body('Parse_Queue_Message')?['callbackParameters']?['reference']}",
+                              "CycleId": "@{variables('cycleId')}",
+                              "WorkflowName": "@{body('Parse_Queue_Message')?['workflowName']}",
+                              "Status": "@{variables('scanStatus')}",
+                              "MaxRetriesExceededTime": "@{utcNow()}",
+                              "RetryCount": "@{body('Parse_Queue_Message')?['currentRetryCount']}",
+                              "FinalStatus": "@{variables('scanStatus')}",
+                              "AssetGroupName": "@{variables('assetGroupName')}"
+                            },
+                            "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('scanStatusLogTableName'))}/entities"
+                          }
+                        },
+
+                        "Add_Final_Check_With_Extended_Delay": {
+                          "runAfter": {
+                            "Log_Max_Retries_Exceeded": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Scope",
+
+                          "actions": {
+                            "Get_Retry_Configuration_For_Extended": {
+                              "type": "ApiConnection",
+                              "inputs": {
+                                "host": {
+                                  "connection": {
+                                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                                  }
+                                },
+                                "method": "get",
+                                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('AppConfiguration')}/entities(PartitionKey='@{encodeURIComponent(body('Parse_Queue_Message')?['workflowName'])}',RowKey='@{encodeURIComponent('QualysScan')}')"
+                              }
+                            },
+
+                            "Parse_Retry_Intervals_For_Extended": {
+                              "runAfter": {
+                                "Get_Retry_Configuration_For_Extended": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "ParseJson",
+                              "inputs": {
+                                "content": "@body('Get_Retry_Configuration_For_Extended')?['Value']",
+                                "schema": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            },
+
+                            "Calculate_Extended_Interval": {
+                              "runAfter": {
+                                "Parse_Retry_Intervals_For_Extended": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "Compose",
+                              "inputs": "@last(body('Parse_Retry_Intervals_For_Extended'))"
+                            },
+
+                            "Calculate_Extended_Check_Time": {
+                              "runAfter": {
+                                "Calculate_Extended_Interval": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "Compose",
+                              "inputs": "@addMinutes(utcNow(), mul(outputs('Calculate_Extended_Interval'), 4))"
+                            },
+
+                            "Calculate_Extended_Visibility_Timeout_Seconds": {
+                              "runAfter": {
+                                "Calculate_Extended_Check_Time": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "Compose",
+                              "inputs": "@mul(mul(outputs('Calculate_Extended_Interval'), 4), 60)",
+                              "description": "Convert extended delay minutes to seconds"
+                            },
+
+                            "Generate_Final_Queue_Message": {
+                              "runAfter": {
+                                "Calculate_Extended_Visibility_Timeout_Seconds": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "Compose",
+                              "inputs": {
+                                "id": "@{body('Parse_Queue_Message')?['id']}",
+                                "scanId": "@{body('Parse_Queue_Message')?['scanId']}",
+                                "cycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
+                                "workflowName": "@{body('Parse_Queue_Message')?['workflowName']}",
+                                "taskId": "@{body('Parse_Queue_Message')?['taskId']}",
+                                "maxRetryCount": "@add(int(body('Parse_Queue_Message')?['maxRetryCount']), 1)",
+                                "currentRetryCount": "@add(int(body('Parse_Queue_Message')?['currentRetryCount']), 1)",
+                                "retryIntervalMinutes": "@int(body('Parse_Queue_Message')?['retryIntervalMinutes'])",
+                                "initialRetryIntervalMinutes": "@int(body('Parse_Queue_Message')?['initialRetryIntervalMinutes'])",
+                                "subsequentRetryIntervalMinutes": "@int(body('Parse_Queue_Message')?['subsequentRetryIntervalMinutes'])",
+                                "callbackUri": "@{body('Parse_Queue_Message')?['callbackUri']}",
+                                "callbackParameters": "@body('Parse_Queue_Message')?['callbackParameters']",
+                                "scheduledTime": "@{outputs('Calculate_Extended_Check_Time')}"
+                              }
+                            },
+
+                            "Add_Final_Check_To_Queue": {
+                              "runAfter": {
+                                "Generate_Final_Queue_Message": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "ApiConnection",
+                              "inputs": {
+                                "host": {
+                                  "connection": {
+                                    "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
+                                  }
+                                },
+                                "method": "post",
+                                "body": "@outputs('Generate_Final_Queue_Message')",
+                                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent(parameters('qualysScanStatusQueueName'))}/messages",
+                                "queries": {
+                                  "visibilitytimeout": "@outputs('Calculate_Extended_Visibility_Timeout_Seconds')"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+
+            "Log_Action_Completion": {
+              "runAfter": {
+                "Check_If_Scan_Completed": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "PartitionKey": "AuditLog",
+                  "RowKey": "@{guid()}",
+                  "Timestamp": "@{utcNow()}",
+                  "WorkflowName": "QualysScanStatus",
+                  "LogicAppName": "QualysScan-Status-01",
+                  "ActionType": "StatusCheckCompleted",
+                  "ScanId": "@{body('Parse_Queue_Message')?['scanId']}",
+                  "Status": "@{variables('scanStatus')}",
+                  "CycleId": "@{body('Parse_Queue_Message')?['cycleId']}",
+                  "RetryCount": "@{body('Parse_Queue_Message')?['currentRetryCount']}",
+                  "Message": "Status check completed and processed"
+                },
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('notificationLogTableName'))}/entities"
+              }
+            }
+          },
+
+          "outputs": {},
+
+          "parameters": {
+            "qualysScanStatusLogicAppName": {
+              "defaultValue": "QualysScan-Status-01",
+              "type": "String"
+            },
+
+            "location": {
+              "defaultValue": "[resourceGroup().location]",
+              "type": "String"
+            },
+
+            "storageAccountName": {
+              "defaultValue": "",
+              "type": "String"
+            },
+
+            "qualysScanStatusQueueName": {
+              "defaultValue": "qualysscanstatusqueue",
+              "type": "String"
+            },
+
+         
+            
+
+            "notificationServiceUrl": {
+           
+              "type": "String"
+            },
+
+         
+            
+
+            "scanStatusLogTableName": {
+              "defaultValue": "ScanStatusLog",
+              "type": "String"
+            },
+
+            "scanCompletionLogTableName": {
+              "defaultValue": "ScanCompletionLog",
+              "type": "String"
+            },
+
+            "qualysIntegrationUrl": {
+              
+              "type": "String"
+            },
+
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            }
+          }
+        },
+
+        "parameters": {
+          "qualysScanStatusLogicAppName": {
+            "value": "[parameters('qualysScanStatusLogicAppName')]"
+          },
+
+          "location": {
+            "value": "[parameters('location')]"
+          },
+
+          "storageAccountName": {
+            "value": "[parameters('storageAccountName')]"
+          },
+
+          "qualysScanStatusQueueName": {
+            "value": "[parameters('qualysScanStatusQueueName')]"
+          },
+
+        
+
+          "notificationServiceUrl": {
+            "value": "[parameters('notificationServiceUrl')]"
+          },
+
+          
+          
+
+          "scanStatusLogTableName": {
+            "value": "[parameters('scanStatusLogTableName')]"
+          },
+
+          "scanCompletionLogTableName": {
+            "value": "[parameters('scanCompletionLogTableName')]"
+          },
+
+          "qualysIntegrationUrl": {
+            "value": "[parameters('qualysIntegrationUrl')]"
+          },
+
+          "$connections": {
+              "value": {
+              "azuretables": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('azureTablesConnectionName'))]",
+                "connectionName": "[parameters('azureTablesConnectionName')]",
+                "connectionProperties": {},
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuretables')]"
+              },
+              "office365": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('office365ConnectionName'))]",
+                "connectionName": "[parameters('office365ConnectionName')]",
+                "connectionProperties": {},
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'office365')]"
+              },
+              "teams": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('teamsConnectionName'))]",
+                "connectionName": "[parameters('teamsConnectionName')]",
+                "connectionProperties": {},
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'teams')]"
+              }
+            }
+          }
+        }
+      }
+    }
+
   ]
 }

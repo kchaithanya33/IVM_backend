@@ -1,3 +1,5 @@
+
+
 import json
 import logging
 from datetime import datetime
@@ -5,7 +7,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from azure.identity import DefaultAzureCredential
+
 from azure.mgmt.resource import ResourceManagementClient
+from azure.mgmt.web import WebSiteManagementClient
+from azure.mgmt.logic import LogicManagementClient
 
 
 logger = logging.getLogger(__name__)
@@ -15,24 +20,52 @@ class ARMDeploymentManager:
     """
     Handles Azure Resource Manager operations.
 
-    This class replaces the Azure CLI commands used by
-    the notification deployment shell script.
+    Responsibilities:
+
+        - Resource Group operations
+        - ARM template loading/deployment
+        - Resource listing
+        - Function App URL resolution
+        - Logic App trigger callback URL resolution
     """
 
     def __init__(
         self,
         subscription_id: str,
     ):
+
         self.subscription_id = subscription_id
 
         logger.info(
-            "Initializing ARM client for subscription: %s",
+            "Initializing ARM clients for subscription: %s",
             subscription_id,
         )
 
         self.credential = DefaultAzureCredential()
 
+        # =====================================================
+        # Resource Manager
+        # =====================================================
+
         self.client = ResourceManagementClient(
+            self.credential,
+            subscription_id,
+        )
+
+        # =====================================================
+        # Web / Function Apps
+        # =====================================================
+
+        self.web_client = WebSiteManagementClient(
+            self.credential,
+            subscription_id,
+        )
+
+        # =====================================================
+        # Logic Apps
+        # =====================================================
+
+        self.logic_client = LogicManagementClient(
             self.credential,
             subscription_id,
         )
@@ -153,13 +186,13 @@ class ARMDeploymentManager:
         )
 
         # -----------------------------------------------------
-        # Convert parameters
+        # IMPORTANT:
         #
-        # ARM SDK expects:
+        # ARM SDK requires:
         #
         # {
         #     "parameterName": {
-        #         "value": "something"
+        #         "value": value
         #     }
         # }
         # -----------------------------------------------------
@@ -193,10 +226,6 @@ class ARMDeploymentManager:
             )
         )
 
-        # -----------------------------------------------------
-        # Wait for ARM deployment
-        # -----------------------------------------------------
-
         deployment = poller.result()
 
         provisioning_state = (
@@ -208,15 +237,12 @@ class ARMDeploymentManager:
             provisioning_state,
         )
 
-        # -----------------------------------------------------
-        # Failure
-        # -----------------------------------------------------
-
         if provisioning_state != "Succeeded":
 
             deployment_error = None
 
             if deployment.properties.error:
+
                 deployment_error = (
                     deployment.properties.error
                 )
@@ -231,10 +257,6 @@ class ARMDeploymentManager:
                 f"State: {provisioning_state}. "
                 f"Error: {deployment_error}"
             )
-
-        # -----------------------------------------------------
-        # Success
-        # -----------------------------------------------------
 
         return {
             "deployment_name": deployment_name,
@@ -261,10 +283,350 @@ class ARMDeploymentManager:
         properties = deployment.properties
 
         return {
-            "deployment_name": deployment_name,
+            "deployment_name":
+                deployment_name,
+
             "provisioning_state":
                 properties.provisioning_state,
         }
+
+    # =========================================================
+    # FUNCTION URL
+    # =========================================================
+
+    def get_function_url(
+        self,
+        resource_group_name: str,
+        function_app_name: str,
+        function_name: str,
+    ) -> str:
+        """
+        Resolve the HTTP invocation URL for an Azure Function.
+
+        Resolution order:
+
+            1. Get the function resource.
+            2. Use its invoke_url_template when available.
+            3. Try function-specific key.
+            4. Fall back to host key.
+            5. If no key exists, return the invocation URL without
+               a key.
+
+        This prevents the old failure:
+
+            No function keys returned for
+            'function-app/FunctionName'
+        """
+
+        if not function_app_name:
+            raise ValueError(
+                "function_app_name is required"
+            )
+
+        if not function_name:
+            raise ValueError(
+                "function_name is required"
+            )
+
+        logger.info(
+            "Getting Function information. "
+            "App: %s, Function: %s",
+            function_app_name,
+            function_name,
+        )
+
+        # =====================================================
+        # 1. Get function resource
+        # =====================================================
+
+        function = (
+            self.web_client.web_apps.get_function(
+                resource_group_name,
+                function_app_name,
+                function_name,
+            )
+        )
+
+        properties = (
+            getattr(function, "properties", None)
+        )
+
+        invoke_url = None
+
+        if properties:
+
+            invoke_url = getattr(
+                properties,
+                "invoke_url_template",
+                None,
+            )
+
+        # =====================================================
+        # 2. Fallback URL construction
+        # =====================================================
+
+        if not invoke_url:
+
+            site = (
+                self.web_client.web_apps.get(
+                    resource_group_name,
+                    function_app_name,
+                )
+            )
+
+            hostname = (
+                getattr(site, "default_host_name", None)
+            )
+
+            if not hostname:
+
+                raise RuntimeError(
+                    "Unable to determine default hostname "
+                    f"for Function App '{function_app_name}'"
+                )
+
+            invoke_url = (
+                f"https://{hostname}/api/{function_name}"
+            )
+
+        logger.info(
+            "Function invocation URL found"
+        )
+
+        # =====================================================
+        # 3. Try function-specific key
+        # =====================================================
+
+        function_key = None
+
+        try:
+
+            keys = (
+                self.web_client.web_apps
+                .list_function_keys(
+                    resource_group_name,
+                    function_app_name,
+                    function_name,
+                )
+            )
+
+            key_values = (
+                getattr(
+                    keys,
+                    "additional_properties",
+                    None,
+                )
+                or {}
+            )
+
+            if not key_values:
+
+                key_values = {
+                    key: getattr(
+                        keys,
+                        key,
+                        None,
+                    )
+                    for key in (
+                        "default",
+                        "key",
+                    )
+                    if getattr(
+                        keys,
+                        key,
+                        None
+                    )
+                }
+
+            function_key = (
+                key_values.get("default")
+                or key_values.get("key")
+            )
+
+        except Exception as exc:
+
+            logger.warning(
+                "Unable to retrieve function-specific "
+                "key for %s/%s: %s",
+                function_app_name,
+                function_name,
+                exc,
+            )
+
+        # =====================================================
+        # 4. Fall back to host key
+        # =====================================================
+
+        if not function_key:
+
+            try:
+
+                host_keys = (
+                    self.web_client.web_apps
+                    .list_host_keys(
+                        resource_group_name,
+                        function_app_name,
+                    )
+                )
+
+                host_key_values = (
+                    getattr(
+                        host_keys,
+                        "additional_properties",
+                        None,
+                    )
+                    or {}
+                )
+
+                if not host_key_values:
+
+                    host_key_values = {
+                        key: getattr(
+                            host_keys,
+                            key,
+                            None,
+                        )
+                        for key in (
+                            "masterKey",
+                            "functionKey",
+                        )
+                        if getattr(
+                            host_keys,
+                            key,
+                            None
+                        )
+                    }
+
+                function_key = (
+                    host_key_values.get(
+                        "functionKey"
+                    )
+                    or host_key_values.get(
+                        "masterKey"
+                    )
+                )
+
+            except Exception as exc:
+
+                logger.warning(
+                    "Unable to retrieve host keys "
+                    "for Function App '%s': %s",
+                    function_app_name,
+                    exc,
+                )
+
+        # =====================================================
+        # 5. Add function key if available
+        # =====================================================
+
+        if function_key:
+
+            separator = (
+                "&" if "?" in invoke_url else "?"
+            )
+
+            final_url = (
+                f"{invoke_url}"
+                f"{separator}"
+                f"code={function_key}"
+            )
+
+            logger.info(
+                "Function URL resolved with authorization key"
+            )
+
+            return final_url
+
+        # =====================================================
+        # 6. No key available
+        #
+        # This can be valid when the function is configured for
+        # anonymous authorization.
+        # =====================================================
+
+        logger.warning(
+            "No function/host key was available for "
+            "%s/%s. Returning invocation URL without code.",
+            function_app_name,
+            function_name,
+        )
+
+        return invoke_url
+
+    # =========================================================
+    # LOGIC APP TRIGGER CALLBACK URL
+    # =========================================================
+
+    def get_logic_app_trigger_callback_url(
+        self,
+        resource_group_name: str,
+        logic_app_name: str,
+        trigger_name: str,
+    ) -> str:
+        """
+        Get the HTTP callback URL for a Logic App trigger.
+
+        Example:
+
+            Logic App:
+                Notification-service
+
+            Trigger:
+                When_a_HTTP_request_is_received
+
+        The URL is returned by Azure and normally contains the
+        required SAS query parameters.
+        """
+
+        if not logic_app_name:
+
+            raise ValueError(
+                "logic_app_name is required"
+            )
+
+        if not trigger_name:
+
+            raise ValueError(
+                "trigger_name is required"
+            )
+
+        logger.info(
+            "Getting Logic App trigger callback URL. "
+            "Logic App: %s, Trigger: %s",
+            logic_app_name,
+            trigger_name,
+        )
+
+        callback = (
+            self.logic_client.workflow_triggers
+            .list_callback_url(
+                resource_group_name,
+                logic_app_name,
+                trigger_name,
+            )
+        )
+
+        callback_url = (
+            getattr(
+                callback,
+                "value",
+                None,
+            )
+        )
+
+        if not callback_url:
+
+            raise RuntimeError(
+                "Azure returned no callback URL for "
+                f"Logic App '{logic_app_name}' "
+                f"trigger '{trigger_name}'"
+            )
+
+        logger.info(
+            "Logic App trigger callback URL resolved successfully"
+        )
+
+        return callback_url
 
     # =========================================================
     # LIST RESOURCES
@@ -293,10 +655,17 @@ class ARMDeploymentManager:
 
             result.append(
                 {
-                    "name": resource.name,
-                    "type": resource.type,
-                    "location": resource.location,
-                    "id": resource.id,
+                    "name":
+                        resource.name,
+
+                    "type":
+                        resource.type,
+
+                    "location":
+                        resource.location,
+
+                    "id":
+                        resource.id,
                 }
             )
 
