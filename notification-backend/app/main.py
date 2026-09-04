@@ -27,9 +27,20 @@ from app.api.scoping import (
     router as scoping_router,
 )
 
-# NEW: AuthScan
+# ============================================================
+# AuthScan
+# ============================================================
+
 from app.api.auth import (
     router as auth_router,
+)
+
+# ============================================================
+# Vulnerability Scan
+# ============================================================
+
+from app.api.vuln import (
+    router as vuln_router,
 )
 
 
@@ -136,6 +147,15 @@ app.include_router(
 
 app.include_router(
     auth_router
+)
+
+
+# ------------------------------------------------------------
+# Vulnerability Scan Logic App Deployment
+# ------------------------------------------------------------
+
+app.include_router(
+    vuln_router
 )
 
 

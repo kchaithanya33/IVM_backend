@@ -47,6 +47,9 @@ class WorkflowService:
              # Scan Log tables
     "ScanStatusLog",
     "ScanCompletionLog",
+    "CHGFormRequests",
+    "CHGStatusTracking",
+    "AssetScanGroups"
             
         ]
 
@@ -79,6 +82,8 @@ class WorkflowService:
             "vulnscan00",
 
             "authscanresultshandlerqueue",
+            "chgfollowup",
+            "vulnscanbatchqueue"
         ]
 
         # ====================================================
