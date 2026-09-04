@@ -28,12 +28,39 @@ def deploy_vuln(
 
     logger.info(
         "Received Vulnerability Scan deployment request: "
-        "vuln15=%s vuln01=%s notification=%s "
-        "function_app=%s",
+        "vuln15=%s vuln01=%s vuln04=%s "
+        "notification=%s callback=%s",
         request.vuln15_logic_app_name,
         request.vuln01_logic_app_name,
+        request.vuln04_logic_app_name,
         request.notification_logic_app_name,
-        request.function_app_name,
+        request.callback_logic_app_name,
+    )
+
+    logger.info(
+        "Function configuration: "
+        "config=%s/%s "
+        "get_next_business_day=%s/%s "
+        "qualys_integration=%s/%s "
+        "qualys_asset_group=%s/%s "
+        "business_days=%s/%s",
+        request.config_service_function_app_name,
+        request.config_service_function_name,
+        request.get_next_business_day_function_app_name,
+        request.get_next_business_day_function_name,
+        request.qualys_integration_function_app_name,
+        request.qualys_integration_function_name,
+        request.qualys_asset_group_creation_function_app_name,
+        request.qualys_asset_group_creation_function_name,
+        request.business_days_service_function_app_name,
+        request.business_days_service_function_name,
+    )
+
+    logger.info(
+        "Callback configuration: "
+        "logic_app=%s trigger=%s",
+        request.callback_logic_app_name,
+        request.callback_logic_app_trigger_name,
     )
 
     try:
