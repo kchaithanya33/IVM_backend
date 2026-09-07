@@ -83,7 +83,8 @@ class WorkflowService:
 
             "authscanresultshandlerqueue",
             "chgfollowup",
-            "vulnscanbatchqueue"
+            "vulnscanbatchqueue",
+            "meydiageo"
         ]
 
         # ====================================================

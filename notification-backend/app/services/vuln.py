@@ -1,3 +1,4 @@
+
 import logging
 from typing import Any, Dict
 
@@ -20,17 +21,18 @@ class VulnDeploymentService:
     Deployment flow:
 
       1. Resolve Azure API connections.
-      2. Resolve all required Function URLs.
-      3. Resolve Notification Logic App callback URL.
-      4. Resolve explicitly selected callback Logic App URL.
-      5. Resolve Vuln 1.55 completion Logic App URL.
-      6. Resolve Vuln 1.55 CHG approval callback URL.
-      7. Deploy LA-VulnScan-01.5.
-      8. Get LA-VulnScan-01.5/manual callback URL.
-      9. Deploy LA-VulnScan-01 using that URL as httpEndpointUrl.
-      10. Deploy LA-VulnScan-04 using the resolved Function URLs
-          and explicitly selected callbackUri.
-      11. Deploy LA-VulnScan-01.55.
+      2. Resolve all required existing Function URLs.
+      3. Resolve all VULN03 Function URLs.
+      4. Resolve Notification Logic App callback URL.
+      5. Resolve explicitly selected callback Logic App URL.
+      6. Resolve Vuln 1.55 completion Logic App URL.
+      7. Resolve Vuln 1.55 CHG approval callback URL.
+      8. Deploy LA-VulnScan-01.5.
+      9. Get LA-VulnScan-01.5/manual callback URL.
+      10. Deploy LA-VulnScan-01.
+      11. Deploy LA-VulnScan-04.
+      12. Deploy LA-VulnScan-01.55.
+      13. Deploy LA-VulnScan-03.
     """
 
     def __init__(self) -> None:
@@ -48,12 +50,13 @@ class VulnDeploymentService:
         logger.info(
             "Starting Vulnerability Scan deployment: "
             "vuln15=%s vuln01=%s vuln04=%s "
-            "vuln155=%s notification=%s "
+            "vuln155=%s vuln03=%s notification=%s "
             "callback_logic_app=%s",
             request.vuln15_logic_app_name,
             request.vuln01_logic_app_name,
             request.vuln04_logic_app_name,
             request.vuln155_logic_app_name,
+            request.vuln03_logic_app_name,
             request.notification_logic_app_name,
             request.callback_logic_app_name,
         )
@@ -71,7 +74,7 @@ class VulnDeploymentService:
         )
 
         # ========================================================
-        # 2. RESOLVE FUNCTION URLs
+        # 2. RESOLVE EXISTING FUNCTION URLS
         # ========================================================
 
         logger.info(
@@ -157,6 +160,101 @@ class VulnDeploymentService:
             ),
         )
 
+        # ========================================================
+        # 3. RESOLVE VULN03 FUNCTION URLS
+        # ========================================================
+        #
+        # NEW VULN03 LOGIC ONLY
+        #
+        # User provides:
+        #
+        #   excel_diageo_ip_function_app_name
+        #   excel_diageo_ip_function_name
+        #
+        #   asset_group_batch_processor_function_app_name
+        #   asset_group_batch_processor_function_name
+        #
+        #   excel_mey_diageo_ip_function_app_name
+        #   excel_mey_diageo_ip_function_name
+        #
+        #   qualys_asset_grouping_function_app_name
+        #   qualys_asset_grouping_function_name
+        #
+        # Backend resolves the actual Function URLs.
+        # ========================================================
+
+        logger.info(
+            "Resolving VULN03 Diageo IP Excel Function URL: %s/%s",
+            request.excel_diageo_ip_function_app_name,
+            request.excel_diageo_ip_function_name,
+        )
+
+        excel_diageo_ip_url = self.azure.get_function_url(
+            subscription_id=request.subscription_id,
+            resource_group_name=request.resource_group_name,
+            function_app_name=(
+                request.excel_diageo_ip_function_app_name
+            ),
+            function_name=(
+                request.excel_diageo_ip_function_name
+            ),
+        )
+
+        logger.info(
+            "Resolving VULN03 Asset Group Batch Processor URL: %s/%s",
+            request.asset_group_batch_processor_function_app_name,
+            request.asset_group_batch_processor_function_name,
+        )
+
+        asset_group_batch_processor_url = self.azure.get_function_url(
+            subscription_id=request.subscription_id,
+            resource_group_name=request.resource_group_name,
+            function_app_name=(
+                request.asset_group_batch_processor_function_app_name
+            ),
+            function_name=(
+                request.asset_group_batch_processor_function_name
+            ),
+        )
+
+        logger.info(
+            "Resolving VULN03 MeyDiageo IP Excel Function URL: %s/%s",
+            request.excel_mey_diageo_ip_function_app_name,
+            request.excel_mey_diageo_ip_function_name,
+        )
+
+        excel_mey_diageo_ip_url = self.azure.get_function_url(
+            subscription_id=request.subscription_id,
+            resource_group_name=request.resource_group_name,
+            function_app_name=(
+                request.excel_mey_diageo_ip_function_app_name
+            ),
+            function_name=(
+                request.excel_mey_diageo_ip_function_name
+            ),
+        )
+
+        logger.info(
+            "Resolving VULN03 Qualys Asset Grouping Function URL: %s/%s",
+            request.qualys_asset_grouping_function_app_name,
+            request.qualys_asset_grouping_function_name,
+        )
+
+        qualys_asset_grouping_url = self.azure.get_function_url(
+            subscription_id=request.subscription_id,
+            resource_group_name=request.resource_group_name,
+            function_app_name=(
+                request.qualys_asset_grouping_function_app_name
+            ),
+            function_name=(
+                request.qualys_asset_grouping_function_name
+            ),
+        )
+
+        # ========================================================
+        # EXISTING FUNCTION URL COLLECTION
+        # ========================================================
+
         function_urls = {
             "config_service_url": config_service_url,
             "get_next_business_day_url": get_next_business_day_url,
@@ -165,10 +263,25 @@ class VulnDeploymentService:
                 qualys_asset_group_creation_function_url
             ),
             "business_days_service_url": business_days_service_url,
+
+            # ----------------------------------------------------
+            # VULN03
+            # ----------------------------------------------------
+
+            "excel_diageo_ip_url": excel_diageo_ip_url,
+            "asset_group_batch_processor_url": (
+                asset_group_batch_processor_url
+            ),
+            "excel_mey_diageo_ip_url": (
+                excel_mey_diageo_ip_url
+            ),
+            "qualys_asset_grouping_url": (
+                qualys_asset_grouping_url
+            ),
         }
 
         # ========================================================
-        # 3. RESOLVE NOTIFICATION LOGIC APP URL
+        # 4. RESOLVE NOTIFICATION LOGIC APP URL
         # ========================================================
 
         logger.info(
@@ -187,22 +300,10 @@ class VulnDeploymentService:
         )
 
         # ========================================================
-        # 4. RESOLVE EXPLICIT CALLBACK LOGIC APP URL
+        # 5. RESOLVE EXPLICIT CALLBACK LOGIC APP URL
         # ========================================================
         #
         # EXISTING LOGIC - UNCHANGED
-        #
-        # This is completely independent of vuln04_logic_app_name.
-        #
-        # The user explicitly selects:
-        #
-        #   callback_logic_app_name
-        #   callback_logic_app_trigger_name
-        #
-        # Backend resolves the URL and passes it to ARM as:
-        #
-        #   callbackUri
-        #
         # ========================================================
 
         logger.info(
@@ -219,20 +320,7 @@ class VulnDeploymentService:
         )
 
         # ========================================================
-        # 5. RESOLVE VULN 1.55 COMPLETION LOGIC APP URL
-        # ========================================================
-        #
-        # NEW LOGIC
-        #
-        # User provides:
-        #
-        #   completion_logic_app_name
-        #   completion_http_action_name
-        #
-        # Backend resolves:
-        #
-        #   completionLogicAppUrl
-        #
+        # 6. RESOLVE VULN 1.55 COMPLETION LOGIC APP URL
         # ========================================================
 
         logger.info(
@@ -256,20 +344,7 @@ class VulnDeploymentService:
         )
 
         # ========================================================
-        # 6. RESOLVE VULN 1.55 CHG APPROVAL CALLBACK URL
-        # ========================================================
-        #
-        # NEW LOGIC
-        #
-        # User provides:
-        #
-        #   vuln_scan_chg_approval_logic_app_name
-        #   vuln_scan_chg_approval_http_action_name
-        #
-        # Backend resolves:
-        #
-        #   vulnScanChgApprovalCallbackUrl
-        #
+        # 7. RESOLVE VULN 1.55 CHG APPROVAL CALLBACK URL
         # ========================================================
 
         logger.info(
@@ -328,6 +403,14 @@ class VulnDeploymentService:
             },
 
             # ----------------------------------------------------
+            # VULN03 Logic App name
+            # ----------------------------------------------------
+
+            "vuln03logicAppName": {
+                "value": request.vuln03_logic_app_name
+            },
+
+            # ----------------------------------------------------
             # Vuln 1.55 completion URL
             # ----------------------------------------------------
 
@@ -376,7 +459,7 @@ class VulnDeploymentService:
             },
 
             # ----------------------------------------------------
-            # Function URLs
+            # Existing Function URLs
             # ----------------------------------------------------
 
             "getNextBusinessDayUrl": {
@@ -407,11 +490,6 @@ class VulnDeploymentService:
 
             # ----------------------------------------------------
             # HTTP endpoint
-            #
-            # Initially empty.
-            #
-            # It will be replaced after LA-VulnScan-01.5
-            # has successfully deployed.
             # ----------------------------------------------------
 
             "httpEndpointUrl": {
@@ -425,10 +503,34 @@ class VulnDeploymentService:
             "$connections": {
                 "value": connections["arm_connections"]
             },
+
+            # ====================================================
+            # VULN03 PARAMETERS
+            # ====================================================
+
+            "excelDiageoIpUrl": {
+                "value": excel_diageo_ip_url
+            },
+
+            "assetGroupBatchProcessorUrl": {
+                "value": asset_group_batch_processor_url
+            },
+
+            "excelMeyDiageoIpUrl": {
+                "value": excel_mey_diageo_ip_url
+            },
+
+            "qualysAssetGroupingUrl": {
+                "value": qualys_asset_grouping_url
+            },
+
+            "sharePointSiteUrl": {
+                "value": request.sharepoint_site_url
+            },
         }
 
         # ========================================================
-        # 7. DEPLOY LA-VULNSCAN-01.5
+        # 8. DEPLOY LA-VULNSCAN-01.5
         # ========================================================
 
         logger.info(
@@ -477,6 +579,9 @@ class VulnDeploymentService:
                 vuln155_logic_app_name=(
                     request.vuln155_logic_app_name
                 ),
+                vuln03_logic_app_name=(
+                    request.vuln03_logic_app_name
+                ),
                 notification_logic_app_name=(
                     request.notification_logic_app_name
                 ),
@@ -518,7 +623,7 @@ class VulnDeploymentService:
             )
 
         # ========================================================
-        # 8. GET LA-VULNSCAN-01.5/MANUAL CALLBACK URL
+        # 9. GET LA-VULNSCAN-01.5/MANUAL CALLBACK URL
         # ========================================================
 
         logger.info(
@@ -541,7 +646,7 @@ class VulnDeploymentService:
         )
 
         # ========================================================
-        # 9. PASS FIRST LOGIC APP URL TO SECOND LOGIC APP
+        # 10. PASS FIRST LOGIC APP URL TO SECOND LOGIC APP
         # ========================================================
 
         base_params["httpEndpointUrl"] = {
@@ -549,7 +654,7 @@ class VulnDeploymentService:
         }
 
         # ========================================================
-        # 10. DEPLOY LA-VULNSCAN-01
+        # 11. DEPLOY LA-VULNSCAN-01
         # ========================================================
 
         logger.info(
@@ -597,6 +702,9 @@ class VulnDeploymentService:
                 ),
                 vuln155_logic_app_name=(
                     request.vuln155_logic_app_name
+                ),
+                vuln03_logic_app_name=(
+                    request.vuln03_logic_app_name
                 ),
                 notification_logic_app_name=(
                     request.notification_logic_app_name
@@ -659,7 +767,7 @@ class VulnDeploymentService:
             )
 
         # ========================================================
-        # 11. DEPLOY LA-VULNSCAN-04
+        # 12. DEPLOY LA-VULNSCAN-04
         # ========================================================
 
         logger.info(
@@ -682,20 +790,7 @@ class VulnDeploymentService:
         )
 
         # ========================================================
-        # 12. DEPLOY LA-VULNSCAN-01.55
-        # ========================================================
-        #
-        # NEW LOGIC
-        #
-        # Resource index 3 must be the Vuln 1.55 Logic App
-        # in arm/vuln.json.
-        #
-        # The following parameters are already in base_params:
-        #
-        #   Vuln1.55logicAppName
-        #   completionLogicAppUrl
-        #   vulnScanChgApprovalCallbackUrl
-        #
+        # 13. DEPLOY LA-VULNSCAN-01.55
         # ========================================================
 
         logger.info(
@@ -718,6 +813,41 @@ class VulnDeploymentService:
         )
 
         # ========================================================
+        # 14. DEPLOY LA-VULNSCAN-03
+        # ========================================================
+        #
+        # NEW VULN03 LOGIC ONLY
+        #
+        # VULN03 is resource index 4 because:
+        #
+        #   0 = VULN 01.5
+        #   1 = VULN 01
+        #   2 = VULN 04
+        #   3 = VULN 01.55
+        #   4 = VULN 03
+        #
+        # ========================================================
+
+        logger.info(
+            "Deploying fifth Logic App: %s",
+            request.vuln03_logic_app_name,
+        )
+
+        deployment03 = self.azure.deploy(
+            subscription_id=request.subscription_id,
+            resource_group_name=request.resource_group_name,
+            location=request.location,
+            template_resource_index=4,
+            parameters=base_params,
+            deployment_prefix="vulnscan03",
+        )
+
+        state03 = deployment03.get(
+            "provisioning_state",
+            "Failed",
+        )
+
+        # ========================================================
         # FINAL SUCCESS
         # ========================================================
 
@@ -726,6 +856,7 @@ class VulnDeploymentService:
             and str(state01).lower() == "succeeded"
             and str(state04).lower() == "succeeded"
             and str(state155).lower() == "succeeded"
+            and str(state03).lower() == "succeeded"
         )
 
         # ========================================================
@@ -738,16 +869,20 @@ class VulnDeploymentService:
             message=(
                 "LA-VulnScan-01.5, "
                 "LA-VulnScan-01, "
-                "LA-VulnScan-04 and "
-                "LA-VulnScan-01.55 deployed successfully."
+                "LA-VulnScan-04, "
+                "LA-VulnScan-01.55 and "
+                "LA-VulnScan-03 deployed successfully."
                 if success
                 else (
-                    deployment155.get(
+                    deployment03.get(
                         "error",
-                        deployment04.get(
+                        deployment155.get(
                             "error",
-                            "Vulnerability Scan Logic App "
-                            "deployment failed.",
+                            deployment04.get(
+                                "error",
+                                "Vulnerability Scan Logic App "
+                                "deployment failed.",
+                            ),
                         ),
                     )
                 )
@@ -773,6 +908,10 @@ class VulnDeploymentService:
 
             vuln155_logic_app_name=(
                 request.vuln155_logic_app_name
+            ),
+
+            vuln03_logic_app_name=(
+                request.vuln03_logic_app_name
             ),
 
             notification_logic_app_name=(
@@ -803,6 +942,10 @@ class VulnDeploymentService:
                 deployment155.get("deployment_name")
             ),
 
+            vuln03_deployment_name=(
+                deployment03.get("deployment_name")
+            ),
+
             vuln15_provisioning_state=state15,
 
             vuln01_provisioning_state=state01,
@@ -810,6 +953,8 @@ class VulnDeploymentService:
             vuln04_provisioning_state=state04,
 
             vuln155_provisioning_state=state155,
+
+            vuln03_provisioning_state=state03,
 
             table_connection_id=(
                 connections.get("table_connection_id")

@@ -1,3 +1,4 @@
+
 import json
 import logging
 import uuid
@@ -46,6 +47,12 @@ class VulnAzureService:
         body: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
 
+        logger.info(
+            "Azure Management REST request: %s %s",
+            method,
+            url,
+        )
+
         response = requests.request(
             method=method,
             url=url,
@@ -60,6 +67,13 @@ class VulnAzureService:
         )
 
         if not response.ok:
+            logger.error(
+                "Azure REST request failed. "
+                "Status=%s Response=%s",
+                response.status_code,
+                response.text,
+            )
+
             raise HttpResponseError(
                 message=(
                     "Azure REST request failed with status "
@@ -88,6 +102,16 @@ class VulnAzureService:
         subscription_id: str,
         resource_group_name: str,
     ) -> str:
+
+        if not subscription_id:
+            raise ValueError(
+                "subscription_id is required."
+            )
+
+        if not resource_group_name:
+            raise ValueError(
+                "resource_group_name is required."
+            )
 
         client = ResourceManagementClient(
             self.credential,
@@ -126,6 +150,21 @@ class VulnAzureService:
             queue_connection_name,
             sharepoint_connection_name,
         )
+
+        if not table_connection_name:
+            raise ValueError(
+                "table_connection_name is required."
+            )
+
+        if not queue_connection_name:
+            raise ValueError(
+                "queue_connection_name is required."
+            )
+
+        if not sharepoint_connection_name:
+            raise ValueError(
+                "sharepoint_connection_name is required."
+            )
 
         resource_client = ResourceManagementClient(
             self.credential,
@@ -222,6 +261,16 @@ class VulnAzureService:
         location: str,
     ) -> Dict[str, str]:
 
+        if not subscription_id:
+            raise ValueError(
+                "subscription_id is required."
+            )
+
+        if not location:
+            raise ValueError(
+                "location is required."
+            )
+
         base = (
             f"/subscriptions/{quote(subscription_id, safe='')}"
             f"/providers/Microsoft.Web/locations/"
@@ -245,6 +294,26 @@ class VulnAzureService:
         function_app_name: str,
         function_name: str,
     ) -> Dict[str, Any]:
+
+        if not subscription_id:
+            raise ValueError(
+                "subscription_id is required."
+            )
+
+        if not resource_group_name:
+            raise ValueError(
+                "resource_group_name is required."
+            )
+
+        if not function_app_name:
+            raise ValueError(
+                "function_app_name is required."
+            )
+
+        if not function_name:
+            raise ValueError(
+                "function_name is required."
+            )
 
         url = (
             f"{self.ARM_MANAGEMENT_URL}/subscriptions/"
@@ -274,6 +343,16 @@ class VulnAzureService:
         function_app_name: str,
         function_name: str,
     ) -> str:
+
+        if not function_app_name:
+            raise ValueError(
+                "function_app_name is required."
+            )
+
+        if not function_name:
+            raise ValueError(
+                "function_name is required."
+            )
 
         url = (
             f"{self.ARM_MANAGEMENT_URL}/subscriptions/"
@@ -340,7 +419,6 @@ class VulnAzureService:
         route = None
 
         if isinstance(props, dict):
-
             route = (
                 props.get("invokeUrlTemplate")
                 or props.get("invoke_url_template")
@@ -420,6 +498,62 @@ class VulnAzureService:
         )
 
     # ============================================================
+    # LOGIC APP RESOURCE
+    # ============================================================
+
+    def get_logic_app_resource(
+        self,
+        subscription_id: str,
+        resource_group_name: str,
+        logic_app_name: str,
+    ) -> Dict[str, Any]:
+
+        if not subscription_id:
+            raise ValueError(
+                "subscription_id is required."
+            )
+
+        if not resource_group_name:
+            raise ValueError(
+                "resource_group_name is required."
+            )
+
+        if not logic_app_name:
+            raise ValueError(
+                "logic_app_name is required. "
+                "The Logic App name is empty."
+            )
+
+        logic_app_name = str(
+            logic_app_name
+        ).strip()
+
+        if not logic_app_name:
+            raise ValueError(
+                "logic_app_name cannot be empty."
+            )
+
+        url = (
+            f"{self.ARM_MANAGEMENT_URL}/subscriptions/"
+            f"{quote(subscription_id, safe='')}"
+            f"/resourceGroups/"
+            f"{quote(resource_group_name, safe='')}"
+            f"/providers/Microsoft.Logic/workflows/"
+            f"{quote(logic_app_name, safe='')}"
+            f"?api-version={self.LOGIC_APP_API_VERSION}"
+        )
+
+        logger.info(
+            "Checking Logic App resource: %s",
+            logic_app_name,
+        )
+
+        return self._management_request(
+            "GET",
+            url,
+        )
+
+    # ============================================================
     # LOGIC APP TRIGGERS
     # ============================================================
 
@@ -429,6 +563,32 @@ class VulnAzureService:
         resource_group_name: str,
         logic_app_name: str,
     ) -> Dict[str, Any]:
+
+        if not subscription_id:
+            raise ValueError(
+                "subscription_id is required."
+            )
+
+        if not resource_group_name:
+            raise ValueError(
+                "resource_group_name is required."
+            )
+
+        if logic_app_name is None:
+            raise ValueError(
+                "logic_app_name is None."
+            )
+
+        logic_app_name = str(
+            logic_app_name
+        ).strip()
+
+        if not logic_app_name:
+            raise ValueError(
+                "logic_app_name is empty. "
+                "Azure would otherwise receive an invalid "
+                "Microsoft.Logic/workflows/triggers path."
+            )
 
         url = (
             f"{self.ARM_MANAGEMENT_URL}/subscriptions/"
@@ -441,10 +601,36 @@ class VulnAzureService:
             f"?api-version={self.LOGIC_APP_API_VERSION}"
         )
 
-        return self._management_request(
-            "GET",
+        logger.info(
+            "Getting Logic App triggers: "
+            "resource_group=%s logic_app=%s",
+            resource_group_name,
+            logic_app_name,
+        )
+
+        logger.debug(
+            "Logic App trigger URL: %s",
             url,
         )
+
+        try:
+            return self._management_request(
+                "GET",
+                url,
+            )
+
+        except HttpResponseError as exc:
+
+            logger.error(
+                "Failed to get Logic App triggers. "
+                "Logic App='%s' Resource Group='%s' "
+                "Error=%s",
+                logic_app_name,
+                resource_group_name,
+                exc,
+            )
+
+            raise
 
     # ============================================================
     # LOGIC APP CALLBACK URL
@@ -458,10 +644,75 @@ class VulnAzureService:
         trigger_name: str,
     ) -> str:
 
-        response = self.get_logic_app_triggers(
-            subscription_id,
-            resource_group_name,
+        # --------------------------------------------------------
+        # VALIDATE INPUT
+        # --------------------------------------------------------
+
+        if not subscription_id:
+            raise ValueError(
+                "subscription_id is required."
+            )
+
+        if not resource_group_name:
+            raise ValueError(
+                "resource_group_name is required."
+            )
+
+        if logic_app_name is None:
+            raise ValueError(
+                "logic_app_name is None."
+            )
+
+        logic_app_name = str(
+            logic_app_name
+        ).strip()
+
+        if not logic_app_name:
+            raise ValueError(
+                "logic_app_name is empty."
+            )
+
+        if trigger_name is None:
+            raise ValueError(
+                f"trigger_name is None for Logic App "
+                f"'{logic_app_name}'."
+            )
+
+        trigger_name = str(
+            trigger_name
+        ).strip()
+
+        if not trigger_name:
+            raise ValueError(
+                f"trigger_name is empty for Logic App "
+                f"'{logic_app_name}'."
+            )
+
+        logger.info(
+            "Resolving Logic App callback URL: "
+            "logic_app=%s trigger=%s",
             logic_app_name,
+            trigger_name,
+        )
+
+        # --------------------------------------------------------
+        # FIRST CHECK THAT LOGIC APP EXISTS
+        # --------------------------------------------------------
+
+        self.get_logic_app_resource(
+            subscription_id=subscription_id,
+            resource_group_name=resource_group_name,
+            logic_app_name=logic_app_name,
+        )
+
+        # --------------------------------------------------------
+        # GET TRIGGERS
+        # --------------------------------------------------------
+
+        response = self.get_logic_app_triggers(
+            subscription_id=subscription_id,
+            resource_group_name=resource_group_name,
+            logic_app_name=logic_app_name,
         )
 
         triggers = response.get(
@@ -475,9 +726,13 @@ class VulnAzureService:
                 f"Logic App '{logic_app_name}'."
             )
 
-        requested = (
-            trigger_name.strip().lower()
+        logger.info(
+            "Found %d trigger(s) in Logic App '%s'.",
+            len(triggers),
+            logic_app_name,
         )
+
+        requested = trigger_name.lower()
 
         selected = None
 
@@ -490,10 +745,12 @@ class VulnAzureService:
             if not isinstance(trigger, dict):
                 continue
 
+            actual_trigger_name = str(
+                trigger.get("name", "")
+            ).strip()
+
             if (
-                str(trigger.get("name", ""))
-                .strip()
-                .lower()
+                actual_trigger_name.lower()
                 == requested
             ):
                 selected = trigger
@@ -558,17 +815,24 @@ class VulnAzureService:
                 if not isinstance(props, dict):
                     continue
 
-                if (
-                    str(
-                        props.get("type", "")
-                    ).lower()
-                    == "request"
-                ):
+                trigger_type = str(
+                    props.get("type", "")
+                ).lower()
+
+                if trigger_type == "request":
                     request_triggers.append(
                         trigger
                     )
 
             if len(request_triggers) == 1:
+                logger.warning(
+                    "Requested trigger '%s' was not found "
+                    "exactly, but Logic App '%s' has exactly "
+                    "one request trigger. Using it.",
+                    trigger_name,
+                    logic_app_name,
+                )
+
                 selected = request_triggers[0]
 
         # --------------------------------------------------------
@@ -577,11 +841,21 @@ class VulnAzureService:
 
         if selected is None:
 
-            available = [
-                str(trigger.get("name"))
-                for trigger in triggers
-                if isinstance(trigger, dict)
-            ]
+            available = []
+
+            for trigger in triggers:
+
+                if not isinstance(trigger, dict):
+                    continue
+
+                trigger_name_value = trigger.get(
+                    "name"
+                )
+
+                if trigger_name_value:
+                    available.append(
+                        str(trigger_name_value)
+                    )
 
             raise ValueError(
                 f"Trigger '{trigger_name}' was not found "
@@ -589,12 +863,24 @@ class VulnAzureService:
                 f"Available triggers: {available}"
             )
 
-        actual_name = selected.get("name")
+        actual_name = selected.get(
+            "name"
+        )
 
         if not actual_name:
             raise ValueError(
                 f"Logic App trigger '{trigger_name}' "
                 "has no valid name."
+            )
+
+        actual_name = str(
+            actual_name
+        ).strip()
+
+        if not actual_name:
+            raise ValueError(
+                f"Logic App trigger '{trigger_name}' "
+                "has an empty name."
             )
 
         # --------------------------------------------------------
@@ -610,10 +896,17 @@ class VulnAzureService:
             f"/providers/Microsoft.Logic/workflows/"
             f"{quote(logic_app_name, safe='')}"
             f"/triggers/"
-            f"{quote(str(actual_name), safe='')}"
+            f"{quote(actual_name, safe='')}"
             f"/listCallbackUrl"
             f"?api-version="
             f"{self.LOGIC_APP_API_VERSION}"
+        )
+
+        logger.info(
+            "Getting Logic App trigger callback URL: "
+            "logic_app=%s trigger=%s",
+            logic_app_name,
+            actual_name,
         )
 
         callback = self._management_request(
@@ -650,13 +943,6 @@ class VulnAzureService:
         deployment_prefix: str,
     ) -> Dict[str, Any]:
 
-        # IMPORTANT:
-        # Put the ARM file here:
-        #
-        # project/
-        #   arm/
-        #       LA-VulnScan-Merged.json
-        #
         candidates = [
             Path(__file__).resolve().parents[2]
             / "arm"
@@ -685,8 +971,8 @@ class VulnAzureService:
 
         if not isinstance(resources, list):
             raise ValueError(
-                "LA-VulnScan-Merged.json does not "
-                "contain a resources array."
+                "vuln.json does not contain "
+                "a resources array."
             )
 
         if template_resource_index not in range(
@@ -698,7 +984,7 @@ class VulnAzureService:
             )
 
         # --------------------------------------------------------
-        # DEPLOY ONLY ONE LOGIC APP
+        # DEPLOY ONLY ONE RESOURCE
         # --------------------------------------------------------
 
         single_template = dict(
@@ -714,7 +1000,9 @@ class VulnAzureService:
             {},
         )
 
-        supplied = dict(parameters)
+        supplied = dict(
+            parameters
+        )
 
         # --------------------------------------------------------
         # VALIDATE REQUIRED ROOT PARAMETERS
@@ -731,6 +1019,10 @@ class VulnAzureService:
                     f"parameter '{name}' is required "
                     "but the backend did not supply it."
                 )
+
+        # --------------------------------------------------------
+        # ONLY SEND PARAMETERS THAT EXIST IN TEMPLATE
+        # --------------------------------------------------------
 
         deployment_parameters = {
             name: value
@@ -754,6 +1046,13 @@ class VulnAzureService:
         client = ResourceManagementClient(
             self.credential,
             subscription_id,
+        )
+
+        logger.info(
+            "Starting ARM deployment: "
+            "name=%s resource_index=%s",
+            deployment_name,
+            template_resource_index,
         )
 
         try:
@@ -790,6 +1089,11 @@ class VulnAzureService:
                 and str(state).lower()
                 == "succeeded"
             ):
+                logger.info(
+                    "ARM deployment succeeded: %s",
+                    deployment_name,
+                )
+
                 return {
                     "deployment_name": deployment_name,
                     "provisioning_state": str(state),
@@ -803,6 +1107,12 @@ class VulnAzureService:
                 )
                 if properties
                 else None
+            )
+
+            logger.error(
+                "ARM deployment failed: %s error=%s",
+                deployment_name,
+                error,
             )
 
             return {

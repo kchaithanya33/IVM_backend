@@ -22,6 +22,14 @@ class VulnFunctionUrls(BaseModel):
     qualys_asset_group_creation_function_url: str
     business_days_service_url: str
 
+    # ------------------------------------------------------------
+    # VULN 03 URLS
+    # ------------------------------------------------------------
+    excel_diageo_ip_url: Optional[str] = None
+    asset_group_batch_processor_url: Optional[str] = None
+    excel_mey_diageo_ip_url: Optional[str] = None
+    qualys_asset_grouping_url: Optional[str] = None
+
 
 class VulnDeploymentRequest(BaseModel):
     """
@@ -42,13 +50,14 @@ class VulnDeploymentRequest(BaseModel):
         - httpEndpointUrl from LA-VulnScan-01.5/manual
 
       Vuln 1.55:
-        - completionLogicAppUrl is resolved from:
-            completion_logic_app_name
-            completion_http_action_name
+        - completionLogicAppUrl
+        - vulnScanChgApprovalCallbackUrl
 
-        - vulnScanChgApprovalCallbackUrl is resolved from:
-            vuln_scan_chg_approval_logic_app_name
-            vuln_scan_chg_approval_http_action_name
+      VULN 03:
+        - excelDiageoIpUrl
+        - assetGroupBatchProcessorUrl
+        - excelMeyDiageoIpUrl
+        - qualysAssetGroupingUrl
 
       Azure API connection IDs:
         - table connection
@@ -122,13 +131,16 @@ class VulnDeploymentRequest(BaseModel):
     )
 
     # ------------------------------------------------------------
-    # VULN 1.55 - COMPLETION LOGIC APP URL RESOLUTION
+    # VULN 03 LOGIC APP
     # ------------------------------------------------------------
-    #
-    # These two values are used by the backend to find the
-    # existing Logic App HTTP action and resolve completionLogicAppUrl.
-    #
-    # They are NOT the URL itself.
+
+    vuln03_logic_app_name: str = Field(
+        default="LA-VulnScan-03",
+        description="Vulnerability Scan 03 Logic App name.",
+    )
+
+    # ------------------------------------------------------------
+    # VULN 1.55 - COMPLETION LOGIC APP URL RESOLUTION
     # ------------------------------------------------------------
 
     completion_logic_app_name: str = Field(
@@ -149,13 +161,6 @@ class VulnDeploymentRequest(BaseModel):
 
     # ------------------------------------------------------------
     # VULN 1.55 - CHANGE APPROVAL CALLBACK URL RESOLUTION
-    # ------------------------------------------------------------
-    #
-    # These two values are used by the backend to find the
-    # existing Logic App HTTP action and resolve
-    # vulnScanChgApprovalCallbackUrl.
-    #
-    # They are NOT the URL itself.
     # ------------------------------------------------------------
 
     vuln_scan_chg_approval_logic_app_name: str = Field(
@@ -245,6 +250,71 @@ class VulnDeploymentRequest(BaseModel):
     )
 
     # ------------------------------------------------------------
+    # VULN 03 - FUNCTION APP - DIAGEO IP EXCEL
+    # ------------------------------------------------------------
+
+    excel_diageo_ip_function_app_name: str = Field(
+        default="",
+        description="Function App containing the Diageo IP Excel extraction function.",
+    )
+
+    excel_diageo_ip_function_name: str = Field(
+        default="",
+        description="Function name used to obtain excelDiageoIpUrl.",
+    )
+
+    # ------------------------------------------------------------
+    # VULN 03 - FUNCTION APP - ASSET GROUP BATCH PROCESSOR
+    # ------------------------------------------------------------
+
+    asset_group_batch_processor_function_app_name: str = Field(
+        default="",
+        description="Function App containing the Asset Group Batch Processor function.",
+    )
+
+    asset_group_batch_processor_function_name: str = Field(
+        default="",
+        description="Function name used to obtain assetGroupBatchProcessorUrl.",
+    )
+
+    # ------------------------------------------------------------
+    # VULN 03 - FUNCTION APP - MEYDIAGEO IP EXCEL
+    # ------------------------------------------------------------
+
+    excel_mey_diageo_ip_function_app_name: str = Field(
+        default="",
+        description="Function App containing the MeyDiageo IP Excel extraction function.",
+    )
+
+    excel_mey_diageo_ip_function_name: str = Field(
+        default="",
+        description="Function name used to obtain excelMeyDiageoIpUrl.",
+    )
+
+    # ------------------------------------------------------------
+    # VULN 03 - FUNCTION APP - QUALYS ASSET GROUPING
+    # ------------------------------------------------------------
+
+    qualys_asset_grouping_function_app_name: str = Field(
+        default="",
+        description="Function App containing the Qualys asset grouping function.",
+    )
+
+    qualys_asset_grouping_function_name: str = Field(
+        default="",
+        description="Function name used to obtain qualysAssetGroupingUrl.",
+    )
+
+    # ------------------------------------------------------------
+    # VULN 03 - SHAREPOINT SITE
+    # ------------------------------------------------------------
+
+    sharepoint_site_url: str = Field(
+        ...,
+        description="SharePoint site URL containing the CMDB report.",
+    )
+
+    # ------------------------------------------------------------
     # NOTIFICATION LOGIC APP
     # ------------------------------------------------------------
 
@@ -310,6 +380,12 @@ class VulnDeploymentResponse(BaseModel):
 
     vuln155_logic_app_name: Optional[str] = None
 
+    # ------------------------------------------------------------
+    # VULN 03
+    # ------------------------------------------------------------
+
+    vuln03_logic_app_name: Optional[str] = None
+
     notification_logic_app_name: str
 
     callback_logic_app_name: Optional[str] = None
@@ -326,6 +402,12 @@ class VulnDeploymentResponse(BaseModel):
 
     vuln155_deployment_name: Optional[str] = None
 
+    # ------------------------------------------------------------
+    # VULN 03 DEPLOYMENT
+    # ------------------------------------------------------------
+
+    vuln03_deployment_name: Optional[str] = None
+
     vuln15_provisioning_state: Optional[str] = None
     vuln01_provisioning_state: Optional[str] = None
     vuln04_provisioning_state: Optional[str] = None
@@ -335,6 +417,12 @@ class VulnDeploymentResponse(BaseModel):
     # ------------------------------------------------------------
 
     vuln155_provisioning_state: Optional[str] = None
+
+    # ------------------------------------------------------------
+    # VULN 03 PROVISIONING STATE
+    # ------------------------------------------------------------
+
+    vuln03_provisioning_state: Optional[str] = None
 
     table_connection_id: Optional[str] = None
     queue_connection_id: Optional[str] = None
@@ -357,6 +445,15 @@ class VulnDeploymentResponse(BaseModel):
 
     completion_logic_app_url: Optional[str] = None
     vuln_scan_chg_approval_callback_url: Optional[str] = None
+
+    # ------------------------------------------------------------
+    # VULN 03 RESOLVED URLS
+    # ------------------------------------------------------------
+
+    excel_diageo_ip_url: Optional[str] = None
+    asset_group_batch_processor_url: Optional[str] = None
+    excel_mey_diageo_ip_url: Optional[str] = None
+    qualys_asset_grouping_url: Optional[str] = None
 
     # ------------------------------------------------------------
     # ARM CONNECTION OBJECT
