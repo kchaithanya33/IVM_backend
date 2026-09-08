@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 class VulnLogicAppUrls(BaseModel):
     vuln01_5_logic_app_url: str
     notification_logic_app_url: str
-    callback_logic_app_url: Optional[str] = None
 
     # ------------------------------------------------------------
     # VULN 1.55 URLS
@@ -51,7 +50,6 @@ class VulnDeploymentRequest(BaseModel):
 
       Logic App + HTTP Trigger:
         - notificationLogicAppUrl
-        - callbackUri
         - httpEndpointUrl from LA-VulnScan-01.5/manual
 
       Vuln 1.55:
@@ -75,6 +73,12 @@ class VulnDeploymentRequest(BaseModel):
           Qualys Integration Function URL.
         - vulnScanProfile3.5 uses the ARM default value.
         - scannerId3.5 uses the ARM default value.
+
+      Vuln Auth Failure Detection:
+        - qualysLaunchReportUrl
+        - qualysCheckReportUrl
+        - qualysDownloadReportUrl
+        - authFailureAnalysisUrl
 
       Azure API connection IDs:
         - table connection
@@ -180,6 +184,15 @@ class VulnDeploymentRequest(BaseModel):
     )
 
     # ------------------------------------------------------------
+    # VULN AUTH FAILURE DETECTION LOGIC APP
+    # ------------------------------------------------------------
+
+    vuln_scan_auth_failure_logic_app_name: str = Field(
+        default="LA-VulnScan-AuthFailureDetection",
+        description="Vulnerability Scan Authentication Failure Detection Logic App name.",
+    )
+
+    # ------------------------------------------------------------
     # VULN 1.55 - COMPLETION LOGIC APP URL RESOLUTION
     # ------------------------------------------------------------
 
@@ -196,26 +209,6 @@ class VulnDeploymentRequest(BaseModel):
         description=(
             "HTTP action/trigger name in the completion Logic App "
             "used to resolve completionLogicAppUrl."
-        ),
-    )
-
-    # ------------------------------------------------------------
-    # VULN 1.55 - CHANGE APPROVAL CALLBACK URL RESOLUTION
-    # ------------------------------------------------------------
-
-    vuln_scan_chg_approval_logic_app_name: str = Field(
-        default="",
-        description=(
-            "Existing Logic App name used to resolve "
-            "vulnScanChgApprovalCallbackUrl."
-        ),
-    )
-
-    vuln_scan_chg_approval_http_action_name: str = Field(
-        default="",
-        description=(
-            "HTTP action/trigger name in the Change Approval Logic App "
-            "used to resolve vulnScanChgApprovalCallbackUrl."
         ),
     )
 
@@ -346,6 +339,66 @@ class VulnDeploymentRequest(BaseModel):
     )
 
     # ------------------------------------------------------------
+    # VULN AUTH FAILURE DETECTION - FUNCTION APP -
+    # QUALYS LAUNCH REPORT
+    # ------------------------------------------------------------
+
+    qualys_launch_report_function_app_name: str = Field(
+        default="",
+        description="Function App containing the Qualys launch report function.",
+    )
+
+    qualys_launch_report_function_name: str = Field(
+        default="",
+        description="Function name used to obtain qualysLaunchReportUrl.",
+    )
+
+    # ------------------------------------------------------------
+    # VULN AUTH FAILURE DETECTION - FUNCTION APP -
+    # QUALYS CHECK REPORT
+    # ------------------------------------------------------------
+
+    qualys_check_report_function_app_name: str = Field(
+        default="",
+        description="Function App containing the Qualys check report function.",
+    )
+
+    qualys_check_report_function_name: str = Field(
+        default="",
+        description="Function name used to obtain qualysCheckReportUrl.",
+    )
+
+    # ------------------------------------------------------------
+    # VULN AUTH FAILURE DETECTION - FUNCTION APP -
+    # QUALYS DOWNLOAD REPORT
+    # ------------------------------------------------------------
+
+    qualys_download_report_function_app_name: str = Field(
+        default="",
+        description="Function App containing the Qualys download report function.",
+    )
+
+    qualys_download_report_function_name: str = Field(
+        default="",
+        description="Function name used to obtain qualysDownloadReportUrl.",
+    )
+
+    # ------------------------------------------------------------
+    # VULN AUTH FAILURE DETECTION - FUNCTION APP -
+    # AUTH FAILURE ANALYSIS
+    # ------------------------------------------------------------
+
+    auth_failure_analysis_function_app_name: str = Field(
+        default="",
+        description="Function App containing the authentication failure analysis function.",
+    )
+
+    auth_failure_analysis_function_name: str = Field(
+        default="",
+        description="Function name used to obtain authFailureAnalysisUrl.",
+    )
+
+    # ------------------------------------------------------------
     # VULN 03 - SHAREPOINT SITE
     # ------------------------------------------------------------
 
@@ -366,20 +419,6 @@ class VulnDeploymentRequest(BaseModel):
     notification_logic_app_trigger_name: str = Field(
         default="When_a_HTTP_request_is_received",
         description="HTTP trigger name in the Notification Logic App.",
-    )
-
-    # ------------------------------------------------------------
-    # CALLBACK LOGIC APP
-    # ------------------------------------------------------------
-
-    callback_logic_app_name: str = Field(
-        default="notification-logic-chai",
-        description="Logic App whose HTTP trigger will receive the vulnerability scan callback.",
-    )
-
-    callback_logic_app_trigger_name: str = Field(
-        default="When_a_HTTP_request_is_received",
-        description="HTTP trigger name in the callback Logic App.",
     )
 
     # ------------------------------------------------------------
@@ -428,7 +467,6 @@ class VulnDeploymentResponse(BaseModel):
     mey_diageo_logic_app_name: Optional[str] = None
 
     notification_logic_app_name: str
-    callback_logic_app_name: Optional[str] = None
 
     storage_account_name: str
 

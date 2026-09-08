@@ -497,6 +497,63 @@ class VulnAzureService:
         )
 
     # ============================================================
+    # AUTH FAILURE DETECTION FUNCTION URLS
+    # ============================================================
+
+    def get_auth_failure_function_urls(
+        self,
+        subscription_id: str,
+        resource_group_name: str,
+        qualys_launch_report_function_app_name: str,
+        qualys_launch_report_function_name: str,
+        qualys_check_report_function_app_name: str,
+        qualys_check_report_function_name: str,
+        qualys_download_report_function_app_name: str,
+        qualys_download_report_function_name: str,
+        auth_failure_analysis_function_app_name: str,
+        auth_failure_analysis_function_name: str,
+    ) -> Dict[str, str]:
+
+        logger.info(
+            "Resolving Auth Failure Detection function URLs."
+        )
+
+        qualys_launch_report_url = self.get_function_url(
+            subscription_id=subscription_id,
+            resource_group_name=resource_group_name,
+            function_app_name=qualys_launch_report_function_app_name,
+            function_name=qualys_launch_report_function_name,
+        )
+
+        qualys_check_report_url = self.get_function_url(
+            subscription_id=subscription_id,
+            resource_group_name=resource_group_name,
+            function_app_name=qualys_check_report_function_app_name,
+            function_name=qualys_check_report_function_name,
+        )
+
+        qualys_download_report_url = self.get_function_url(
+            subscription_id=subscription_id,
+            resource_group_name=resource_group_name,
+            function_app_name=qualys_download_report_function_app_name,
+            function_name=qualys_download_report_function_name,
+        )
+
+        auth_failure_analysis_url = self.get_function_url(
+            subscription_id=subscription_id,
+            resource_group_name=resource_group_name,
+            function_app_name=auth_failure_analysis_function_app_name,
+            function_name=auth_failure_analysis_function_name,
+        )
+
+        return {
+            "qualysLaunchReportUrl": qualys_launch_report_url,
+            "qualysCheckReportUrl": qualys_check_report_url,
+            "qualysDownloadReportUrl": qualys_download_report_url,
+            "authFailureAnalysisUrl": auth_failure_analysis_url,
+        }
+
+    # ============================================================
     # LOGIC APP RESOURCE
     # ============================================================
 

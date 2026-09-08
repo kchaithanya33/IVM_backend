@@ -1,4 +1,3 @@
-
 import logging
 from typing import Any, Dict
 
@@ -23,24 +22,25 @@ class VulnDeploymentService:
       1. Resolve Azure API connections.
       2. Resolve all required existing Function URLs.
       3. Resolve all VULN03 Function URLs.
-      4. Resolve Notification Logic App callback URL.
-      5. Resolve explicitly selected callback Logic App URL.
+      4. Resolve Auth Failure Detection Function URLs.
+      5. Resolve Notification Logic App callback URL.
       6. Resolve Vuln 1.55 completion Logic App URL.
       7. Deploy LA-VulnScan-01.5.
       8. Get LA-VulnScan-01.5/manual callback URL.
       9. Deploy LA-VulnScan-01.
-      10. Deploy LA-VulnScan-01.
-      11. Deploy LA-VulnScan-04.
-      12. Deploy LA-VulnScan-03.
-      13. Get LA-VulnScan-03/manual callback URL.
-      14. Pass Vuln-03 callback URL to Vuln-02.
-      15. Deploy LA-VulnScan-02.
-      16. Get LA-VulnScan-02/manual callback URL.
-      17. Pass the Vuln-02 callback URL as
+      10. Deploy LA-VulnScan-04.
+      11. Deploy LA-VulnScan-03.
+      12. Get LA-VulnScan-03/manual callback URL.
+      13. Pass Vuln-03 callback URL to Vuln-02.
+      14. Deploy LA-VulnScan-02.
+      15. Get LA-VulnScan-02/manual callback URL.
+      16. Pass the Vuln-02 callback URL as
           vulnScanChgApprovalCallbackUrl.
-      18. Deploy LA-VulnScan-01.55.
-      19. Deploy LA-VulnScan-MeyDiageo-03.5 using the
+      17. Deploy LA-VulnScan-01.55.
+      18. Deploy LA-VulnScan-MeyDiageo-03.5 using the
           already resolved Qualys Integration URL.
+      19. Deploy LA-VulnScan-AuthFailureDetection using
+          the four dynamically resolved Function URLs.
     """
 
     def __init__(self) -> None:
@@ -59,7 +59,7 @@ class VulnDeploymentService:
             "Starting Vulnerability Scan deployment: "
             "vuln15=%s vuln01=%s vuln02=%s vuln04=%s "
             "vuln155=%s vuln03=%s meyDiageo=%s "
-            "notification=%s callback_logic_app=%s",
+            "authFailure=%s notification=%s",
             request.vuln15_logic_app_name,
             request.vuln01_logic_app_name,
             request.vuln02_logic_app_name,
@@ -67,8 +67,8 @@ class VulnDeploymentService:
             request.vuln155_logic_app_name,
             request.vuln03_logic_app_name,
             request.mey_diageo_logic_app_name,
+            request.vuln_scan_auth_failure_logic_app_name,
             request.notification_logic_app_name,
-            request.callback_logic_app_name,
         )
 
         # ========================================================
@@ -247,6 +247,94 @@ class VulnDeploymentService:
         )
 
         # ========================================================
+        # 4. RESOLVE AUTH FAILURE DETECTION FUNCTION URLS
+        # ========================================================
+
+        logger.info(
+            "Resolving Qualys Launch Report Function URL: %s/%s",
+            request.qualys_launch_report_function_app_name,
+            request.qualys_launch_report_function_name,
+        )
+
+        qualys_launch_report_url = self.azure.get_function_url(
+            subscription_id=request.subscription_id,
+            resource_group_name=request.resource_group_name,
+            function_app_name=(
+                request.qualys_launch_report_function_app_name
+            ),
+            function_name=(
+                request.qualys_launch_report_function_name
+            ),
+        )
+
+        logger.info(
+            "Qualys Launch Report Function URL resolved successfully."
+        )
+
+        logger.info(
+            "Resolving Qualys Check Report Function URL: %s/%s",
+            request.qualys_check_report_function_app_name,
+            request.qualys_check_report_function_name,
+        )
+
+        qualys_check_report_url = self.azure.get_function_url(
+            subscription_id=request.subscription_id,
+            resource_group_name=request.resource_group_name,
+            function_app_name=(
+                request.qualys_check_report_function_app_name
+            ),
+            function_name=(
+                request.qualys_check_report_function_name
+            ),
+        )
+
+        logger.info(
+            "Qualys Check Report Function URL resolved successfully."
+        )
+
+        logger.info(
+            "Resolving Qualys Download Report Function URL: %s/%s",
+            request.qualys_download_report_function_app_name,
+            request.qualys_download_report_function_name,
+        )
+
+        qualys_download_report_url = self.azure.get_function_url(
+            subscription_id=request.subscription_id,
+            resource_group_name=request.resource_group_name,
+            function_app_name=(
+                request.qualys_download_report_function_app_name
+            ),
+            function_name=(
+                request.qualys_download_report_function_name
+            ),
+        )
+
+        logger.info(
+            "Qualys Download Report Function URL resolved successfully."
+        )
+
+        logger.info(
+            "Resolving Auth Failure Analysis Function URL: %s/%s",
+            request.auth_failure_analysis_function_app_name,
+            request.auth_failure_analysis_function_name,
+        )
+
+        auth_failure_analysis_url = self.azure.get_function_url(
+            subscription_id=request.subscription_id,
+            resource_group_name=request.resource_group_name,
+            function_app_name=(
+                request.auth_failure_analysis_function_app_name
+            ),
+            function_name=(
+                request.auth_failure_analysis_function_name
+            ),
+        )
+
+        logger.info(
+            "Auth Failure Analysis Function URL resolved successfully."
+        )
+
+        # ========================================================
         # EXISTING FUNCTION URL COLLECTION
         # ========================================================
 
@@ -276,7 +364,7 @@ class VulnDeploymentService:
         }
 
         # ========================================================
-        # 4. RESOLVE NOTIFICATION LOGIC APP URL
+        # 5. RESOLVE NOTIFICATION LOGIC APP URL
         # ========================================================
 
         logger.info(
@@ -292,23 +380,6 @@ class VulnDeploymentService:
                 logic_app_name=request.notification_logic_app_name,
                 trigger_name=request.notification_logic_app_trigger_name,
             )
-        )
-
-        # ========================================================
-        # 5. RESOLVE EXPLICIT CALLBACK LOGIC APP URL
-        # ========================================================
-
-        logger.info(
-            "Resolving explicit callback Logic App URL: %s/%s",
-            request.callback_logic_app_name,
-            request.callback_logic_app_trigger_name,
-        )
-
-        callback_uri = self.azure.get_logic_app_callback_url(
-            subscription_id=request.subscription_id,
-            resource_group_name=request.resource_group_name,
-            logic_app_name=request.callback_logic_app_name,
-            trigger_name=request.callback_logic_app_trigger_name,
         )
 
         # ========================================================
@@ -396,6 +467,16 @@ class VulnDeploymentService:
             },
 
             # ----------------------------------------------------
+            # VULN AUTH FAILURE DETECTION LOGIC APP NAME
+            # ----------------------------------------------------
+
+            "vulnScanAuthFailureLogicAppName": {
+                "value": (
+                    request.vuln_scan_auth_failure_logic_app_name
+                )
+            },
+
+            # ----------------------------------------------------
             # Vuln 1.55 completion URL
             # ----------------------------------------------------
 
@@ -474,14 +555,6 @@ class VulnDeploymentService:
             },
 
             # ----------------------------------------------------
-            # Explicit callback URI
-            # ----------------------------------------------------
-
-            "callbackUri": {
-                "value": callback_uri
-            },
-
-            # ----------------------------------------------------
             # HTTP endpoint
             # ----------------------------------------------------
 
@@ -519,6 +592,26 @@ class VulnDeploymentService:
 
             "sharePointSiteUrl": {
                 "value": request.sharepoint_site_url
+            },
+
+            # ====================================================
+            # AUTH FAILURE DETECTION PARAMETERS
+            # ====================================================
+
+            "qualysLaunchReportUrl": {
+                "value": qualys_launch_report_url
+            },
+
+            "qualysCheckReportUrl": {
+                "value": qualys_check_report_url
+            },
+
+            "qualysDownloadReportUrl": {
+                "value": qualys_download_report_url
+            },
+
+            "authFailureAnalysisUrl": {
+                "value": auth_failure_analysis_url
             },
         }
 
@@ -588,9 +681,6 @@ class VulnDeploymentService:
                 notification_logic_app_name=(
                     request.notification_logic_app_name
                 ),
-                callback_logic_app_name=(
-                    request.callback_logic_app_name
-                ),
                 storage_account_name=(
                     request.storage_account_name
                 ),
@@ -613,7 +703,6 @@ class VulnDeploymentService:
                 notification_logic_app_url=(
                     notification_logic_app_url
                 ),
-                callback_uri=callback_uri,
                 completion_logic_app_url=(
                     completion_logic_app_url
                 ),
@@ -718,9 +807,6 @@ class VulnDeploymentService:
                 notification_logic_app_name=(
                     request.notification_logic_app_name
                 ),
-                callback_logic_app_name=(
-                    request.callback_logic_app_name
-                ),
                 storage_account_name=(
                     request.storage_account_name
                 ),
@@ -751,7 +837,6 @@ class VulnDeploymentService:
                     notification_logic_app_url=(
                         notification_logic_app_url
                     ),
-                    callback_logic_app_url=callback_uri,
                     completion_logic_app_url=(
                         completion_logic_app_url
                     ),
@@ -763,7 +848,6 @@ class VulnDeploymentService:
                 notification_logic_app_url=(
                     notification_logic_app_url
                 ),
-                callback_uri=callback_uri,
                 completion_logic_app_url=(
                     completion_logic_app_url
                 ),
@@ -827,9 +911,6 @@ class VulnDeploymentService:
 
         # ========================================================
         # STOP IF VULN03 FAILED
-        #
-        # Vuln02 depends on Vuln03 callback URL.
-        # Therefore Vuln02 must NOT be deployed if Vuln03 failed.
         # ========================================================
 
         if str(state03).lower() != "succeeded":
@@ -866,9 +947,6 @@ class VulnDeploymentService:
                 ),
                 notification_logic_app_name=(
                     request.notification_logic_app_name
-                ),
-                callback_logic_app_name=(
-                    request.callback_logic_app_name
                 ),
                 storage_account_name=(
                     request.storage_account_name
@@ -912,7 +990,6 @@ class VulnDeploymentService:
                     notification_logic_app_url=(
                         notification_logic_app_url
                     ),
-                    callback_logic_app_url=callback_uri,
                     completion_logic_app_url=(
                         completion_logic_app_url
                     ),
@@ -924,7 +1001,6 @@ class VulnDeploymentService:
                 notification_logic_app_url=(
                     notification_logic_app_url
                 ),
-                callback_uri=callback_uri,
                 completion_logic_app_url=(
                     completion_logic_app_url
                 ),
@@ -992,9 +1068,6 @@ class VulnDeploymentService:
 
         # ========================================================
         # STOP IF VULN02 FAILED
-        #
-        # Vuln 1.55 must only be deployed after Vuln02 succeeds
-        # and its HTTP callback URL has been resolved.
         # ========================================================
 
         if str(state02).lower() != "succeeded":
@@ -1031,9 +1104,6 @@ class VulnDeploymentService:
                 ),
                 notification_logic_app_name=(
                     request.notification_logic_app_name
-                ),
-                callback_logic_app_name=(
-                    request.callback_logic_app_name
                 ),
                 storage_account_name=(
                     request.storage_account_name
@@ -1075,7 +1145,6 @@ class VulnDeploymentService:
                     notification_logic_app_url=(
                         notification_logic_app_url
                     ),
-                    callback_logic_app_url=callback_uri,
                     completion_logic_app_url=(
                         completion_logic_app_url
                     ),
@@ -1088,7 +1157,6 @@ class VulnDeploymentService:
                 notification_logic_app_url=(
                     notification_logic_app_url
                 ),
-                callback_uri=callback_uri,
                 completion_logic_app_url=(
                     completion_logic_app_url
                 ),
@@ -1156,21 +1224,6 @@ class VulnDeploymentService:
 
         # ========================================================
         # 19. DEPLOY LA-VULNSCAN-MEYDIAGEO-03.5
-        #
-        # This Logic App only needs:
-        #
-        #   meyDiageoLogicAppName
-        #   qualysIntegrationUrl
-        #
-        # qualysIntegrationUrl was already resolved above and is
-        # already present in base_params.
-        #
-        # ARM defaults provide:
-        #
-        #   vulnScanProfile3.5 = LogicApps_Default_Scan
-        #   scannerId3.5       = MeyDiageo
-        #
-        # Therefore no additional user input is required.
         # ========================================================
 
         logger.info(
@@ -1200,6 +1253,38 @@ class VulnDeploymentService:
         )
 
         # ========================================================
+        # 20. DEPLOY AUTH FAILURE DETECTION LOGIC APP
+        # ========================================================
+
+        logger.info(
+            "Deploying Auth Failure Detection Logic App: %s",
+            request.vuln_scan_auth_failure_logic_app_name,
+        )
+
+        deployment_auth_failure = self.azure.deploy(
+            subscription_id=request.subscription_id,
+            resource_group_name=request.resource_group_name,
+            location=request.location,
+            template_resource_index=7,
+            parameters=base_params,
+            deployment_prefix="vulnscan-authfailure",
+        )
+
+        state_auth_failure = deployment_auth_failure.get(
+            "provisioning_state",
+            "Failed",
+        )
+
+        logger.info(
+            "Auth Failure Detection deployment completed: "
+            "state=%s deployment=%s",
+            state_auth_failure,
+            deployment_auth_failure.get(
+                "deployment_name"
+            ),
+        )
+
+        # ========================================================
         # FINAL SUCCESS
         # ========================================================
 
@@ -1211,6 +1296,7 @@ class VulnDeploymentService:
             and str(state03).lower() == "succeeded"
             and str(state02).lower() == "succeeded"
             and str(state_mey_diageo).lower() == "succeeded"
+            and str(state_auth_failure).lower() == "succeeded"
         )
 
         # ========================================================
@@ -1226,23 +1312,27 @@ class VulnDeploymentService:
                 "LA-VulnScan-04, "
                 "LA-VulnScan-01.55, "
                 "LA-VulnScan-03, "
-                "LA-VulnScan-02 and "
-                "LA-VulnScan-MeyDiageo-03.5 "
+                "LA-VulnScan-02, "
+                "LA-VulnScan-MeyDiageo-03.5 and "
+                "LA-VulnScan-AuthFailureDetection "
                 "deployed successfully."
                 if success
                 else (
-                    deployment_mey_diageo.get(
+                    deployment_auth_failure.get(
                         "error",
-                        deployment02.get(
+                        deployment_mey_diageo.get(
                             "error",
-                            deployment03.get(
+                            deployment02.get(
                                 "error",
-                                deployment155.get(
+                                deployment03.get(
                                     "error",
-                                    deployment04.get(
+                                    deployment155.get(
                                         "error",
-                                        "Vulnerability Scan Logic App "
-                                        "deployment failed.",
+                                        deployment04.get(
+                                            "error",
+                                            "Vulnerability Scan Logic App "
+                                            "deployment failed.",
+                                        ),
                                     ),
                                 ),
                             ),
@@ -1287,10 +1377,6 @@ class VulnDeploymentService:
 
             notification_logic_app_name=(
                 request.notification_logic_app_name
-            ),
-
-            callback_logic_app_name=(
-                request.callback_logic_app_name
             ),
 
             storage_account_name=(
@@ -1368,8 +1454,6 @@ class VulnDeploymentService:
                     notification_logic_app_url
                 ),
 
-                callback_logic_app_url=callback_uri,
-
                 completion_logic_app_url=(
                     completion_logic_app_url
                 ),
@@ -1388,8 +1472,6 @@ class VulnDeploymentService:
             notification_logic_app_url=(
                 notification_logic_app_url
             ),
-
-            callback_uri=callback_uri,
 
             completion_logic_app_url=(
                 completion_logic_app_url
