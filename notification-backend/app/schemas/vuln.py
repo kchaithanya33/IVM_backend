@@ -14,6 +14,11 @@ class VulnLogicAppUrls(BaseModel):
     completion_logic_app_url: Optional[str] = None
     vuln_scan_chg_approval_callback_url: Optional[str] = None
 
+    # ------------------------------------------------------------
+    # VULN 03 URL
+    # ------------------------------------------------------------
+    vuln03_callback_url: Optional[str] = None
+
 
 class VulnFunctionUrls(BaseModel):
     config_service_url: str
@@ -53,11 +58,23 @@ class VulnDeploymentRequest(BaseModel):
         - completionLogicAppUrl
         - vulnScanChgApprovalCallbackUrl
 
-      VULN 03:
+      Vuln 03:
         - excelDiageoIpUrl
         - assetGroupBatchProcessorUrl
         - excelMeyDiageoIpUrl
         - qualysAssetGroupingUrl
+        - vuln03CallbackUrl
+
+      Vuln 02:
+        - vulnScanAssetGroupManagerUrl is resolved from Vuln 03
+          HTTP callback URL and passed during Vuln 02 deployment.
+
+      MeyDiageo 03.5:
+        - meyDiageoLogicAppName is provided by the user.
+        - qualysIntegrationUrl is reused from the already resolved
+          Qualys Integration Function URL.
+        - vulnScanProfile3.5 uses the ARM default value.
+        - scannerId3.5 uses the ARM default value.
 
       Azure API connection IDs:
         - table connection
@@ -104,7 +121,7 @@ class VulnDeploymentRequest(BaseModel):
     )
 
     # ------------------------------------------------------------
-    # SECOND LOGIC APP
+    # SECOND LOGIC APP - VULN 01
     # ------------------------------------------------------------
 
     vuln01_logic_app_name: str = Field(
@@ -137,6 +154,29 @@ class VulnDeploymentRequest(BaseModel):
     vuln03_logic_app_name: str = Field(
         default="LA-VulnScan-03",
         description="Vulnerability Scan 03 Logic App name.",
+    )
+
+    vuln03_logic_app_trigger_name: str = Field(
+        default="manual",
+        description="HTTP trigger of the Vuln-03 Logic App.",
+    )
+
+    # ------------------------------------------------------------
+    # VULN 02 - CHANGE APPROVAL LOGIC APP
+    # ------------------------------------------------------------
+
+    vuln02_logic_app_name: str = Field(
+        default="LA-VulnScan-02",
+        description="Vulnerability Scan 02 / Change Approval Logic App name.",
+    )
+
+    # ------------------------------------------------------------
+    # MEYDIAGEO 03.5 LOGIC APP
+    # ------------------------------------------------------------
+
+    mey_diageo_logic_app_name: str = Field(
+        default="LA-VulnScan-MeyDiageo-03.5",
+        description="MeyDiageo Vulnerability Scan 03.5 Logic App name.",
     )
 
     # ------------------------------------------------------------
@@ -370,65 +410,80 @@ class VulnDeploymentResponse(BaseModel):
     resource_group_name: str
     location: str
 
+    # ------------------------------------------------------------
+    # LOGIC APP NAMES
+    # ------------------------------------------------------------
+
     vuln15_logic_app_name: str
     vuln01_logic_app_name: str
+    vuln02_logic_app_name: Optional[str] = None
     vuln04_logic_app_name: str
-
-    # ------------------------------------------------------------
-    # VULN 1.55
-    # ------------------------------------------------------------
-
     vuln155_logic_app_name: Optional[str] = None
-
-    # ------------------------------------------------------------
-    # VULN 03
-    # ------------------------------------------------------------
-
     vuln03_logic_app_name: Optional[str] = None
 
-    notification_logic_app_name: str
+    # ------------------------------------------------------------
+    # MEYDIAGEO 03.5 LOGIC APP
+    # ------------------------------------------------------------
 
+    mey_diageo_logic_app_name: Optional[str] = None
+
+    notification_logic_app_name: str
     callback_logic_app_name: Optional[str] = None
 
     storage_account_name: str
 
+    # ------------------------------------------------------------
+    # DEPLOYMENT NAMES
+    # ------------------------------------------------------------
+
     vuln15_deployment_name: Optional[str] = None
     vuln01_deployment_name: Optional[str] = None
+    vuln02_deployment_name: Optional[str] = None
     vuln04_deployment_name: Optional[str] = None
-
-    # ------------------------------------------------------------
-    # VULN 1.55 DEPLOYMENT
-    # ------------------------------------------------------------
-
     vuln155_deployment_name: Optional[str] = None
-
-    # ------------------------------------------------------------
-    # VULN 03 DEPLOYMENT
-    # ------------------------------------------------------------
-
     vuln03_deployment_name: Optional[str] = None
+
+    # ------------------------------------------------------------
+    # MEYDIAGEO 03.5 DEPLOYMENT
+    # ------------------------------------------------------------
+
+    mey_diageo_deployment_name: Optional[str] = None
+
+    # ------------------------------------------------------------
+    # PROVISIONING STATES
+    # ------------------------------------------------------------
 
     vuln15_provisioning_state: Optional[str] = None
     vuln01_provisioning_state: Optional[str] = None
+    vuln02_provisioning_state: Optional[str] = None
     vuln04_provisioning_state: Optional[str] = None
-
-    # ------------------------------------------------------------
-    # VULN 1.55 PROVISIONING STATE
-    # ------------------------------------------------------------
-
     vuln155_provisioning_state: Optional[str] = None
-
-    # ------------------------------------------------------------
-    # VULN 03 PROVISIONING STATE
-    # ------------------------------------------------------------
-
     vuln03_provisioning_state: Optional[str] = None
+
+    # ------------------------------------------------------------
+    # MEYDIAGEO 03.5 PROVISIONING STATE
+    # ------------------------------------------------------------
+
+    mey_diageo_provisioning_state: Optional[str] = None
+
+    # ------------------------------------------------------------
+    # API CONNECTION IDS
+    # ------------------------------------------------------------
 
     table_connection_id: Optional[str] = None
     queue_connection_id: Optional[str] = None
     sharepoint_connection_id: Optional[str] = None
 
+    # ------------------------------------------------------------
+    # RESOLVED FUNCTION URLS
+    # ------------------------------------------------------------
+
     function_urls: Optional[VulnFunctionUrls] = None
+
+    # ------------------------------------------------------------
+    # RESOLVED LOGIC APP URLS
+    # ------------------------------------------------------------
+
     logic_app_urls: Optional[VulnLogicAppUrls] = None
 
     # ------------------------------------------------------------
@@ -454,6 +509,14 @@ class VulnDeploymentResponse(BaseModel):
     asset_group_batch_processor_url: Optional[str] = None
     excel_mey_diageo_ip_url: Optional[str] = None
     qualys_asset_grouping_url: Optional[str] = None
+
+    # ------------------------------------------------------------
+    # VULN 03 CALLBACK URL
+    # This is passed to Vuln 02 as:
+    # vulnScanAssetGroupManagerUrl
+    # ------------------------------------------------------------
+
+    vuln03_callback_url: Optional[str] = None
 
     # ------------------------------------------------------------
     # ARM CONNECTION OBJECT

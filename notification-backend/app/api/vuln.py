@@ -1,3 +1,4 @@
+
 import logging
 
 from fastapi import APIRouter, HTTPException
@@ -29,11 +30,15 @@ def deploy_vuln(
     logger.info(
         "Received Vulnerability Scan deployment request: "
         "vuln15=%s vuln01=%s vuln04=%s vuln155=%s "
+        "vuln03=%s vuln02=%s meyDiageo035=%s "
         "notification=%s callback=%s",
         request.vuln15_logic_app_name,
         request.vuln01_logic_app_name,
         request.vuln04_logic_app_name,
         request.vuln155_logic_app_name,
+        request.vuln03_logic_app_name,
+        request.vuln02_logic_app_name,
+        request.mey_diageo_logic_app_name,
         request.notification_logic_app_name,
         request.callback_logic_app_name,
     )
@@ -74,6 +79,19 @@ def deploy_vuln(
         request.completion_http_action_name,
         request.vuln_scan_chg_approval_logic_app_name,
         request.vuln_scan_chg_approval_http_action_name,
+    )
+
+    logger.info(
+        "Vuln 03 callback configuration: "
+        "vuln03_logic_app=%s trigger=%s",
+        request.vuln03_logic_app_name,
+        request.vuln03_logic_app_trigger_name,
+    )
+
+    logger.info(
+        "MeyDiageo 03.5 Logic App configuration: "
+        "logic_app=%s",
+        request.mey_diageo_logic_app_name,
     )
 
     try:
