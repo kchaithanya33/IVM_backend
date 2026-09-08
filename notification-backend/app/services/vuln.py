@@ -26,17 +26,20 @@ class VulnDeploymentService:
       4. Resolve Notification Logic App callback URL.
       5. Resolve explicitly selected callback Logic App URL.
       6. Resolve Vuln 1.55 completion Logic App URL.
-      7. Resolve Vuln 1.55 CHG approval callback URL.
-      8. Deploy LA-VulnScan-01.5.
-      9. Get LA-VulnScan-01.5/manual callback URL.
+      7. Deploy LA-VulnScan-01.5.
+      8. Get LA-VulnScan-01.5/manual callback URL.
+      9. Deploy LA-VulnScan-01.
       10. Deploy LA-VulnScan-01.
       11. Deploy LA-VulnScan-04.
-      12. Deploy LA-VulnScan-01.55.
-      13. Deploy LA-VulnScan-03.
-      14. Get LA-VulnScan-03/manual callback URL.
-      15. Pass Vuln-03 callback URL to Vuln-02.
-      16. Deploy LA-VulnScan-02.
-      17. Deploy LA-VulnScan-MeyDiageo-03.5 using the
+      12. Deploy LA-VulnScan-03.
+      13. Get LA-VulnScan-03/manual callback URL.
+      14. Pass Vuln-03 callback URL to Vuln-02.
+      15. Deploy LA-VulnScan-02.
+      16. Get LA-VulnScan-02/manual callback URL.
+      17. Pass the Vuln-02 callback URL as
+          vulnScanChgApprovalCallbackUrl.
+      18. Deploy LA-VulnScan-01.55.
+      19. Deploy LA-VulnScan-MeyDiageo-03.5 using the
           already resolved Qualys Integration URL.
     """
 
@@ -333,35 +336,6 @@ class VulnDeploymentService:
         )
 
         # ========================================================
-        # 7. RESOLVE VULN 1.55 CHG APPROVAL CALLBACK URL
-        # ========================================================
-
-        logger.info(
-            "Resolving Vuln 1.55 CHG approval callback URL: "
-            "%s/%s",
-            request.vuln_scan_chg_approval_logic_app_name,
-            request.vuln_scan_chg_approval_http_action_name,
-        )
-
-        vuln_scan_chg_approval_callback_url = (
-            self.azure.get_logic_app_callback_url(
-                subscription_id=request.subscription_id,
-                resource_group_name=request.resource_group_name,
-                logic_app_name=(
-                    request.vuln_scan_chg_approval_logic_app_name
-                ),
-                trigger_name=(
-                    request.vuln_scan_chg_approval_http_action_name
-                ),
-            )
-        )
-
-        logger.info(
-            "Vuln 1.55 CHG approval callback URL "
-            "resolved successfully."
-        )
-
-        # ========================================================
         # COMMON ARM PARAMETERS
         # ========================================================
 
@@ -434,7 +408,7 @@ class VulnDeploymentService:
             # ----------------------------------------------------
 
             "vulnScanChgApprovalCallbackUrl": {
-                "value": vuln_scan_chg_approval_callback_url
+                "value": ""
             },
 
             # ----------------------------------------------------
@@ -548,8 +522,12 @@ class VulnDeploymentService:
             },
         }
 
+        # The Vuln 1.55 CHG approval callback URL is resolved only
+        # after Vuln02 has been deployed successfully.
+        vuln_scan_chg_approval_callback_url = ""
+
         # ========================================================
-        # 8. DEPLOY LA-VULNSCAN-01.5
+        # 7. DEPLOY LA-VULNSCAN-01.5
         # ========================================================
 
         logger.info(
@@ -648,7 +626,7 @@ class VulnDeploymentService:
             )
 
         # ========================================================
-        # 9. GET LA-VULNSCAN-01.5/MANUAL CALLBACK URL
+        # 8. GET LA-VULNSCAN-01.5/MANUAL CALLBACK URL
         # ========================================================
 
         logger.info(
@@ -671,7 +649,7 @@ class VulnDeploymentService:
         )
 
         # ========================================================
-        # 10. PASS FIRST LOGIC APP URL TO SECOND LOGIC APP
+        # 9. PASS FIRST LOGIC APP URL TO SECOND LOGIC APP
         # ========================================================
 
         base_params["httpEndpointUrl"] = {
@@ -679,7 +657,7 @@ class VulnDeploymentService:
         }
 
         # ========================================================
-        # 11. DEPLOY LA-VULNSCAN-01
+        # 10. DEPLOY LA-VULNSCAN-01
         # ========================================================
 
         logger.info(
@@ -798,7 +776,7 @@ class VulnDeploymentService:
             )
 
         # ========================================================
-        # 12. DEPLOY LA-VULNSCAN-04
+        # 11. DEPLOY LA-VULNSCAN-04
         # ========================================================
 
         logger.info(
@@ -820,31 +798,12 @@ class VulnDeploymentService:
             "Failed",
         )
 
-        # ========================================================
-        # 13. DEPLOY LA-VULNSCAN-01.55
-        # ========================================================
-
-        logger.info(
-            "Deploying fourth Logic App: %s",
-            request.vuln155_logic_app_name,
-        )
-
-        deployment155 = self.azure.deploy(
-            subscription_id=request.subscription_id,
-            resource_group_name=request.resource_group_name,
-            location=request.location,
-            template_resource_index=3,
-            parameters=base_params,
-            deployment_prefix="vulnscan155",
-        )
-
-        state155 = deployment155.get(
-            "provisioning_state",
-            "Failed",
-        )
+        # Vuln 1.55 is deployed after Vuln02 callback resolution.
+        deployment155: Dict[str, Any] = {}
+        state155 = "Not deployed"
 
         # ========================================================
-        # 14. DEPLOY LA-VULNSCAN-03
+        # 12. DEPLOY LA-VULNSCAN-03
         # ========================================================
 
         logger.info(
@@ -978,7 +937,7 @@ class VulnDeploymentService:
             )
 
         # ========================================================
-        # 15. GET VULN03 CALLBACK URL
+        # 13. GET VULN03 CALLBACK URL
         # ========================================================
 
         logger.info(
@@ -1001,7 +960,7 @@ class VulnDeploymentService:
         )
 
         # ========================================================
-        # 16. PASS VULN03 CALLBACK URL TO VULN02
+        # 14. PASS VULN03 CALLBACK URL TO VULN02
         # ========================================================
 
         base_params["vulnScanAssetGroupManagerUrl"] = {
@@ -1009,7 +968,7 @@ class VulnDeploymentService:
         }
 
         # ========================================================
-        # 17. DEPLOY LA-VULNSCAN-02
+        # 15. DEPLOY LA-VULNSCAN-02
         # ========================================================
 
         logger.info(
@@ -1032,7 +991,171 @@ class VulnDeploymentService:
         )
 
         # ========================================================
-        # 18. DEPLOY LA-VULNSCAN-MEYDIAGEO-03.5
+        # STOP IF VULN02 FAILED
+        #
+        # Vuln 1.55 must only be deployed after Vuln02 succeeds
+        # and its HTTP callback URL has been resolved.
+        # ========================================================
+
+        if str(state02).lower() != "succeeded":
+
+            return VulnDeploymentResponse(
+                success=False,
+                message=deployment02.get(
+                    "error",
+                    "LA-VulnScan-02 deployment failed.",
+                ),
+                subscription_id=request.subscription_id,
+                resource_group_name=request.resource_group_name,
+                location=request.location,
+                vuln15_logic_app_name=(
+                    request.vuln15_logic_app_name
+                ),
+                vuln01_logic_app_name=(
+                    request.vuln01_logic_app_name
+                ),
+                vuln02_logic_app_name=(
+                    request.vuln02_logic_app_name
+                ),
+                vuln04_logic_app_name=(
+                    request.vuln04_logic_app_name
+                ),
+                vuln155_logic_app_name=(
+                    request.vuln155_logic_app_name
+                ),
+                vuln03_logic_app_name=(
+                    request.vuln03_logic_app_name
+                ),
+                mey_diageo_logic_app_name=(
+                    request.mey_diageo_logic_app_name
+                ),
+                notification_logic_app_name=(
+                    request.notification_logic_app_name
+                ),
+                callback_logic_app_name=(
+                    request.callback_logic_app_name
+                ),
+                storage_account_name=(
+                    request.storage_account_name
+                ),
+                vuln15_deployment_name=(
+                    deployment15.get("deployment_name")
+                ),
+                vuln01_deployment_name=(
+                    deployment01.get("deployment_name")
+                ),
+                vuln04_deployment_name=(
+                    deployment04.get("deployment_name")
+                ),
+                vuln155_deployment_name=None,
+                vuln03_deployment_name=(
+                    deployment03.get("deployment_name")
+                ),
+                vuln15_provisioning_state=state15,
+                vuln01_provisioning_state=state01,
+                vuln04_provisioning_state=state04,
+                vuln155_provisioning_state=state155,
+                vuln03_provisioning_state=state03,
+                table_connection_id=(
+                    connections.get("table_connection_id")
+                ),
+                queue_connection_id=(
+                    connections.get("queue_connection_id")
+                ),
+                sharepoint_connection_id=(
+                    connections.get("sharepoint_connection_id")
+                ),
+                function_urls=VulnFunctionUrls(
+                    **function_urls
+                ),
+                logic_app_urls=VulnLogicAppUrls(
+                    vuln01_5_logic_app_url=(
+                        http_endpoint_url
+                    ),
+                    notification_logic_app_url=(
+                        notification_logic_app_url
+                    ),
+                    callback_logic_app_url=callback_uri,
+                    completion_logic_app_url=(
+                        completion_logic_app_url
+                    ),
+                    vuln_scan_chg_approval_callback_url=None,
+                    vuln03_callback_url=(
+                        vuln03_callback_url
+                    ),
+                ),
+                http_endpoint_url=http_endpoint_url,
+                notification_logic_app_url=(
+                    notification_logic_app_url
+                ),
+                callback_uri=callback_uri,
+                completion_logic_app_url=(
+                    completion_logic_app_url
+                ),
+                vuln_scan_chg_approval_callback_url=None,
+                vuln03_callback_url=(
+                    vuln03_callback_url
+                ),
+                arm_connections=(
+                    connections.get("arm_connections")
+                ),
+            )
+
+        # ========================================================
+        # 16. GET VULN02 CALLBACK URL
+        # ========================================================
+
+        logger.info(
+            "Getting callback URL for Vuln02: %s/manual",
+            request.vuln02_logic_app_name,
+        )
+
+        vuln_scan_chg_approval_callback_url = (
+            self.azure.get_logic_app_callback_url(
+                subscription_id=request.subscription_id,
+                resource_group_name=request.resource_group_name,
+                logic_app_name=request.vuln02_logic_app_name,
+                trigger_name="manual",
+            )
+        )
+
+        logger.info(
+            "Vuln02 callback URL resolved successfully."
+        )
+
+        # ========================================================
+        # 17. PASS VULN02 CALLBACK URL TO VULN 1.55
+        # ========================================================
+
+        base_params["vulnScanChgApprovalCallbackUrl"] = {
+            "value": vuln_scan_chg_approval_callback_url
+        }
+
+        # ========================================================
+        # 18. DEPLOY LA-VULNSCAN-01.55
+        # ========================================================
+
+        logger.info(
+            "Deploying fourth Logic App: %s",
+            request.vuln155_logic_app_name,
+        )
+
+        deployment155 = self.azure.deploy(
+            subscription_id=request.subscription_id,
+            resource_group_name=request.resource_group_name,
+            location=request.location,
+            template_resource_index=3,
+            parameters=base_params,
+            deployment_prefix="vulnscan155",
+        )
+
+        state155 = deployment155.get(
+            "provisioning_state",
+            "Failed",
+        )
+
+        # ========================================================
+        # 19. DEPLOY LA-VULNSCAN-MEYDIAGEO-03.5
         #
         # This Logic App only needs:
         #
