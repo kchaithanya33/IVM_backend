@@ -1,0 +1,576 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for the Logic App"
+      }
+    },
+
+    "LA-reporting-04": {
+      "type": "string",
+      "defaultValue": "LA-reporting-04",
+      "metadata": {
+        "description": "Name of the Final Report Logic App"
+      }
+    },
+
+    "storageAccountName": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure Storage Account name used by the Logic App"
+      }
+    },
+
+    "notificationServiceUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Notification service URL"
+      }
+    },
+
+    "sharePointSiteUrl": {
+      "type": "string",
+     
+      "metadata": {
+        "description": "SharePoint site URL"
+      }
+    },
+
+    "auditLogTableName": {
+      "type": "string",
+      "defaultValue": "AuditLog",
+      "metadata": {
+        "description": "Azure Table Storage table used for audit logs"
+      }
+    },
+
+    "splitVulnerabilitiesFunctionUrl": {
+      "type": "string",
+      
+      "metadata": {
+        "description": "Split Vulnerabilities Azure Function URL"
+      }
+    },
+
+    "azureTablesConnectionName": {
+      "type": "string",
+      "defaultValue": "azuretables",
+      "metadata": {
+        "description": "Name of the Azure Tables API connection"
+      }
+    },
+
+    "sharePointOnlineConnectionName": {
+      "type": "string",
+      "defaultValue": "sharepointonline",
+      "metadata": {
+        "description": "Name of the SharePoint Online API connection"
+      }
+    },
+    "$connections": {
+  "type": "object",
+  "defaultValue": {},
+  "metadata": {
+    "description": "API connection configuration for Azure Tables and SharePoint"
+  }
+}
+  },
+
+  
+
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('LA-reporting-04')]",
+      "location": "[parameters('location')]",
+
+     
+
+      "properties": {
+        "state": "Enabled",
+
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+
+          "triggers": {
+            "When_a_HTTP_request_is_received": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cycleId": {
+                      "type": "string"
+                    },
+                    "triagingSheetPath": {
+                      "type": "string"
+                    },
+                    "validationDueDate": {
+                      "type": "string"
+                    },
+                    "taskId": {
+                      "type": "string"
+                    },
+                    "validationStatus": {
+                      "type": "string"
+                    },
+                    "validationComments": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "cycleId",
+                    "triagingSheetPath",
+                    "taskId"
+                  ]
+                }
+              }
+            }
+          },
+
+          "actions": {
+            "Initialize_variables": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "cycleId",
+                    "type": "string",
+                    "value": "@{triggerBody()?['cycleId']}"
+                  },
+                  {
+                    "name": "validationStatus",
+                    "type": "string",
+                    "value": "@{coalesce(triggerBody()?['validationStatus'], 'Completed')}"
+                  },
+                  {
+                    "name": "validationComments",
+                    "type": "string",
+                    "value": "@{coalesce(triggerBody()?['validationComments'], 'Report generated successfully')}"
+                  },
+                  {
+                    "name": "triagingSheetPath",
+                    "type": "string",
+                    "value": "@{triggerBody()?['triagingSheetPath']}"
+                  },
+                  {
+                    "name": "taskId",
+                    "type": "string",
+                    "value": "@{triggerBody()?['taskId']}"
+                  },
+                  {
+                    "name": "finalReportPath",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "finalReportName",
+                    "type": "string",
+                    "value": "VulnerabilityReport-@{triggerBody()?['cycleId']}.xlsx"
+                  },
+                  {
+                    "name": "finalReportFolderPath",
+                    "type": "string",
+                    "value": "/Shared Documents/Reporting/@{triggerBody()?['cycleId']}/FinalReport"
+                  },
+                  {
+                    "name": "sharePointWebUrl",
+                    "type": "string",
+                    "value": "@parameters('sharePointSiteUrl')"
+                  }
+                ]
+              }
+            },
+
+            "Log_Task_Start": {
+              "runAfter": {
+                "Initialize_variables": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "PartitionKey": "Reporting",
+                  "RowKey": "@{guid()}",
+                  "CycleId": "@{variables('cycleId')}",
+                  "ActionType": "FinalReport",
+                  "Timestamp": "@{utcNow()}",
+                  "Status": "Started",
+                  "TaskId": "@{variables('taskId')}"
+                },
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('auditLogTableName'))}/entities"
+              }
+            },
+
+            "Create_SharePoint_Final_Report_Folder": {
+              "runAfter": {
+                "Log_Task_Start": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "path": "@variables('finalReportFolderPath')"
+                },
+                "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/tables/@{encodeURIComponent(encodeURIComponent('Documents'))}/createnewfolder"
+              }
+            },
+
+            "Get_Source_File_Content": {
+              "runAfter": {
+                "Create_SharePoint_Final_Report_Folder": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files/@{encodeURIComponent(encodeURIComponent(variables('triagingSheetPath')))}/content"
+              }
+            },
+
+            "Split_Vulnerabilties": {
+              "runAfter": {
+                "Get_Source_File_Content": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "uri": "@parameters('splitVulnerabilitiesFunctionUrl')",
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "cycleId": "@{variables('cycleId')}",
+                  "excelContent": "@{base64(body('Get_Source_File_Content'))}",
+                  "fileType": "xlsx"
+                }
+              }
+            },
+
+            "Copy_Triaging_Sheet_as_Final_Report": {
+              "runAfter": {
+                "Split_Vulnerabilties": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": "@body('Split_Vulnerabilties')",
+                "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files",
+                "queries": {
+                  "folderPath": "@variables('finalReportFolderPath')",
+                  "name": "@variables('finalReportName')"
+                }
+              }
+            },
+
+            "Set_final_report_path_variable": {
+              "runAfter": {
+                "Copy_Triaging_Sheet_as_Final_Report": [
+                  "Succeeded"
+                ]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "finalReportPath",
+                "value": "@body('Copy_Triaging_Sheet_as_Final_Report')?['Path']"
+              }
+            },
+
+            "Check_if_Cycle_Status_Exists": {
+              "runAfter": {
+                "Set_final_report_path_variable": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('SecurityReportingCycles')}/entities",
+                "queries": {
+                  "$filter": "PartitionKey eq '@{variables('cycleId')}' and RowKey eq 'Status'"
+                }
+              }
+            },
+
+            "Condition_Check_Entity_Exists": {
+              "actions": {
+                "Update_Cycle_Status": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                      }
+                    },
+                    "method": "patch",
+                    "body": {
+                      "StatusValue": "ReportingComplete",
+                      "ReportCompletionDate": "@{utcNow()}",
+                      "ValidationStatus": "@{variables('validationStatus')}",
+                      "FinalReportPath": "@{variables('finalReportPath')}"
+                    },
+                    "headers": {
+                      "If-Match": "*"
+                    },
+                    "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('SecurityReportingCycles')}/entities/etag(PartitionKey='@{encodeURIComponent(variables('cycleId'))}',RowKey='@{encodeURIComponent('Status')}')"
+                  }
+                }
+              },
+
+              "runAfter": {
+                "Check_if_Cycle_Status_Exists": [
+                  "Succeeded"
+                ]
+              },
+
+              "else": {
+                "actions": {
+                  "Create_Cycle_Status": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                        }
+                      },
+                      "method": "post",
+                      "body": {
+                        "PartitionKey": "@{variables('cycleId')}",
+                        "RowKey": "Status",
+                        "StatusValue": "ReportingComplete",
+                        "ReportCompletionDate": "@{utcNow()}",
+                        "ValidationStatus": "@{variables('validationStatus')}",
+                        "FinalReportPath": "@{variables('finalReportPath')}",
+                        "TaskId": "@{variables('taskId')}"
+                      },
+                      "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('SecurityReportingCycles')}/entities"
+                    }
+                  }
+                }
+              },
+
+              "expression": {
+                "and": [
+                  {
+                    "greater": [
+                      "@length(body('Check_if_Cycle_Status_Exists')?['value'])",
+                      0
+                    ]
+                  }
+                ]
+              },
+
+              "type": "If"
+            },
+
+            "Send_Final_Report_Notification": {
+              "runAfter": {
+                "Condition_Check_Entity_Exists": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "uri": "@parameters('notificationServiceUrl')",
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "WorkflowName": "ScopeTriaging-Report",
+                  "NotificationType": "Completion",
+                  "NotificationTitle": "Vulnerability Scan Report Available - @{variables('cycleId')}",
+
+                  "NotificationContent": "<!DOCTYPE html><html><head><style>body{font-family:Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px}.header{background-color:#0066cc;color:white;padding:20px;text-align:center;border-radius:8px 8px 0 0}.content{background-color:#f9f9f9;padding:30px;border:1px solid #ddd}.highlight{background-color:#e7f3ff;padding:15px;border-left:4px solid #0066cc;margin:20px 0}.download-section{text-align:center;margin:30px 0}.download-btn{display:inline-block;background-color:#0066cc;color:white;padding:15px 30px;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px;margin:10px;transition:background-color 0.3s}.download-btn:hover{background-color:#0052a3;color:white}.download-btn:visited{color:white}.file-info{background-color:#f0f8ff;padding:15px;border-radius:8px;margin:20px 0;border:1px solid #b3d9ff}.footer{background-color:#f1f1f1;padding:15px;text-align:center;font-size:12px;color:#666;border-radius:0 0 8px 8px}</style></head><body><div class='header'><h1>🔒 Vulnerability Scan Complete</h1><h2>Cycle ID: @{variables('cycleId')}</h2></div><div class='content'><p>Dear Security Team,</p><p>We are pleased to inform you that the vulnerability triaging process has been successfully completed and validated for scan cycle <strong>@{variables('cycleId')}</strong>.</p><div class='highlight'><h3>📋 Scan Summary</h3><ul><li><strong>Status:</strong> ✅ Completed & Validated</li><li><strong>Cycle ID:</strong> @{variables('cycleId')}</li><li><strong>Completion Date:</strong> @{utcNow('yyyy-MM-dd HH:mm:ss')} UTC</li><li><strong>Validation Status:</strong> @{variables('validationStatus')}</li></ul></div><div class='download-section'><h3>📊 Final Report Available</h3><div class='file-info'><p><strong>File Name:</strong> @{variables('finalReportName')}</p><p><strong>Location:</strong> @{variables('finalReportFolderPath')}</p></div><a href='@{variables('sharePointWebUrl')}@{replace(variables('finalReportPath'), ' ', '%20')}' class='download-btn' target='_blank'>📄 Open Final Report</a><br><br><a href='@{variables('sharePointWebUrl')}/Shared%20Documents/Reporting/@{variables('cycleId')}/FinalReport' class='download-btn' target='_blank'>📁 Open Report Folder</a></div></div><div class='footer'><p>This is an automated message from the Vulnerability Management System</p><p>If you cannot access the file, please contact your SharePoint administrator</p></div></body></html>",
+
+                  "RecipientList": [
+                    "IVM_Team"
+                  ],
+
+                  "TeamsList": [
+                    "IVM_Team"
+                  ],
+
+                  "NotificationChannels": [
+                    "Email"
+                  ],
+
+                  "TemplateVariables": [
+                    {
+                      "key": "cycleId",
+                      "value": "@{variables('cycleId')}"
+                    },
+                    {
+                      "key": "completionDateTime",
+                      "value": "@{utcNow('yyyy-MM-dd HH:mm:ss')}"
+                    },
+                    {
+                      "key": "validationStatus",
+                      "value": "@{variables('validationStatus')}"
+                    },
+                    {
+                      "key": "finalReportName",
+                      "value": "@{variables('finalReportName')}"
+                    },
+                    {
+                      "key": "finalReportFolderPath",
+                      "value": "@{variables('finalReportFolderPath')}"
+                    },
+                    {
+                      "key": "finalReportUrl",
+                      "value": "@{variables('sharePointWebUrl')}@{replace(variables('finalReportPath'), ' ', '%20')}"
+                    },
+                    {
+                      "key": "reportFolderUrl",
+                      "value": "@{variables('sharePointWebUrl')}/Shared%20Documents/Reporting/@{variables('cycleId')}/FinalReport"
+                    }
+                  ],
+
+                  "TemplateId": "REPORT-04",
+                  "Importance": "High",
+                  "Attachments": []
+                }
+              },
+
+              "runtimeConfiguration": {
+                "contentTransfer": {
+                  "transferMode": "Chunked"
+                }
+              }
+            },
+
+            "Log_Task_Completion": {
+              "runAfter": {
+                "Send_Final_Report_Notification": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "PartitionKey": "Reporting",
+                  "RowKey": "@{guid()}",
+                  "CycleId": "@{variables('cycleId')}",
+                  "ActionType": "FinalReport",
+                  "Timestamp": "@{utcNow()}",
+                  "Status": "Completed",
+                  "TaskId": "@{variables('taskId')}",
+                  "ReportPath": "@{variables('finalReportPath')}"
+                },
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('auditLogTableName'))}/entities"
+              }
+            }
+          },
+
+          "outputs": {},
+
+          "parameters": {
+            "storageAccountName": {
+              "type": "String"
+            },
+
+            "notificationServiceUrl": {
+              "type": "String"
+            },
+
+            "sharePointSiteUrl": {
+              "type": "String"
+            },
+
+            "auditLogTableName": {
+              "type": "String"
+            },
+
+            "splitVulnerabilitiesFunctionUrl": {
+              "type": "String"
+            },
+
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            }
+          }
+        },
+
+        "parameters": {
+          "storageAccountName": {
+            "value": "[parameters('storageAccountName')]"
+          },
+
+          "notificationServiceUrl": {
+            "value": "[parameters('notificationServiceUrl')]"
+          },
+
+          "sharePointSiteUrl": {
+            "value": "[parameters('sharePointSiteUrl')]"
+          },
+
+          "auditLogTableName": {
+            "value": "[parameters('auditLogTableName')]"
+          },
+
+          "splitVulnerabilitiesFunctionUrl": {
+            "value": "[parameters('splitVulnerabilitiesFunctionUrl')]"
+          },
+
+          "$connections": {
+            "value": "[parameters('$connections')]"
+          }
+        }
+      }
+    }
+  ],
+
+  "outputs": {
+
+  }
+}

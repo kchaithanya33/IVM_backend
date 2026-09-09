@@ -1,5 +1,4 @@
 
-
 import json
 import logging
 from datetime import datetime
@@ -26,6 +25,7 @@ class ARMDeploymentManager:
         - ARM template loading/deployment
         - Resource listing
         - Function App URL resolution
+        - Logic App existence check
         - Logic App trigger callback URL resolution
     """
 
@@ -552,6 +552,68 @@ class ARMDeploymentManager:
         )
 
         return invoke_url
+
+    # =========================================================
+    # LOGIC APP EXISTENCE
+    # =========================================================
+
+    def logic_app_exists(
+        self,
+        resource_group_name: str,
+        logic_app_name: str,
+    ) -> bool:
+        """
+        Check whether a Logic App workflow exists.
+
+        Returns:
+
+            True  -> Logic App exists
+            False -> Logic App does not exist
+        """
+
+        if not logic_app_name:
+
+            raise ValueError(
+                "logic_app_name is required"
+            )
+
+        logger.info(
+            "Checking Logic App existence: %s",
+            logic_app_name,
+        )
+
+        try:
+
+            self.logic_client.workflows.get(
+                resource_group_name,
+                logic_app_name,
+            )
+
+            logger.info(
+                "Logic App exists: %s",
+                logic_app_name,
+            )
+
+            return True
+
+        except Exception as exc:
+
+            error_text = str(exc)
+
+            if (
+                "ResourceNotFound" in error_text
+                or "was not found" in error_text
+                or "not found" in error_text.lower()
+            ):
+
+                logger.info(
+                    "Logic App does not exist: %s",
+                    logic_app_name,
+                )
+
+                return False
+
+            raise
 
     # =========================================================
     # LOGIC APP TRIGGER CALLBACK URL

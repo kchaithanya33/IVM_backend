@@ -43,6 +43,14 @@ from app.api.vuln import (
     router as vuln_router,
 )
 
+# ============================================================
+# Reporting
+# ============================================================
+
+from app.api.reporting import (
+    router as reporting_router,
+)
+
 
 # ============================================================
 # FASTAPI APPLICATION
@@ -156,6 +164,15 @@ app.include_router(
 
 app.include_router(
     vuln_router
+)
+
+
+# ------------------------------------------------------------
+# Reporting Logic App Deployment
+# ------------------------------------------------------------
+
+app.include_router(
+    reporting_router
 )
 
 

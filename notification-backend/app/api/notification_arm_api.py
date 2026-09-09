@@ -1,5 +1,4 @@
 
-
 import logging
 
 from fastapi import APIRouter, HTTPException
@@ -79,15 +78,8 @@ def deploy_notification_service(
                 notification_followup_logic_app_name=
                     request.notification_followup_logic_app_name,
 
-                # =================================================
-                # NOTIFICATION SERVICE CALLBACK
-                # =================================================
-
-                notification_logic_app_name=
-                    request.notification_logic_app_name,
-
-                notification_trigger_name=
-                    request.notification_trigger_name,
+                vuln_scan_complete_logic_app_name=
+                    request.vuln_scan_complete_logic_app_name,
 
                 # =================================================
                 # QUEUES

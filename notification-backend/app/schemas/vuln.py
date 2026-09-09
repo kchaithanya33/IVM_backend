@@ -18,6 +18,11 @@ class VulnLogicAppUrls(BaseModel):
     # ------------------------------------------------------------
     vuln03_callback_url: Optional[str] = None
 
+    # ------------------------------------------------------------
+    # VULN 05 URL
+    # ------------------------------------------------------------
+    callback_uri_05: Optional[str] = None
+
 
 class VulnFunctionUrls(BaseModel):
     config_service_url: str
@@ -33,6 +38,11 @@ class VulnFunctionUrls(BaseModel):
     asset_group_batch_processor_url: Optional[str] = None
     excel_mey_diageo_ip_url: Optional[str] = None
     qualys_asset_grouping_url: Optional[str] = None
+
+    # ------------------------------------------------------------
+    # VULN 05 URL
+    # ------------------------------------------------------------
+    qualys_scan_function_url: Optional[str] = None
 
 
 class VulnDeploymentRequest(BaseModel):
@@ -79,6 +89,12 @@ class VulnDeploymentRequest(BaseModel):
         - qualysCheckReportUrl
         - qualysDownloadReportUrl
         - authFailureAnalysisUrl
+
+      Vuln 05:
+        - qualysScanFunctionUrl is resolved from the supplied
+          Function App name + Function name.
+        - callbackUri05 is resolved from the Auth Failure Detection
+          Logic App (06) manual HTTP trigger after 06 deployment.
 
       Azure API connection IDs:
         - table connection
@@ -190,6 +206,15 @@ class VulnDeploymentRequest(BaseModel):
     vuln_scan_auth_failure_logic_app_name: str = Field(
         default="LA-VulnScan-AuthFailureDetection",
         description="Vulnerability Scan Authentication Failure Detection Logic App name.",
+    )
+
+    # ------------------------------------------------------------
+    # VULN 05 LOGIC APP
+    # ------------------------------------------------------------
+
+    vuln05_logic_app_name: str = Field(
+        default="LA-VulnScan-05",
+        description="Vulnerability Scan 05 Logic App name.",
     )
 
     # ------------------------------------------------------------
@@ -399,6 +424,20 @@ class VulnDeploymentRequest(BaseModel):
     )
 
     # ------------------------------------------------------------
+    # VULN 05 - FUNCTION APP - QUALYS SCAN
+    # ------------------------------------------------------------
+
+    qualys_scan_function_app_name: str = Field(
+        default="",
+        description="Function App containing the Qualys scan function.",
+    )
+
+    qualys_scan_function_name: str = Field(
+        default="",
+        description="Function name used to obtain qualysScanFunctionUrl.",
+    )
+
+    # ------------------------------------------------------------
     # VULN 03 - SHAREPOINT SITE
     # ------------------------------------------------------------
 
@@ -466,6 +505,12 @@ class VulnDeploymentResponse(BaseModel):
 
     mey_diageo_logic_app_name: Optional[str] = None
 
+    # ------------------------------------------------------------
+    # VULN 05 LOGIC APP
+    # ------------------------------------------------------------
+
+    vuln05_logic_app_name: Optional[str] = None
+
     notification_logic_app_name: str
 
     storage_account_name: str
@@ -488,6 +533,12 @@ class VulnDeploymentResponse(BaseModel):
     mey_diageo_deployment_name: Optional[str] = None
 
     # ------------------------------------------------------------
+    # VULN 05 DEPLOYMENT
+    # ------------------------------------------------------------
+
+    vuln05_deployment_name: Optional[str] = None
+
+    # ------------------------------------------------------------
     # PROVISIONING STATES
     # ------------------------------------------------------------
 
@@ -503,6 +554,12 @@ class VulnDeploymentResponse(BaseModel):
     # ------------------------------------------------------------
 
     mey_diageo_provisioning_state: Optional[str] = None
+
+    # ------------------------------------------------------------
+    # VULN 05 PROVISIONING STATE
+    # ------------------------------------------------------------
+
+    vuln05_provisioning_state: Optional[str] = None
 
     # ------------------------------------------------------------
     # API CONNECTION IDS
@@ -555,6 +612,13 @@ class VulnDeploymentResponse(BaseModel):
     # ------------------------------------------------------------
 
     vuln03_callback_url: Optional[str] = None
+
+    # ------------------------------------------------------------
+    # VULN 05 RESOLVED URL
+    # ------------------------------------------------------------
+
+    qualys_scan_function_url: Optional[str] = None
+    callback_uri_05: Optional[str] = None
 
     # ------------------------------------------------------------
     # ARM CONNECTION OBJECT

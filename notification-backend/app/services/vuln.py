@@ -23,12 +23,12 @@ class VulnDeploymentService:
       2. Resolve all required existing Function URLs.
       3. Resolve all VULN03 Function URLs.
       4. Resolve Auth Failure Detection Function URLs.
-      5. Resolve Notification Logic App callback URL.
-      6. Resolve Vuln 1.55 completion Logic App URL.
-      7. Deploy LA-VulnScan-01.5.
-      8. Get LA-VulnScan-01.5/manual callback URL.
-      9. Deploy LA-VulnScan-01.
-      10. Deploy LA-VulnScan-04.
+      5. Resolve Vuln05 Qualys Scan Function URL.
+      6. Resolve Notification Logic App callback URL.
+      7. Resolve Vuln 1.55 completion Logic App URL.
+      8. Deploy LA-VulnScan-01.5.
+      9. Get LA-VulnScan-01.5/manual callback URL.
+      10. Deploy LA-VulnScan-01.
       11. Deploy LA-VulnScan-03.
       12. Get LA-VulnScan-03/manual callback URL.
       13. Pass Vuln-03 callback URL to Vuln-02.
@@ -37,10 +37,14 @@ class VulnDeploymentService:
       16. Pass the Vuln-02 callback URL as
           vulnScanChgApprovalCallbackUrl.
       17. Deploy LA-VulnScan-01.55.
-      18. Deploy LA-VulnScan-MeyDiageo-03.5 using the
-          already resolved Qualys Integration URL.
-      19. Deploy LA-VulnScan-AuthFailureDetection using
-          the four dynamically resolved Function URLs.
+      18. Deploy LA-VulnScan-MeyDiageo-03.5.
+      19. Deploy LA-VulnScan-AuthFailureDetection (06).
+      20. Get Auth Failure Detection/manual callback URL.
+      21. Pass the 06 callback URL as callbackUri05.
+      22. Deploy LA-VulnScan-05.
+      23. Get LA-VulnScan-05/manual callback URL.
+      24. Pass the 05 callback URL as callbackUri.
+      25. Deploy LA-VulnScan-04.
     """
 
     def __init__(self) -> None:
@@ -59,7 +63,7 @@ class VulnDeploymentService:
             "Starting Vulnerability Scan deployment: "
             "vuln15=%s vuln01=%s vuln02=%s vuln04=%s "
             "vuln155=%s vuln03=%s meyDiageo=%s "
-            "authFailure=%s notification=%s",
+            "authFailure=%s vuln05=%s notification=%s",
             request.vuln15_logic_app_name,
             request.vuln01_logic_app_name,
             request.vuln02_logic_app_name,
@@ -68,6 +72,7 @@ class VulnDeploymentService:
             request.vuln03_logic_app_name,
             request.mey_diageo_logic_app_name,
             request.vuln_scan_auth_failure_logic_app_name,
+            request.vuln05_logic_app_name,
             request.notification_logic_app_name,
         )
 
@@ -335,6 +340,31 @@ class VulnDeploymentService:
         )
 
         # ========================================================
+        # 5. RESOLVE VULN05 QUALYS SCAN FUNCTION URL
+        # ========================================================
+
+        logger.info(
+            "Resolving Vuln05 Qualys Scan Function URL: %s/%s",
+            request.qualys_scan_function_app_name,
+            request.qualys_scan_function_name,
+        )
+
+        qualys_scan_function_url = self.azure.get_function_url(
+            subscription_id=request.subscription_id,
+            resource_group_name=request.resource_group_name,
+            function_app_name=(
+                request.qualys_scan_function_app_name
+            ),
+            function_name=(
+                request.qualys_scan_function_name
+            ),
+        )
+
+        logger.info(
+            "Vuln05 Qualys Scan Function URL resolved successfully."
+        )
+
+        # ========================================================
         # EXISTING FUNCTION URL COLLECTION
         # ========================================================
 
@@ -364,7 +394,7 @@ class VulnDeploymentService:
         }
 
         # ========================================================
-        # 5. RESOLVE NOTIFICATION LOGIC APP URL
+        # 6. RESOLVE NOTIFICATION LOGIC APP URL
         # ========================================================
 
         logger.info(
@@ -383,7 +413,7 @@ class VulnDeploymentService:
         )
 
         # ========================================================
-        # 6. RESOLVE VULN 1.55 COMPLETION LOGIC APP URL
+        # 7. RESOLVE VULN 1.55 COMPLETION LOGIC APP URL
         # ========================================================
 
         logger.info(
@@ -446,9 +476,6 @@ class VulnDeploymentService:
 
             # ----------------------------------------------------
             # VULN02 Logic App name
-            #
-            # ARM parameter name in vuln.json is:
-            # vulnScanChgApprovalLogicAppName
             # ----------------------------------------------------
 
             "vulnScanChgApprovalLogicAppName": {
@@ -457,9 +484,6 @@ class VulnDeploymentService:
 
             # ----------------------------------------------------
             # MEYDIAGEO 03.5 LOGIC APP NAME
-            #
-            # ARM parameter name:
-            # meyDiageoLogicAppName
             # ----------------------------------------------------
 
             "meyDiageoLogicAppName": {
@@ -477,6 +501,14 @@ class VulnDeploymentService:
             },
 
             # ----------------------------------------------------
+            # VULN05 LOGIC APP NAME
+            # ----------------------------------------------------
+
+            "LA-VulnScan-05": {
+                "value": request.vuln05_logic_app_name
+            },
+
+            # ----------------------------------------------------
             # Vuln 1.55 completion URL
             # ----------------------------------------------------
 
@@ -489,6 +521,36 @@ class VulnDeploymentService:
             # ----------------------------------------------------
 
             "vulnScanChgApprovalCallbackUrl": {
+                "value": ""
+            },
+
+            # ----------------------------------------------------
+            # VULN05 callback URL
+            #
+            # This is populated only after Auth Failure Detection
+            # Logic App (06) has been deployed.
+            # ----------------------------------------------------
+
+            "callbackUri05": {
+                "value": ""
+            },
+
+            # ----------------------------------------------------
+            # VULN05 Qualys Scan Function URL
+            # ----------------------------------------------------
+
+            "qualysScanFunctionUrl": {
+                "value": qualys_scan_function_url
+            },
+
+            # ----------------------------------------------------
+            # Vuln04 callback URL
+            #
+            # This is populated only after Vuln05 has been
+            # deployed successfully.
+            # ----------------------------------------------------
+
+            "callbackUri": {
                 "value": ""
             },
 
@@ -534,10 +596,6 @@ class VulnDeploymentService:
 
             # ----------------------------------------------------
             # QUALYS INTEGRATION URL
-            #
-            # This URL is already resolved above.
-            # The new MeyDiageo 03.5 Logic App reuses
-            # this exact same URL.
             # ----------------------------------------------------
 
             "qualysIntegrationUrl": {
@@ -620,7 +678,7 @@ class VulnDeploymentService:
         vuln_scan_chg_approval_callback_url = ""
 
         # ========================================================
-        # 7. DEPLOY LA-VULNSCAN-01.5
+        # 8. DEPLOY LA-VULNSCAN-01.5
         # ========================================================
 
         logger.info(
@@ -641,10 +699,6 @@ class VulnDeploymentService:
             "provisioning_state",
             "Failed",
         )
-
-        # ========================================================
-        # STOP IF FIRST LOGIC APP FAILED
-        # ========================================================
 
         if str(state15).lower() != "succeeded":
 
@@ -715,7 +769,7 @@ class VulnDeploymentService:
             )
 
         # ========================================================
-        # 8. GET LA-VULNSCAN-01.5/MANUAL CALLBACK URL
+        # 9. GET LA-VULNSCAN-01.5/MANUAL CALLBACK URL
         # ========================================================
 
         logger.info(
@@ -738,7 +792,7 @@ class VulnDeploymentService:
         )
 
         # ========================================================
-        # 9. PASS FIRST LOGIC APP URL TO SECOND LOGIC APP
+        # 10. PASS FIRST LOGIC APP URL TO SECOND LOGIC APP
         # ========================================================
 
         base_params["httpEndpointUrl"] = {
@@ -746,7 +800,7 @@ class VulnDeploymentService:
         }
 
         # ========================================================
-        # 10. DEPLOY LA-VULNSCAN-01
+        # 11. DEPLOY LA-VULNSCAN-01
         # ========================================================
 
         logger.info(
@@ -767,10 +821,6 @@ class VulnDeploymentService:
             "provisioning_state",
             "Failed",
         )
-
-        # ========================================================
-        # STOP IF SECOND LOGIC APP FAILED
-        # ========================================================
 
         if str(state01).lower() != "succeeded":
 
@@ -859,30 +909,6 @@ class VulnDeploymentService:
                 ),
             )
 
-        # ========================================================
-        # 11. DEPLOY LA-VULNSCAN-04
-        # ========================================================
-
-        logger.info(
-            "Deploying third Logic App: %s",
-            request.vuln04_logic_app_name,
-        )
-
-        deployment04 = self.azure.deploy(
-            subscription_id=request.subscription_id,
-            resource_group_name=request.resource_group_name,
-            location=request.location,
-            template_resource_index=2,
-            parameters=base_params,
-            deployment_prefix="vulnscan04",
-        )
-
-        state04 = deployment04.get(
-            "provisioning_state",
-            "Failed",
-        )
-
-        # Vuln 1.55 is deployed after Vuln02 callback resolution.
         deployment155: Dict[str, Any] = {}
         state155 = "Not deployed"
 
@@ -908,10 +934,6 @@ class VulnDeploymentService:
             "provisioning_state",
             "Failed",
         )
-
-        # ========================================================
-        # STOP IF VULN03 FAILED
-        # ========================================================
 
         if str(state03).lower() != "succeeded":
 
@@ -1065,10 +1087,6 @@ class VulnDeploymentService:
             "provisioning_state",
             "Failed",
         )
-
-        # ========================================================
-        # STOP IF VULN02 FAILED
-        # ========================================================
 
         if str(state02).lower() != "succeeded":
 
@@ -1253,7 +1271,7 @@ class VulnDeploymentService:
         )
 
         # ========================================================
-        # 20. DEPLOY AUTH FAILURE DETECTION LOGIC APP
+        # 20. DEPLOY AUTH FAILURE DETECTION LOGIC APP (06)
         # ========================================================
 
         logger.info(
@@ -1285,6 +1303,139 @@ class VulnDeploymentService:
         )
 
         # ========================================================
+        # 21. GET AUTH FAILURE DETECTION CALLBACK URL
+        #
+        # This callback URL becomes callbackUri05 for Vuln05.
+        # ========================================================
+
+        callback_uri_05 = ""
+
+        if str(state_auth_failure).lower() == "succeeded":
+
+            logger.info(
+                "Getting callback URL for Auth Failure Detection: "
+                "%s/manual",
+                request.vuln_scan_auth_failure_logic_app_name,
+            )
+
+            callback_uri_05 = (
+                self.azure.get_logic_app_callback_url(
+                    subscription_id=request.subscription_id,
+                    resource_group_name=request.resource_group_name,
+                    logic_app_name=(
+                        request.vuln_scan_auth_failure_logic_app_name
+                    ),
+                    trigger_name="manual",
+                )
+            )
+
+            logger.info(
+                "Auth Failure Detection callback URL resolved "
+                "successfully for Vuln05."
+            )
+
+            base_params["callbackUri05"] = {
+                "value": callback_uri_05
+            }
+
+        # ========================================================
+        # 22. DEPLOY LA-VULNSCAN-05
+        # ========================================================
+
+        deployment05: Dict[str, Any] = {}
+        state05 = "Not deployed"
+
+        if str(state_auth_failure).lower() == "succeeded":
+
+            logger.info(
+                "Deploying Vuln05 Logic App: %s",
+                request.vuln05_logic_app_name,
+            )
+
+            deployment05 = self.azure.deploy(
+                subscription_id=request.subscription_id,
+                resource_group_name=request.resource_group_name,
+                location=request.location,
+                template_resource_index=8,
+                parameters=base_params,
+                deployment_prefix="vulnscan05",
+            )
+
+            state05 = deployment05.get(
+                "provisioning_state",
+                "Failed",
+            )
+
+            logger.info(
+                "Vuln05 deployment completed: "
+                "state=%s deployment=%s",
+                state05,
+                deployment05.get("deployment_name"),
+            )
+
+        else:
+
+            logger.error(
+                "Skipping Vuln05 deployment because Auth Failure "
+                "Detection Logic App deployment failed."
+            )
+
+        # ========================================================
+        # 23. GET VULN05 CALLBACK URL
+        #
+        # This callback URL becomes callbackUri for Vuln04.
+        # ========================================================
+
+        callback_uri = ""
+
+        if str(state05).lower() == "succeeded":
+
+            logger.info(
+                "Getting callback URL for Vuln05: %s/manual",
+                request.vuln05_logic_app_name,
+            )
+
+            callback_uri = (
+                self.azure.get_logic_app_callback_url(
+                    subscription_id=request.subscription_id,
+                    resource_group_name=request.resource_group_name,
+                    logic_app_name=request.vuln05_logic_app_name,
+                    trigger_name="manual",
+                )
+            )
+
+            logger.info(
+                "Vuln05 callback URL resolved successfully for Vuln04."
+            )
+
+            base_params["callbackUri"] = {
+                "value": callback_uri
+            }
+
+        # ========================================================
+        # 24. DEPLOY LA-VULNSCAN-04
+        # ========================================================
+
+        logger.info(
+            "Deploying third Logic App: %s",
+            request.vuln04_logic_app_name,
+        )
+
+        deployment04 = self.azure.deploy(
+            subscription_id=request.subscription_id,
+            resource_group_name=request.resource_group_name,
+            location=request.location,
+            template_resource_index=2,
+            parameters=base_params,
+            deployment_prefix="vulnscan04",
+        )
+
+        state04 = deployment04.get(
+            "provisioning_state",
+            "Failed",
+        )
+
+        # ========================================================
         # FINAL SUCCESS
         # ========================================================
 
@@ -1297,6 +1448,7 @@ class VulnDeploymentService:
             and str(state02).lower() == "succeeded"
             and str(state_mey_diageo).lower() == "succeeded"
             and str(state_auth_failure).lower() == "succeeded"
+            and str(state05).lower() == "succeeded"
         )
 
         # ========================================================
@@ -1313,25 +1465,29 @@ class VulnDeploymentService:
                 "LA-VulnScan-01.55, "
                 "LA-VulnScan-03, "
                 "LA-VulnScan-02, "
-                "LA-VulnScan-MeyDiageo-03.5 and "
-                "LA-VulnScan-AuthFailureDetection "
+                "LA-VulnScan-MeyDiageo-03.5, "
+                "LA-VulnScan-AuthFailureDetection and "
+                "LA-VulnScan-05 "
                 "deployed successfully."
                 if success
                 else (
-                    deployment_auth_failure.get(
+                    deployment05.get(
                         "error",
-                        deployment_mey_diageo.get(
+                        deployment_auth_failure.get(
                             "error",
-                            deployment02.get(
+                            deployment_mey_diageo.get(
                                 "error",
-                                deployment03.get(
+                                deployment02.get(
                                     "error",
-                                    deployment155.get(
+                                    deployment03.get(
                                         "error",
-                                        deployment04.get(
+                                        deployment155.get(
                                             "error",
-                                            "Vulnerability Scan Logic App "
-                                            "deployment failed.",
+                                            deployment04.get(
+                                                "error",
+                                                "Vulnerability Scan Logic App "
+                                                "deployment failed.",
+                                            ),
                                         ),
                                     ),
                                 ),

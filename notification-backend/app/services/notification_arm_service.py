@@ -1,5 +1,4 @@
 
-
 import logging
 from typing import Any, Dict
 
@@ -19,12 +18,12 @@ class NotificationARMService:
 
         1. Create/verify Resource Group.
         2. Resolve existing Qualys Function URL.
-        3. Resolve Notification Service Logic App HTTP trigger URL.
-        4. Pass both URLs explicitly to ARM:
-              - qualysIntegrationUrl
-              - notificationServiceUrl
-        5. Deploy ARM template.
-        6. Return deployed resources.
+        3. Check whether Notification Service Logic App exists.
+        4. If Notification Service exists, resolve its HTTP trigger URL.
+        5. If Notification Service does not exist, deploy ARM first.
+        6. Resolve Notification Service callback URL after deployment.
+        7. Deploy ARM template with the resolved callback URL.
+        8. Return deployed resources.
 
     IMPORTANT:
         auditLogTableName and qualysDashboardUrl are intentionally
@@ -52,13 +51,7 @@ class NotificationARMService:
         logic_app_name: str,
         completion_logic_app_name: str,
         notification_followup_logic_app_name: str,
-
-        # -----------------------------------------------------
-        # Notification Service Logic App trigger
-        # -----------------------------------------------------
-
-        notification_logic_app_name: str,
-        notification_trigger_name: str,
+        vuln_scan_complete_logic_app_name: str,
 
         # -----------------------------------------------------
         # Queue
@@ -170,63 +163,75 @@ class NotificationARMService:
         )
 
         # =====================================================
-        # 5. GET NOTIFICATION SERVICE CALLBACK URL
+        # 5. CHECK NOTIFICATION SERVICE
+        # =====================================================
+        #
+        # Notification Service is the Logic App represented by
+        # logic_app_name.
+        #
+        # The HTTP trigger name is fixed in the ARM template.
+        #
         # =====================================================
 
-        if not notification_logic_app_name:
-            raise ValueError(
-                "notification_logic_app_name is required"
-            )
+        notification_service_url = None
+        notification_service_exists = False
 
-        if not notification_trigger_name:
-            raise ValueError(
-                "notification_trigger_name is required"
-            )
+        notification_trigger_name = (
+            "When_a_HTTP_request_is_received"
+        )
 
         logger.info(
-            "Resolving Notification Service callback URL. "
-            "Logic App: %s, Trigger: %s",
-            notification_logic_app_name,
-            notification_trigger_name,
+            "Checking Notification Service Logic App: %s",
+            logic_app_name,
         )
 
-        notification_service_url = (
-            arm_manager.get_logic_app_trigger_callback_url(
-                resource_group_name=resource_group_name,
-                logic_app_name=notification_logic_app_name,
-                trigger_name=notification_trigger_name,
-            )
-        )
+        try:
 
-        if not notification_service_url:
-            raise RuntimeError(
-                "Unable to resolve Notification Service "
-                "Logic App callback URL"
+            notification_service_url = (
+                arm_manager.get_logic_app_trigger_callback_url(
+                    resource_group_name=resource_group_name,
+                    logic_app_name=logic_app_name,
+                    trigger_name=notification_trigger_name,
+                )
             )
 
-        logger.info(
-            "Notification Service callback URL resolved successfully"
-        )
+            if notification_service_url:
+
+                notification_service_exists = True
+
+                logger.info(
+                    "Notification Service Logic App already exists"
+                )
+
+                logger.info(
+                    "Notification Service callback URL "
+                    "resolved successfully"
+                )
+
+        except Exception as exc:
+
+            error_text = str(exc)
+
+            if (
+                "ResourceNotFound" in error_text
+                or "was not found" in error_text
+                or "not found" in error_text.lower()
+            ):
+
+                logger.info(
+                    "Notification Service Logic App does not "
+                    "exist yet. It will be created by ARM."
+                )
+
+                notification_service_exists = False
+                notification_service_url = ""
+
+            else:
+
+                raise
 
         # =====================================================
-        # 6. ARM PARAMETERS
-        #
-        # IMPORTANT:
-        #
-        # The ARM template contains:
-        #
-        #     qualysIntegrationUrl
-        #
-        # Therefore we MUST send exactly:
-        #
-        #     "qualysIntegrationUrl":
-        #         qualys_integration_url
-        #
-        # This fixes:
-        #
-        # InvalidTemplate:
-        # The value for template parameter
-        # 'qualysIntegrationUrl' is not provided.
+        # 6. BUILD ARM PARAMETERS
         # =====================================================
 
         parameters = {
@@ -253,6 +258,9 @@ class NotificationARMService:
 
             "notificationFollowupLogicAppName":
                 notification_followup_logic_app_name,
+
+            "vulnScanCompleteLogicAppName":
+                vuln_scan_complete_logic_app_name,
 
             # -------------------------------------------------
             # Queue
@@ -311,7 +319,6 @@ class NotificationARMService:
                 "LA-QualysScan-Status",
 
             # -------------------------------------------------
-            # CRITICAL:
             # Backend-resolved Qualys Function URL
             # -------------------------------------------------
 
@@ -319,12 +326,11 @@ class NotificationARMService:
                 qualys_integration_url,
 
             # -------------------------------------------------
-            # CRITICAL:
             # Backend-resolved Notification Service URL
             # -------------------------------------------------
 
             "notificationServiceUrl":
-                notification_service_url,
+                notification_service_url or "",
         }
 
         logger.info(
@@ -341,8 +347,20 @@ class NotificationARMService:
         )
 
         # =====================================================
-        # 7. DEPLOY ARM TEMPLATE
+        # 7. FIRST ARM DEPLOYMENT
         # =====================================================
+        #
+        # If Notification Service already exists, this deployment
+        # can use its callback URL directly.
+        #
+        # If it does not exist, notificationServiceUrl is empty.
+        # ARM creates Notification-service and the other resources.
+        #
+        # =====================================================
+
+        logger.info(
+            "Deploying Notification ARM template"
+        )
 
         deployment_result = (
             arm_manager.deploy_arm_template(
@@ -353,11 +371,83 @@ class NotificationARMService:
         )
 
         logger.info(
-            "Notification ARM deployment completed successfully"
+            "Initial Notification ARM deployment completed"
         )
 
         # =====================================================
-        # 8. LIST RESOURCES
+        # 8. RESOLVE NOTIFICATION SERVICE AFTER DEPLOYMENT
+        # =====================================================
+        #
+        # If the Notification Service did not exist before,
+        # ARM should have created it now.
+        #
+        # Resolve the callback URL again.
+        #
+        # =====================================================
+
+        if not notification_service_exists:
+
+            logger.info(
+                "Resolving Notification Service callback URL "
+                "after ARM deployment"
+            )
+
+            notification_service_url = (
+                arm_manager.get_logic_app_trigger_callback_url(
+                    resource_group_name=resource_group_name,
+                    logic_app_name=logic_app_name,
+                    trigger_name=notification_trigger_name,
+                )
+            )
+
+            if not notification_service_url:
+
+                raise RuntimeError(
+                    "Unable to resolve Notification Service "
+                    "Logic App callback URL after ARM deployment"
+                )
+
+            logger.info(
+                "Notification Service callback URL resolved "
+                "after ARM deployment"
+            )
+
+            # -------------------------------------------------
+            # Update the parameter with the real callback URL
+            # -------------------------------------------------
+
+            parameters["notificationServiceUrl"] = (
+                notification_service_url
+            )
+
+            # =================================================
+            # 9. SECOND ARM DEPLOYMENT
+            # =================================================
+            #
+            # Redeploy the same notification.json so all Logic
+            # Apps receive the actual Notification Service URL.
+            #
+            # =================================================
+
+            logger.info(
+                "Updating ARM deployment with resolved "
+                "Notification Service callback URL"
+            )
+
+            deployment_result = (
+                arm_manager.deploy_arm_template(
+                    resource_group_name=resource_group_name,
+                    template_path=self.arm_template_path,
+                    parameters=parameters,
+                )
+            )
+
+            logger.info(
+                "Notification ARM deployment updated successfully"
+            )
+
+        # =====================================================
+        # 10. LIST RESOURCES
         # =====================================================
 
         resources = (
@@ -367,7 +457,7 @@ class NotificationARMService:
         )
 
         # =====================================================
-        # 9. EXTRACT LOGIC APPS
+        # 11. EXTRACT LOGIC APPS
         # =====================================================
 
         logic_apps = []
@@ -393,7 +483,7 @@ class NotificationARMService:
                 connections.append(resource)
 
         # =====================================================
-        # 10. FIND QUALYS STATUS LOGIC APP
+        # 12. FIND QUALYS STATUS LOGIC APP
         # =====================================================
 
         qualys_logic_app = None
@@ -405,10 +495,11 @@ class NotificationARMService:
             ):
 
                 qualys_logic_app = logic_app
+
                 break
 
         # =====================================================
-        # 11. FINAL RESPONSE
+        # 13. FINAL RESPONSE
         # =====================================================
 
         return {
@@ -433,12 +524,6 @@ class NotificationARMService:
             "qualys_integration_url":
                 qualys_integration_url,
 
-            "notification_logic_app_name":
-                notification_logic_app_name,
-
-            "notification_trigger_name":
-                notification_trigger_name,
-
             "notification_service_url":
                 notification_service_url,
 
@@ -454,3 +539,4 @@ class NotificationARMService:
             "resources":
                 resources,
         }
+

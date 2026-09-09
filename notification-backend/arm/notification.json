@@ -94,6 +94,22 @@
     "description": "URL of the Qualys Integration Function App"
   }
 },
+
+"callbackSecretKeyLA-VulnScan-Complete": {     
+  "type": "secureString",     
+  "defaultValue": "MySecretKey123!",    
+   "metadata": {       
+    "description": "Secret key used to generate and validate email completion callback tokens."    
+     }   
+     }  ,
+
+"vulnScanCompleteLogicAppName": {
+
+  "type": "string",
+
+  "defaultValue": "LA-VulnScan-Complete"
+
+},
  "notificationServiceUrl": {
            
               "type": "String"
@@ -1035,6 +1051,9 @@
   "NotificationStatus": {
   "value": "[parameters('NotificationStatus')]"
 },
+"notificationServiceUrl": {
+  "value": "[parameters('notificationServiceUrl')]"
+},
 "notificationLogTableName": {
   "value": "[parameters('notificationLogTableName')]"
 }
@@ -1056,6 +1075,9 @@
     "NotificationStatus": {
   "type": "String"
 },
+  "notificationServiceUrl": {
+    "type": "String"
+  },
 "notificationLogTableName": {
   "type": "String"
 }
@@ -1310,7 +1332,7 @@
             "Send_Reminder": {
               "type": "Http",
               "inputs": {
-                "uri": "https://prod-08.canadacentral.logic.azure.com:443/workflows/b651f069e9704427a45f29eb7fb0351c/triggers/When_a_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_a_HTTP_request_is_received%2Frun&sv=1.0&sig=4r74-HBI3baGbUYUabL6TvYrCeGslVVVEQyFYRi3UsI",
+                 "uri": "@parameters('notificationServiceUrl')",
                 "method": "POST",
                 "headers": {
                   "Content-Type": "application/json"
@@ -1337,6 +1359,7 @@
                   "Succeeded"
                 ]
               },
+
               "type": "ApiConnection",
               "inputs": {
                 "host": {
@@ -3234,7 +3257,421 @@
           }
         }
       }
+    },
+    {
+  "type": "Microsoft.Logic/workflows",
+  "apiVersion": "2017-07-01",
+  "name": "[parameters('vulnScanCompleteLogicAppName')]",
+  "location": "[parameters('location')]",
+  "properties": {
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+
+      "triggers": {
+        "When_a_HTTP_request_is_received": {
+          "type": "Request",
+          "kind": "Http",
+          "inputs": {
+            "method": "GET",
+            "relativePath": "/complete/{taskId}/{workflowName}/{token}"
+          }
+        }
+      },
+
+      "actions": {
+      "Initialize_Request_ID": {
+        "runAfter": {},
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "requestId",
+              "type": "string",
+              "value": "@{guid()}"
+            }
+          ]
+        }
+      },
+      "Initialize_Expected_Token": {
+        "runAfter": {
+          "Initialize_Request_ID": ["Succeeded"]
+        },
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "expectedToken",
+              "type": "string",
+              "value": "@{base64(concat(triggerOutputs()['relativePathParameters']['taskId'], ':', triggerOutputs()['relativePathParameters']['workflowName'], ':', parameters('callbackSecretKeyLA-VulnScan-Complete')))}"
+            }
+          ]
+        }
+      },
+      "Debug_Token_Comparison": {
+        "runAfter": {
+          "Initialize_Expected_Token": ["Succeeded"]
+        },
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "debugInfo",
+              "type": "string",
+              "value": "@{concat('Expected: ', variables('expectedToken'), ' | Received: ', triggerOutputs()['relativePathParameters']['token'], ' | TaskId: ', triggerOutputs()['relativePathParameters']['taskId'], ' | WorkflowName: ', triggerOutputs()['relativePathParameters']['workflowName'])}"
+            }
+          ]
+        }
+      },
+      "Validate_Token": {
+        "actions": {
+          "Get_Current_Status": {
+            "type": "ApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                }
+              },
+              "method": "get",
+              "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('NotificationStatus')}/entities(PartitionKey='@{encodeURIComponent(triggerOutputs()['relativePathParameters']['workflowName'])}',RowKey='@{encodeURIComponent(triggerOutputs()['relativePathParameters']['taskId'])}')"
+            }
+          },
+          "Check_if_Entity_Exists": {
+            "actions": {
+              "Check_Already_Completed": {
+                "actions": {
+                  "Return_Already_Completed_Response": {
+                    "type": "Response",
+                    "kind": "Http",
+                    "inputs": {
+                      "statusCode": 200,
+                      "headers": {
+                        "Content-Type": "text/html"
+                      },
+                      "body": "<!DOCTYPE html><html><head><title>Task Already Completed</title><style>body{font-family:Arial,sans-serif;text-align:center;margin-top:50px;background-color:#f5f5f5;}div{background:white;padding:30px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);display:inline-block;}</style></head><body><div><h2 style='color:#28a745;'>Task Already Completed</h2><p>This task has already been marked as completed.</p><p><strong>Task ID:</strong> @{triggerOutputs()['relativePathParameters']['taskId']}</p><p><strong>Workflow:</strong> @{triggerOutputs()['relativePathParameters']['workflowName']}</p></div></body></html>"
+                    }
+                  }
+                },
+                "else": {
+                  "actions": {
+                    "Check_Special_PartitionKey_Conditions": {
+                      "actions": {
+                        "Update_Secondary_Approval_Task": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                              }
+                            },
+                            "method": "patch",
+                            "body": {
+                              "Status": "Completed",
+                              "LastUpdatedTime": "@{utcNow()}",
+                              "LastUpdatedBy": "EmailLinkClick",
+                              "Comments": "Completed via email link click - Cross approval task update",
+                              "CompletedViaEmail": true
+                            },
+                            "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('NotificationStatus')}/entities(PartitionKey='@{encodeURIComponent(if(equals(triggerOutputs()['relativePathParameters']['workflowName'], 'VulnScan-CHGApproval'), 'VulnScan-CHGApproval-Secondary', 'VulnScan-CHGApproval'))}',RowKey='@{encodeURIComponent(body('Get_Current_Status')['ApprovalTaskId'])}')"
+                          }
+                        }
+                      },
+                      "runAfter": {},
+                      "expression": {
+                        "and": [
+                          {
+                            "or": [
+                              {
+                                "equals": [
+                                  "@triggerOutputs()['relativePathParameters']['workflowName']",
+                                  "VulnScan-CHGApproval"
+                                ]
+                              },
+                              {
+                                "equals": [
+                                  "@triggerOutputs()['relativePathParameters']['workflowName']",
+                                  "VulnScan-CHGApproval-Secondary"
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "not": {
+                              "equals": [
+                                "@body('Get_Current_Status')['ApprovalTaskId']",
+                                "@null"
+                              ]
+                            }
+                          },
+                          {
+                            "not": {
+                              "equals": [
+                                "@body('Get_Current_Status')['ApprovalTaskId']",
+                                ""
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    },
+                    "Update_Status_To_Completed": {
+                      "runAfter": {
+                        "Check_Special_PartitionKey_Conditions": [
+                          "Succeeded",
+                          "Skipped",
+                          "Failed"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                          }
+                        },
+                        "method": "patch",
+                        "body": {
+                          "Status": "Completed",
+                          "LastUpdatedTime": "@{utcNow()}",
+                          "LastUpdatedBy": "EmailLinkClick",
+                          "Comments": "Completed via email link click",
+                          "CompletedViaEmail": true
+                        },
+                        "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('NotificationStatus')}/entities(PartitionKey='@{encodeURIComponent(triggerOutputs()['relativePathParameters']['workflowName'])}',RowKey='@{encodeURIComponent(triggerOutputs()['relativePathParameters']['taskId'])}')"
+                      }
+                    },
+                    "Execute_Callback_If_URL_Exists": {
+                      "actions": {
+                        "HTTP_Callback": {
+                          "type": "Http",
+                          "inputs": {
+                            "method": "POST",
+                            "uri": "@body('Get_Current_Status')['CallbackUri']",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": "@if(or(empty(body('Get_Current_Status')['CallbackParameters']), equals(body('Get_Current_Status')['CallbackParameters'], null), equals(body('Get_Current_Status')['CallbackParameters'], '')), json('{}'), json(body('Get_Current_Status')['CallbackParameters']))"
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Update_Status_To_Completed": ["Succeeded"]
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@body('Get_Current_Status')['CallbackUri']",
+                                ""
+                              ]
+                            }
+                          },
+                          {
+                            "not": {
+                              "equals": [
+                                "@body('Get_Current_Status')['CallbackUri']",
+                                "@null"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    },
+                    "Create_Completion_Audit_Entry": {
+                      "runAfter": {
+                        "Execute_Callback_If_URL_Exists": [
+                          "Succeeded",
+                          "Skipped",
+                          "Failed"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "body": {
+                          "PartitionKey": "@{triggerOutputs()['relativePathParameters']['workflowName']}",
+                          "RowKey": "@{formatDateTime(utcNow(), 'yyyyMMddHHmmss')}_@{guid()}",
+                          "TaskId": "@{triggerOutputs()['relativePathParameters']['taskId']}",
+                          "EntityType": "EmailLinkCompletion",
+                          "PreviousStatus": "@{body('Get_Current_Status')['Status']}",
+                          "NewStatus": "Completed",
+                          "UpdatedBy": "EmailLinkClick",
+                          "UpdateTime": "@{utcNow()}",
+                          "Comments": "Task completed via email link click",
+                          "RequestId": "@variables('requestId')",
+                          "ClientIP": "@{coalesce(triggerOutputs()['headers']['x-forwarded-for'], 'Unknown')}",
+                          "CallbackExecuted": "@{if(empty(body('Get_Current_Status')['CallbackUri']), 'Not Required', 'Attempted')}"
+                        },
+                        "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('NotificationAudit')}/entities"
+                      }
+                    },
+                    "Return_Success_Response": {
+                      "runAfter": {
+                        "Create_Completion_Audit_Entry": [
+                          "Succeeded",
+                          "Skipped"
+                        ]
+                      },
+                      "type": "Response",
+                      "kind": "Http",
+                      "inputs": {
+                        "statusCode": 200,
+                        "headers": {
+                          "Content-Type": "text/html"
+                        },
+                        "body": "<!DOCTYPE html><html><head><title>Task Completed</title><style>body{font-family:Arial,sans-serif;text-align:center;margin-top:50px;background-color:#f5f5f5;}div{background:white;padding:30px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);display:inline-block;}</style></head><body><div><h2 style='color:#28a745;'>Task Completed Successfully!</h2><p>Thank you for confirming the completion of this task.</p><p><strong>Task ID:</strong> @{triggerOutputs()['relativePathParameters']['taskId']}</p><p><strong>Workflow:</strong> @{triggerOutputs()['relativePathParameters']['workflowName']}</p><p><strong>Completed at:</strong> @{formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss')} UTC</p></div></body></html>"
+                      }
+                    }
+                  }
+                },
+                "expression": {
+                  "equals": [
+                    "@body('Get_Current_Status')['Status']",
+                    "Completed"
+                  ]
+                },
+                "type": "If"
+              }
+            },
+            "runAfter": {
+              "Get_Current_Status": ["Succeeded", "Failed"]
+            },
+            "else": {
+              "actions": {
+                "Return_Task_Not_Found": {
+                  "type": "Response",
+                  "kind": "Http",
+                  "inputs": {
+                    "statusCode": 404,
+                    "headers": {
+                      "Content-Type": "text/html"
+                    },
+                    "body": "<!DOCTYPE html><html><head><title>Task Not Found</title><style>body{font-family:Arial,sans-serif;text-align:center;margin-top:50px;background-color:#f5f5f5;}div{background:white;padding:30px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);display:inline-block;}</style></head><body><div><h2 style='color:#dc3545;'>Task Not Found</h2><p>The requested task could not be found in the system.</p><p><strong>Task ID:</strong> @{triggerOutputs()['relativePathParameters']['taskId']}</p></div></body></html>"
+                  }
+                }
+              }
+            },
+            "expression": {
+              "not": {
+                "equals": ["@outputs('Get_Current_Status')['statusCode']", 404]
+              }
+            },
+            "type": "If"
+          }
+        },
+        "runAfter": {
+          "Debug_Token_Comparison": ["Succeeded"]
+        },
+        "else": {
+          "actions": {
+            "Log_Invalid_Token_Access": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": {
+                  "PartitionKey": "SecurityEvent",
+                  "RowKey": "@{guid()}",
+                  "EventType": "InvalidEmailLinkAccess",
+                  "EventTime": "@{utcNow()}",
+                  "RequestId": "@variables('requestId')",
+                  "TaskId": "@{coalesce(triggerOutputs()['relativePathParameters']['taskId'], 'Unknown')}",
+                  "WorkflowName": "@{coalesce(triggerOutputs()['relativePathParameters']['workflowName'], 'Unknown')}",
+                  "ProvidedToken": "@{coalesce(triggerOutputs()['relativePathParameters']['token'], 'Missing')}",
+                  "ExpectedToken": "@{variables('expectedToken')}",
+                  "DebugInfo": "@{variables('debugInfo')}",
+                  "ClientIP": "@{coalesce(triggerOutputs()['headers']['x-forwarded-for'], 'Unknown')}"
+                },
+                "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('NotificationAudit')}/entities"
+              }
+            },
+            "Return_Unauthorized_Response": {
+              "runAfter": {
+                "Log_Invalid_Token_Access": ["Succeeded"]
+              },
+              "type": "Response",
+              "kind": "Http",
+              "inputs": {
+                "statusCode": 401,
+                "headers": {
+                  "Content-Type": "text/html"
+                },
+                "body": "<!DOCTYPE html><html><head><title>Unauthorized Access</title><style>body{font-family:Arial,sans-serif;text-align:center;margin-top:50px;background-color:#f5f5f5;}div{background:white;padding:30px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);display:inline-block;}</style></head><body><div><h2 style='color:#dc3549;'>Unauthorized Access</h2><p>This link is invalid or has expired.</p><p>Please contact your administrator if you believe this is an error.</p><p style='font-size:12px;color:#666;margin-top:20px;'>Debug: @{variables('debugInfo')}</p></div></body></html>"
+              }
+            }
+          }
+        },
+        "expression": {
+          "equals": [
+            "@variables('expectedToken')",
+            "@triggerOutputs()['relativePathParameters']['token']"
+          ]
+        },
+        "type": "If"
+      }
+    },
+
+      "outputs": {},
+
+      "parameters": {
+        "callbackSecretKeyLA-VulnScan-Complete": {
+          "type": "SecureString"
+        },
+        "storageAccountName": {
+          "type": "String"
+        },
+        "$connections": {
+          "type": "Object",
+          "defaultValue": {}
+        }
+      }
+    },
+
+    "parameters": {
+      "callbackSecretKeyLA-VulnScan-Complete": {
+        "value": "[parameters('callbackSecretKeyLA-VulnScan-Complete')]"
+      },
+      "storageAccountName": {
+        "value": "[parameters('storageAccountName')]"
+      },
+      "$connections": {
+           "value": {
+              "azuretables": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('azureTablesConnectionName'))]",
+                "connectionName": "[parameters('azureTablesConnectionName')]",
+                "connectionProperties": {},
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'azuretables')]"
+              },
+              "office365": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('office365ConnectionName'))]",
+                "connectionName": "[parameters('office365ConnectionName')]",
+                "connectionProperties": {},
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'office365')]"
+              },
+              "teams": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('teamsConnectionName'))]",
+                "connectionName": "[parameters('teamsConnectionName')]",
+                "connectionProperties": {},
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'teams')]"
+              }
+            }
+      }
     }
+  }
+}
 
   ]
 }

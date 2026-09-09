@@ -1,5 +1,3 @@
-
-
 from pydantic import BaseModel, Field
 
 
@@ -47,26 +45,6 @@ class NotificationARMDeploymentRequest(BaseModel):
     )
 
     # =========================================================
-    # NOTIFICATION LOGIC APP
-    #
-    # These are user supplied because the Notification Service
-    # Logic App must already exist/be deployed before its callback
-    # URL can be obtained.
-    # =========================================================
-
-    notification_logic_app_name: str = Field(
-        "Notification-service",
-        min_length=1,
-        description="Notification Service Logic App name",
-    )
-
-    notification_trigger_name: str = Field(
-        "When_a_HTTP_request_is_received",
-        min_length=1,
-        description="HTTP request trigger name of Notification Service Logic App",
-    )
-
-    # =========================================================
     # QUALYS FUNCTION APP
     # =========================================================
 
@@ -83,7 +61,7 @@ class NotificationARMDeploymentRequest(BaseModel):
     )
 
     # =========================================================
-    # EXISTING NOTIFICATION LOGIC APPS
+    # NOTIFICATION LOGIC APPS
     # =========================================================
 
     logic_app_name: str = Field(
@@ -104,6 +82,12 @@ class NotificationARMDeploymentRequest(BaseModel):
         description="Notification Follow-up Logic App name",
     )
 
+    vuln_scan_complete_logic_app_name: str = Field(
+        "LA-VulnScan-Complete",
+        min_length=1,
+        description="Vulnerability Scan Complete Logic App name",
+    )
+
     # =========================================================
     # QUEUE
     # =========================================================
@@ -122,9 +106,6 @@ class NotificationARMDeploymentRequest(BaseModel):
 
     # =========================================================
     # TABLES
-    #
-    # IMPORTANT:
-    # audit_log_table_name has intentionally been removed.
     # =========================================================
 
     notification_log_table_name: str = Field(

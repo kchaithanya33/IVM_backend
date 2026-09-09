@@ -30,7 +30,7 @@ def deploy_vuln(
         "Received Vulnerability Scan deployment request: "
         "vuln15=%s vuln01=%s vuln04=%s vuln155=%s "
         "vuln03=%s vuln02=%s meyDiageo035=%s "
-        "authFailure=%s "
+        "authFailure=%s vuln05=%s "
         "notification=%s",
         request.vuln15_logic_app_name,
         request.vuln01_logic_app_name,
@@ -40,6 +40,7 @@ def deploy_vuln(
         request.vuln02_logic_app_name,
         request.mey_diageo_logic_app_name,
         request.vuln_scan_auth_failure_logic_app_name,
+        request.vuln05_logic_app_name,
         request.notification_logic_app_name,
     )
 
@@ -98,6 +99,19 @@ def deploy_vuln(
         request.qualys_download_report_function_name,
         request.auth_failure_analysis_function_app_name,
         request.auth_failure_analysis_function_name,
+    )
+
+    # ============================================================
+    # VULN05 FUNCTION CONFIGURATION
+    # ============================================================
+
+    logger.info(
+        "Vuln05 configuration: "
+        "logic_app=%s "
+        "qualys_scan_function=%s/%s",
+        request.vuln05_logic_app_name,
+        request.qualys_scan_function_app_name,
+        request.qualys_scan_function_name,
     )
 
     logger.info(
