@@ -21,9 +21,29 @@ class ReportingDeploymentService:
 
         1. Resolve Azure Tables connection
         2. Resolve SharePoint connection
-        3. Resolve Split Vulnerabilities Function URL
-        4. Resolve Notification Logic App callback URL
-        5. Deploy Reporting Logic App
+        3. Resolve Azure Queue connection
+        4. Resolve Split Vulnerabilities Function URL
+        5. Resolve Notification Logic App callback URL
+        6. Resolve Completion Logic App callback URL
+        7. Extract completionUrl and completionSasToken
+        8. Deploy Reporting 04 ONLY
+        9. Resolve Reporting 04 callback URL
+       10. Deploy Reporting 03 ONLY
+       11. Return all dynamically resolved values
+
+    IMPORTANT:
+
+        callbackUrl != completionUrl
+
+        callbackUrl:
+            Reporting 04 callback URL
+
+        completionUrl:
+            Completion Logic App callback URL without
+            query parameters
+
+        completionSasToken:
+            'sig' value extracted from completionUrl
     """
 
     def __init__(self) -> None:
@@ -49,13 +69,29 @@ class ReportingDeploymentService:
 
         sharepoint_connection_id = None
 
+        queue_connection_id = None
+
         split_vulnerabilities_function_url = None
 
+        after_scoping_triaging_url = None
+
+        triaging_validator_url = None
+
         notification_service_url = None
+
+        completion_url = None
+
+        completion_sas_token = None
+
+        callback_url = None
 
         deployment_name = None
 
         provisioning_state = None
+
+        reporting_03_deployment_name = None
+
+        reporting_03_provisioning_state = None
 
         try:
 
@@ -68,8 +104,13 @@ class ReportingDeploymentService:
             )
 
             logger.info(
-                "Reporting Logic App: %s",
+                "Reporting 04 Logic App: %s",
                 request.reporting_logic_app_name,
+            )
+
+            logger.info(
+                "Reporting 03 Logic App: %s",
+                request.reporting_03_logic_app_name,
             )
 
             logger.info(
@@ -98,6 +139,9 @@ class ReportingDeploymentService:
                     sharepoint_connection_name=(
                         request.sharepoint_connection_name
                     ),
+                    azure_queue_connection_name=(
+                        request.azure_queue_connection_name
+                    ),
                 )
             )
 
@@ -113,12 +157,22 @@ class ReportingDeploymentService:
                 )
             )
 
+            queue_connection_id = (
+                connections.get(
+                    "queue_connection_id"
+                )
+            )
+
             logger.info(
                 "Azure Tables connection resolved."
             )
 
             logger.info(
                 "SharePoint connection resolved."
+            )
+
+            logger.info(
+                "Azure Queue connection resolved."
             )
 
             # ====================================================
@@ -160,11 +214,111 @@ class ReportingDeploymentService:
             )
 
             # ====================================================
-            # 3. RESOLVE NOTIFICATION LOGIC APP CALLBACK
+            # 3. RESOLVE AFTER SCOPING TRIAGING FUNCTION URL
+            # ====================================================
+
+            if (
+                request.after_scoping_triaging_function_app_name
+                and request.after_scoping_triaging_function_name
+            ):
+
+                logger.info(
+                    "STEP 3: Resolving After Scoping Triaging "
+                    "Function URL."
+                )
+
+                after_scoping_triaging_url = (
+                    self.azure_manager.get_function_url(
+                        subscription_id=(
+                            request.subscription_id
+                        ),
+                        resource_group_name=(
+                            request.resource_group_name
+                        ),
+                        function_app_name=(
+                            request.after_scoping_triaging_function_app_name
+                        ),
+                        function_name=(
+                            request.after_scoping_triaging_function_name
+                        ),
+                    )
+                )
+
+                if not after_scoping_triaging_url:
+
+                    raise ValueError(
+                        "After Scoping Triaging Function URL "
+                        "could not be resolved."
+                    )
+
+                logger.info(
+                    "After Scoping Triaging Function URL "
+                    "resolved successfully."
+                )
+
+            else:
+
+                raise ValueError(
+                    "After Scoping Triaging Function App "
+                    "name and function name are required."
+                )
+
+            # ====================================================
+            # 4. RESOLVE TRIAGING VALIDATOR FUNCTION URL
+            # ====================================================
+
+            if (
+                request.triaging_validator_function_app_name
+                and request.triaging_validator_function_name
+            ):
+
+                logger.info(
+                    "STEP 4: Resolving Triaging Validator "
+                    "Function URL."
+                )
+
+                triaging_validator_url = (
+                    self.azure_manager.get_function_url(
+                        subscription_id=(
+                            request.subscription_id
+                        ),
+                        resource_group_name=(
+                            request.resource_group_name
+                        ),
+                        function_app_name=(
+                            request.triaging_validator_function_app_name
+                        ),
+                        function_name=(
+                            request.triaging_validator_function_name
+                        ),
+                    )
+                )
+
+                if not triaging_validator_url:
+
+                    raise ValueError(
+                        "Triaging Validator Function URL "
+                        "could not be resolved."
+                    )
+
+                logger.info(
+                    "Triaging Validator Function URL "
+                    "resolved successfully."
+                )
+
+            else:
+
+                raise ValueError(
+                    "Triaging Validator Function App "
+                    "name and function name are required."
+                )
+
+            # ====================================================
+            # 5. RESOLVE NOTIFICATION LOGIC APP CALLBACK
             # ====================================================
 
             logger.info(
-                "STEP 3: Resolving Notification Logic App "
+                "STEP 5: Resolving Notification Logic App "
                 "callback URL."
             )
 
@@ -199,11 +353,74 @@ class ReportingDeploymentService:
             )
 
             # ====================================================
-            # 4. DEPLOY REPORTING ARM TEMPLATE
+            # 6. RESOLVE COMPLETION LOGIC APP CALLBACK
             # ====================================================
 
             logger.info(
-                "STEP 4: Deploying Reporting ARM template."
+                "STEP 6: Resolving Completion Logic App "
+                "callback URL and SAS token."
+            )
+
+            completion_details = (
+                self.azure_manager
+                .get_logic_app_callback_details(
+                    subscription_id=(
+                        request.subscription_id
+                    ),
+                    resource_group_name=(
+                        request.resource_group_name
+                    ),
+                    logic_app_name=(
+                        request.completion_logic_app_name
+                    ),
+                    trigger_name=(
+                        request.completion_logic_app_trigger_name
+                    ),
+                )
+            )
+
+            completion_url = (
+                completion_details.get(
+                    "completion_url"
+                )
+            )
+
+            completion_sas_token = (
+                completion_details.get(
+                    "completion_sas_token"
+                )
+            )
+
+            if not completion_url:
+
+                raise ValueError(
+                    "Completion Logic App URL "
+                    "could not be resolved."
+                )
+
+            if not completion_sas_token:
+
+                raise ValueError(
+                    "Completion Logic App SAS token "
+                    "could not be resolved."
+                )
+
+            logger.info(
+                "Completion Logic App URL "
+                "resolved successfully."
+            )
+
+            logger.info(
+                "Completion Logic App SAS token "
+                "resolved successfully."
+            )
+
+            # ====================================================
+            # 7. DEPLOY REPORTING 04 ONLY
+            # ====================================================
+
+            logger.info(
+                "STEP 7: Deploying Reporting 04 ONLY."
             )
 
             deployment = (
@@ -232,7 +449,7 @@ class ReportingDeploymentService:
             )
 
             # ====================================================
-            # 5. CHECK DEPLOYMENT
+            # 8. CHECK REPORTING 04 DEPLOYMENT
             # ====================================================
 
             if provisioning_state not in {
@@ -243,12 +460,12 @@ class ReportingDeploymentService:
                 error_message = (
                     deployment.get(
                         "error",
-                        "Reporting ARM deployment failed.",
+                        "Reporting 04 ARM deployment failed.",
                     )
                 )
 
                 logger.error(
-                    "Reporting deployment failed: %s",
+                    "Reporting 04 deployment failed: %s",
                     error_message,
                 )
 
@@ -273,6 +490,10 @@ class ReportingDeploymentService:
                         request.reporting_logic_app_name
                     ),
 
+                    reporting_03_logic_app_name=(
+                        request.reporting_03_logic_app_name
+                    ),
+
                     storage_account_name=(
                         request.storage_account_name
                     ),
@@ -286,6 +507,10 @@ class ReportingDeploymentService:
                         or "Failed"
                     ),
 
+                    reporting_03_deployment_name=None,
+
+                    reporting_03_provisioning_state=None,
+
                     table_connection_id=(
                         table_connection_id
                     ),
@@ -294,11 +519,23 @@ class ReportingDeploymentService:
                         sharepoint_connection_id
                     ),
 
+                    queue_connection_id=(
+                        queue_connection_id
+                    ),
+
+                    callback_url=None,
+
                     function_urls=(
                         ReportingFunctionUrls(
                             split_vulnerabilities_function_url=(
                                 split_vulnerabilities_function_url
-                            )
+                            ),
+                            after_scoping_triaging_url=(
+                                after_scoping_triaging_url
+                            ),
+                            triaging_validator_url=(
+                                triaging_validator_url
+                            ),
                         )
                     ),
 
@@ -306,13 +543,225 @@ class ReportingDeploymentService:
                         ReportingLogicAppUrls(
                             notification_service_url=(
                                 notification_service_url
-                            )
+                            ),
+                            completion_url=(
+                                completion_url
+                            ),
+                            completion_sas_token=(
+                                completion_sas_token
+                            ),
                         )
+                    ),
+
+                    completion_url=(
+                        completion_url
+                    ),
+
+                    completion_sas_token=(
+                        completion_sas_token
                     ),
                 )
 
             # ====================================================
-            # 6. SUCCESS
+            # 9. RESOLVE REPORTING 04 CALLBACK URL
+            # ====================================================
+
+            logger.info(
+                "STEP 9: Resolving Reporting 04 "
+                "callback URL."
+            )
+
+            callback_url = (
+                self.azure_manager
+                .get_reporting_callback_url(
+                    subscription_id=(
+                        request.subscription_id
+                    ),
+                    resource_group_name=(
+                        request.resource_group_name
+                    ),
+                    reporting_logic_app_name=(
+                        request.reporting_logic_app_name
+                    ),
+                )
+            )
+
+            if not callback_url:
+
+                raise ValueError(
+                    "Reporting 04 callback URL "
+                    "could not be resolved."
+                )
+
+            logger.info(
+                "Reporting 04 callback URL "
+                "resolved successfully."
+            )
+
+            # ====================================================
+            # 10. DEPLOY REPORTING 03 ONLY
+            # ====================================================
+
+            logger.info(
+                "STEP 10: Deploying Reporting 03 ONLY."
+            )
+
+            reporting_03_deployment = (
+                self.azure_manager.deploy_reporting_03(
+                    request=request,
+                    connections=connections,
+                    notification_service_url=(
+                        notification_service_url
+                    ),
+                    callback_url=callback_url,
+                    completion_url=completion_url,
+                    completion_sas_token=(
+                        completion_sas_token
+                    ),
+                    after_scoping_triaging_url=(
+                        after_scoping_triaging_url
+                    ),
+                    triaging_validator_url=(
+                        triaging_validator_url
+                    ),
+                )
+            )
+
+            reporting_03_deployment_name = (
+                reporting_03_deployment.get(
+                    "deployment_name"
+                )
+            )
+
+            reporting_03_provisioning_state = (
+                reporting_03_deployment.get(
+                    "provisioning_state"
+                )
+            )
+
+            # ====================================================
+            # 11. CHECK REPORTING 03 DEPLOYMENT
+            # ====================================================
+
+            if reporting_03_provisioning_state not in {
+                "Succeeded",
+                "succeeded",
+            }:
+
+                error_message = (
+                    reporting_03_deployment.get(
+                        "error",
+                        "Reporting 03 ARM deployment failed.",
+                    )
+                )
+
+                logger.error(
+                    "Reporting 03 deployment failed: %s",
+                    error_message,
+                )
+
+                return ReportingDeploymentResponse(
+                    success=False,
+
+                    message=(
+                        "Reporting 04 deployed successfully, "
+                        "but Reporting 03 deployment failed: "
+                        f"{error_message}"
+                    ),
+
+                    subscription_id=(
+                        request.subscription_id
+                    ),
+
+                    resource_group_name=(
+                        request.resource_group_name
+                    ),
+
+                    location=request.location,
+
+                    reporting_logic_app_name=(
+                        request.reporting_logic_app_name
+                    ),
+
+                    reporting_03_logic_app_name=(
+                        request.reporting_03_logic_app_name
+                    ),
+
+                    storage_account_name=(
+                        request.storage_account_name
+                    ),
+
+                    deployment_name=(
+                        deployment_name
+                    ),
+
+                    provisioning_state=(
+                        provisioning_state
+                    ),
+
+                    reporting_03_deployment_name=(
+                        reporting_03_deployment_name
+                    ),
+
+                    reporting_03_provisioning_state=(
+                        reporting_03_provisioning_state
+                    ),
+
+                    table_connection_id=(
+                        table_connection_id
+                    ),
+
+                    sharepoint_connection_id=(
+                        sharepoint_connection_id
+                    ),
+
+                    queue_connection_id=(
+                        queue_connection_id
+                    ),
+
+                    callback_url=(
+                        callback_url
+                    ),
+
+                    function_urls=(
+                        ReportingFunctionUrls(
+                            split_vulnerabilities_function_url=(
+                                split_vulnerabilities_function_url
+                            ),
+                            after_scoping_triaging_url=(
+                                after_scoping_triaging_url
+                            ),
+                            triaging_validator_url=(
+                                triaging_validator_url
+                            ),
+                        )
+                    ),
+
+                    logic_app_urls=(
+                        ReportingLogicAppUrls(
+                            notification_service_url=(
+                                notification_service_url
+                            ),
+                            completion_url=(
+                                completion_url
+                            ),
+                            completion_sas_token=(
+                                completion_sas_token
+                            ),
+                        )
+                    ),
+
+                    completion_url=(
+                        completion_url
+                    ),
+
+                    completion_sas_token=(
+                        completion_sas_token
+                    ),
+                )
+
+            # ====================================================
+            # 12. SUCCESS
             # ====================================================
 
             logger.info(
@@ -324,8 +773,30 @@ class ReportingDeploymentService:
             )
 
             logger.info(
-                "Reporting Logic App: %s",
+                "Reporting 04 Logic App: %s",
                 request.reporting_logic_app_name,
+            )
+
+            logger.info(
+                "Reporting 03 Logic App: %s",
+                request.reporting_03_logic_app_name,
+            )
+
+            logger.info(
+                "Reporting 04 callback URL resolved."
+            )
+
+            logger.info(
+                "Completion Logic App callback URL resolved."
+            )
+
+            logger.info(
+                "Completion Logic App SAS token extracted."
+            )
+
+            logger.info(
+                "Reporting 03 deployed using Reporting 04 "
+                "callback URL."
             )
 
             logger.info(
@@ -336,8 +807,10 @@ class ReportingDeploymentService:
                 success=True,
 
                 message=(
-                    "Reporting Logic App deployed "
-                    "successfully."
+                    "Reporting 04 and Reporting 03 Logic Apps "
+                    "deployed successfully. Reporting 03 was "
+                    "deployed using the dynamically resolved "
+                    "Reporting 04 callback URL."
                 ),
 
                 subscription_id=(
@@ -354,6 +827,10 @@ class ReportingDeploymentService:
                     request.reporting_logic_app_name
                 ),
 
+                reporting_03_logic_app_name=(
+                    request.reporting_03_logic_app_name
+                ),
+
                 storage_account_name=(
                     request.storage_account_name
                 ),
@@ -366,6 +843,14 @@ class ReportingDeploymentService:
                     provisioning_state
                 ),
 
+                reporting_03_deployment_name=(
+                    reporting_03_deployment_name
+                ),
+
+                reporting_03_provisioning_state=(
+                    reporting_03_provisioning_state
+                ),
+
                 table_connection_id=(
                     table_connection_id
                 ),
@@ -374,11 +859,25 @@ class ReportingDeploymentService:
                     sharepoint_connection_id
                 ),
 
+                queue_connection_id=(
+                    queue_connection_id
+                ),
+
+                callback_url=(
+                    callback_url
+                ),
+
                 function_urls=(
                     ReportingFunctionUrls(
                         split_vulnerabilities_function_url=(
                             split_vulnerabilities_function_url
-                        )
+                        ),
+                        after_scoping_triaging_url=(
+                            after_scoping_triaging_url
+                        ),
+                        triaging_validator_url=(
+                            triaging_validator_url
+                        ),
                     )
                 ),
 
@@ -386,8 +885,22 @@ class ReportingDeploymentService:
                     ReportingLogicAppUrls(
                         notification_service_url=(
                             notification_service_url
-                        )
+                        ),
+                        completion_url=(
+                            completion_url
+                        ),
+                        completion_sas_token=(
+                            completion_sas_token
+                        ),
                     )
+                ),
+
+                completion_url=(
+                    completion_url
+                ),
+
+                completion_sas_token=(
+                    completion_sas_token
                 ),
             )
 
@@ -419,6 +932,10 @@ class ReportingDeploymentService:
                     request.reporting_logic_app_name
                 ),
 
+                reporting_03_logic_app_name=(
+                    request.reporting_03_logic_app_name
+                ),
+
                 storage_account_name=(
                     request.storage_account_name
                 ),
@@ -431,6 +948,14 @@ class ReportingDeploymentService:
                     provisioning_state
                 ),
 
+                reporting_03_deployment_name=(
+                    reporting_03_deployment_name
+                ),
+
+                reporting_03_provisioning_state=(
+                    reporting_03_provisioning_state
+                ),
+
                 table_connection_id=(
                     table_connection_id
                 ),
@@ -439,11 +964,25 @@ class ReportingDeploymentService:
                     sharepoint_connection_id
                 ),
 
+                queue_connection_id=(
+                    queue_connection_id
+                ),
+
+                callback_url=(
+                    callback_url
+                ),
+
                 function_urls=(
                     ReportingFunctionUrls(
                         split_vulnerabilities_function_url=(
                             split_vulnerabilities_function_url
-                        )
+                        ),
+                        after_scoping_triaging_url=(
+                            after_scoping_triaging_url
+                        ),
+                        triaging_validator_url=(
+                            triaging_validator_url
+                        ),
                     )
                     if split_vulnerabilities_function_url
                     else None
@@ -453,9 +992,23 @@ class ReportingDeploymentService:
                     ReportingLogicAppUrls(
                         notification_service_url=(
                             notification_service_url
-                        )
+                        ),
+                        completion_url=(
+                            completion_url
+                        ),
+                        completion_sas_token=(
+                            completion_sas_token
+                        ),
                     )
                     if notification_service_url
                     else None
+                ),
+
+                completion_url=(
+                    completion_url
+                ),
+
+                completion_sas_token=(
+                    completion_sas_token
                 ),
             )

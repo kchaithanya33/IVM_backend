@@ -10,6 +10,7 @@
         "description": "Azure region for the Logic App"
       }
     },
+   
 
     "LA-reporting-04": {
       "type": "string",
@@ -43,7 +44,7 @@
 
     "auditLogTableName": {
       "type": "string",
-      "defaultValue": "AuditLog",
+      "defaultValue": "NotificationLogs",
       "metadata": {
         "description": "Azure Table Storage table used for audit logs"
       }
@@ -57,21 +58,50 @@
       }
     },
 
-    "azureTablesConnectionName": {
-      "type": "string",
-      "defaultValue": "azuretables",
-      "metadata": {
-        "description": "Name of the Azure Tables API connection"
-      }
-    },
-
-    "sharePointOnlineConnectionName": {
-      "type": "string",
-      "defaultValue": "sharepointonline",
-      "metadata": {
-        "description": "Name of the SharePoint Online API connection"
-      }
-    },
+    
+      "LA-reporting-03": {
+    "type": "string",
+    "defaultValue": "LA-reporting-03",
+    "metadata": {
+      "description": "Name of the Logic App workflow"
+    }
+  },
+  "callbackUrl": {
+    "type": "string",
+    "metadata": {
+      "description": "Callback Logic App URL"
+    }
+  },
+  "completionUrl": {
+    "type": "string",
+    "metadata": {
+      "description": "Completion callback Logic App base URL"
+    }
+  },
+   "completionSasToken": {
+    "type": "secureString",
+    "metadata": {
+      "description": "SAS token used by the completion callback"
+    }
+  },
+  "afterScopingTriagingUrl": {
+    "type": "string",
+    "metadata": {
+      "description": "After Scoping Triaging Function App URL"
+    }
+  },
+  "triagingValidatorUrl": {
+    "type": "string",
+    "metadata": {
+      "description": "Triaging validator Function App URL"
+    }
+  },
+  "callbackSecretKey": {
+    "type": "secureString",
+    "metadata": {
+      "description": "Secret key used for callback authentication"
+    }
+  },
     "$connections": {
   "type": "object",
   "defaultValue": {},
@@ -567,7 +597,792 @@
           }
         }
       }
+    },
+    {
+  "type": "Microsoft.Logic/workflows",
+  "apiVersion": "2019-05-01",
+  "name": "[parameters('LA-reporting-03')]",
+  "location": "[parameters('location')]",
+  "properties": {
+    "state": "Enabled",
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+
+      "triggers": {
+        "When_a_HTTP_request_is_received": {
+          "type": "Request",
+          "kind": "Http",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "cycleId": {
+                  "type": "string"
+                },
+                "ticketNumber": {
+                  "type": "string"
+                },
+                "triagingSheetPath": {
+                  "type": "string"
+                },
+                "newVulnSheetPath": {
+                  "type": "string"
+                },
+                "dueDate": {
+                  "type": "string"
+                },
+                "taskId": {
+                  "type": "string"
+                },
+                "qualysReportPath": {
+                  "type": "string"
+                },
+                "dfnReportPath": {
+                  "type": "string"
+                },
+                "cmdbDataPath": {
+                  "type": "string"
+                },
+                "qidDataPath": {
+                  "type": "string"
+                },
+                "legacyDataPath": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "cycleId",
+                "triagingSheetPath",
+                "taskId"
+              ]
+            }
+          }
+        }
+      },
+
+       "actions": {
+      "Initialize_variables": {
+        "runAfter": {},
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "taskId",
+              "type": "string",
+              "value": "@{guid()}"
+            }
+          ]
+        }
+      },
+      "Initialize_Variables_From_HTTP_Request": {
+        "runAfter": {
+          "Initialize_variables": ["Succeeded"]
+        },
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "cycleId",
+              "type": "string",
+              "value": "@{triggerBody()?['cycleId']}"
+            },
+            {
+              "name": "ticketNumber",
+              "type": "string",
+              "value": "@{triggerBody()?['ticketNumber']}"
+            },
+            {
+              "name": "triagingSheetPath",
+              "type": "string",
+              "value": "@{triggerBody()?['triagingSheetPath']}"
+            },
+            {
+              "name": "newVulnSheetPath",
+              "type": "string",
+              "value": "@{triggerBody()?['newVulnSheetPath']}"
+            },
+            {
+              "name": "dueDate",
+              "type": "string",
+              "value": "@{triggerBody()?['dueDate']}"
+            },
+            {
+              "name": "qualysReportPath",
+              "type": "string",
+              "value": "@{triggerBody()?['qualysReportPath']}"
+            },
+            {
+              "name": "dfnReportPath",
+              "type": "string",
+              "value": "@{triggerBody()?['dfnReportPath']}"
+            },
+            {
+              "name": "cmdbDataPath",
+              "type": "string",
+              "value": "@{triggerBody()?['cmdbDataPath']}"
+            },
+            {
+              "name": "qidDataPath",
+              "type": "string",
+              "value": "@{triggerBody()?['qidDataPath']}"
+            },
+            {
+              "name": "legacyDataPath",
+              "type": "string",
+              "value": "@{triggerBody()?['legacyDataPath']}"
+            },
+            {
+              "name": "validationIssuesFound",
+              "type": "boolean",
+              "value": false
+            },
+            {
+              "name": "validationIssues",
+              "type": "array",
+              "value": []
+            },
+            {
+  "name": "completionUrl",
+  "type": "string",
+   "value": "@{concat(parameters('completionUrl'), '/complete/', variables('taskId'), '/ScopeValidate-Report/', base64(concat(variables('taskId'), ':', parameters('LA-reporting-03'), ':', parameters('callbackSecretKey'))), '?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_a_HTTP_request_is_received%2Frun&sv=1.0&sig=', parameters('completionSasToken'))}"
+},
+            {
+              "name": "finaltriagingSheetPath",
+              "type": "string"
+            },
+            {
+              "name": "legacyToNonLegacyMismatch",
+              "type": "string",
+              "value": ""
+            },
+            {
+              "name": "nonLegacyToLegacyMismatch",
+              "type": "string",
+              "value": ""
+            },
+            {
+              "name": "legacyMismatchFilePath",
+              "type": "string",
+              "value": ""
+            },
+            {
+              "name": "hasLegacyMismatches",
+              "type": "boolean",
+              "value": false
+            }
+          ]
+        }
+      },
+      "Get_Triaging_Sheet_Content": {
+        "runAfter": {
+          "Initialize_Variables_From_HTTP_Request": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files/@{encodeURIComponent(uriComponent(variables('triagingSheetPath')))}/content",
+          "queries": {
+            "inferContentType": true
+          }
+        }
+      },
+      "Get_New_Vulnerabilities_Sheet_Content": {
+        "runAfter": {
+          "Get_Triaging_Sheet_Content": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files/@{encodeURIComponent(uriComponent(variables('newVulnSheetPath')))}/content",
+          "queries": {
+            "inferContentType": true
+          }
+        }
+      },
+      "Get_QID_Data_Content": {
+        "runAfter": {
+          "Get_New_Vulnerabilities_Sheet_Content": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files/@{encodeURIComponent(uriComponent(variables('qidDataPath')))}/content",
+          "queries": {
+            "inferContentType": true
+          }
+        }
+      },
+      "Get_Legacy_Data_Content": {
+        "runAfter": {
+          "Get_QID_Data_Content": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files/@{encodeURIComponent(uriComponent(variables('legacyDataPath')))}/content",
+          "queries": {
+            "inferContentType": true
+          }
+        }
+      },
+      "Call_After_Scoping_Triaging_Condition": {
+        "runAfter": {
+          "Get_Legacy_Data_Content": ["Succeeded"]
+        },
+        "type": "Http",
+        "inputs": {
+          "uri": "@parameters('afterScopingTriagingUrl')",
+          "method": "POST",
+          "body": {
+            "cycleId": "@{variables('cycleId')}",
+            "allVulnDataContent": "@{base64(body('Get_Triaging_Sheet_Content'))}",
+            "newVulnDataContent": "@{base64(body('Get_New_Vulnerabilities_Sheet_Content'))}",
+            "qidDataContent": "@{base64(body('Get_QID_Data_Content'))}",
+            "legacyDataContent": "@{base64(body('Get_Legacy_Data_Content'))}",
+            "allVulnFileType": "xlsx",
+            "newVulnFileType": "xlsx",
+            "qidFileType": "xlsx",
+            "legacyFileType": "xlsx"
+          }
+        }
+      },
+      "Create_SharePoint_Folder_for_Final_Triaging_Report": {
+        "runAfter": {
+          "Call_After_Scoping_Triaging_Condition": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": {
+            "path": "/Shared Documents/Reporting/@{variables('cycleId')}/Triaging/Final Triaging Report/"
+          },
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/tables/@{encodeURIComponent(encodeURIComponent('6c55c5faf74b43e787ff5cf463978cd9'))}/createnewfolder"
+        }
+      },
+      "Store_Final_Triaging_Sheet_to_Sharepoint": {
+        "runAfter": {
+          "Create_SharePoint_Folder_for_Final_Triaging_Report": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": "@body('Call_After_Scoping_Triaging_Condition')",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files",
+          "queries": {
+            "folderPath": "/Shared Documents/Reporting/@{variables('cycleId')}/Triaging/Final Triaging Report/",
+            "name": "@concat('vulnerability_report_', variables('cycleId'), '-', formatDateTime(utcNow(), 'yyyyMMdd_HHmmss'), '.xlsx')",
+            "queryParametersSingleEncoded": true
+          }
+        },
+        "runtimeConfiguration": {
+          "contentTransfer": {
+            "transferMode": "Chunked"
+          }
+        }
+      },
+      "Set_Final_Triaging_Sheet_Path": {
+        "runAfter": {
+          "Store_Final_Triaging_Sheet_to_Sharepoint": ["Succeeded"]
+        },
+        "type": "SetVariable",
+        "inputs": {
+          "name": "finaltriagingSheetPath",
+          "value": "@{body('Store_Final_Triaging_Sheet_to_Sharepoint')?['Path']}"
+        }
+      },
+      "Add_NotificationStatus_Entry": {
+        "runAfter": {
+          "Set_Final_Triaging_Sheet_Path": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": {
+            "PartitionKey": "ScopeValidate-Report",
+            "RowKey": "@{variables('taskId')}",
+            "Timestamp": "@{utcNow()}",
+            "WorkflowName": "@{parameters('LA-reporting-03')}",
+            "CycleId": "@{variables('cycleId')}",
+            "TaskId": "@{variables('taskId')}",
+            "Status": "Pending",
+            "CallbackUri": "@parameters('callbackUrl')",
+            "CallbackParameters": "@{string(json(concat('{\"cycleId\":\"', variables('cycleId'), '\",\"triagingSheetPath\":\"', variables('finaltriagingSheetPath'), '\",\"validationDueDate\":\"', formatDateTime(addDays(utcNow(),2), 'yyyy-MM-ddTHH:mm:ss'), '\",\"taskId\":\"', variables('taskId'), '\"}')))}",
+            "CreatedAt": "@{utcNow()}",
+            "LastUpdated": "@{utcNow()}",
+            "TicketNumber": "@{variables('ticketNumber')}",
+            "TriagingSheetPath": "@{variables('finaltriagingSheetPath')}",
+            "DueDate": "@{variables('dueDate')}"
+          },
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('NotificationStatus')}/entities"
+        }
+      },
+      "Log_Task_Start": {
+        "runAfter": {
+          "Add_NotificationStatus_Entry": ["Succeeded"]
+ 
+ 
+ 
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": {
+            "PartitionKey": "Reporting",
+            "RowKey": "@{guid()}",
+            "CycleId": "@{variables('cycleId')}",
+            "TicketNumber": "@{variables('ticketNumber')}",
+            "ActionType": "Validation",
+            "Timestamp": "@{utcNow()}",
+            "Status": "Started",
+            "TaskId": "@{variables('taskId')}",
+            "DueDate": "@{variables('dueDate')}"
+          },
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('auditLogTableName'))}/entities"
+        }
+      },
+      "Validate_Triaged_Sheet": {
+        "runAfter": {
+          "Log_Task_Start": ["Succeeded"]
+        },
+        "type": "Http",
+        "inputs": {
+          "uri": "@parameters('triagingValidatorUrl')",
+          "method": "POST",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "excelFileContent": "@{base64(body('Call_After_Scoping_Triaging_Condition'))}",
+            "cycleId": "@{variables('cycleId')}"
+          }
+        }
+      },
+      "Create_SharePoint_Folder_for_Legacy_Mismatch_Report": {
+        "runAfter": {
+          "Validate_Triaged_Sheet": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": {
+            "path": "/Shared Documents/Reporting/@{variables('cycleId')}/Triaging/Legacy Mismatch/"
+          },
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/tables/@{encodeURIComponent(encodeURIComponent('6c55c5faf74b43e787ff5cf463978cd9'))}/createnewfolder"
+        }
+      },
+      "Check_If_Legacy_Mismatches_Exist": {
+        "actions": {
+          "Store_Legacy_Mismatch_Sheet_to_Sharepoint": {
+            "type": "ApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+                }
+              },
+              "method": "post",
+              "body": "@base64ToBinary(body('Validate_Triaged_Sheet')?['mismatchExcelFile'])",
+              "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files",
+              "queries": {
+                "folderPath": "/Shared Documents/Reporting/@{variables('cycleId')}/Triaging/Legacy Mismatch/",
+                "name": "@concat('Legacy_mismatches_report_', variables('cycleId'), '-', formatDateTime(utcNow(), 'yyyyMMdd_HHmmss'), '.xlsx')",
+                "queryParametersSingleEncoded": true
+              }
+            },
+            "runtimeConfiguration": {
+              "contentTransfer": {
+                "transferMode": "Chunked"
+              }
+            }
+          },
+          "Set_Legacy_Mismatch_File_Path": {
+            "runAfter": {
+              "Store_Legacy_Mismatch_Sheet_to_Sharepoint": ["Succeeded"]
+            },
+            "type": "SetVariable",
+            "inputs": {
+              "name": "legacyMismatchFilePath",
+              "value": "@{body('Store_Legacy_Mismatch_Sheet_to_Sharepoint')?['Path']}"
+            }
+          },
+          "Set_Has_Legacy_Mismatches_True": {
+            "runAfter": {
+              "Set_Legacy_Mismatch_File_Path": ["Succeeded"]
+            },
+            "type": "SetVariable",
+            "inputs": {
+              "name": "hasLegacyMismatches",
+              "value": true
+            }
+          }
+        },
+        "runAfter": {
+          "Create_SharePoint_Folder_for_Legacy_Mismatch_Report": ["Succeeded"]
+        },
+        "else": {
+          "actions": {
+            "Set_Legacy_Mismatch_File_Path_Empty": {
+              "type": "SetVariable",
+              "inputs": {
+                "name": "legacyMismatchFilePath",
+                "value": ""
+              }
+            },
+            "Set_Has_Legacy_Mismatches_False": {
+              "runAfter": {
+                "Set_Legacy_Mismatch_File_Path_Empty": ["Succeeded"]
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "hasLegacyMismatches",
+                "value": false
+              }
+            }
+          }
+        },
+        "expression": {
+          "and": [
+            {
+              "not": {
+                "equals": [
+                  "@body('Validate_Triaged_Sheet')?['mismatchExcelFile']",
+                  null
+                ]
+              }
+            },
+            {
+              "greater": [
+                "@length(coalesce(body('Validate_Triaged_Sheet')?['mismatchExcelFile'], ''))",
+                0
+              ]
+            }
+          ]
+        },
+        "type": "If"
+      },
+      "Set_Validation_Issues": {
+        "runAfter": {
+          "Check_If_Legacy_Mismatches_Exist": ["Succeeded"]
+        },
+        "type": "SetVariable",
+        "inputs": {
+          "name": "validationIssues",
+          "value": "@body('Validate_Triaged_Sheet')?['validationIssues']"
+        }
+      },
+      "Set_Validation_Issues_Found_Flag": {
+        "runAfter": {
+          "Set_Validation_Issues": ["Succeeded"]
+        },
+        "type": "SetVariable",
+        "inputs": {
+          "name": "validationIssuesFound",
+          "value": "@greater(length(variables('validationIssues')), 0)"
+        }
+      },
+      "Set_Legacy_To_NonLegacy_Mismatch": {
+        "runAfter": {
+          "Set_Validation_Issues_Found_Flag": ["Succeeded"]
+        },
+        "type": "SetVariable",
+        "inputs": {
+          "name": "legacyToNonLegacyMismatch",
+          "value": "@body('Validate_Triaged_Sheet')?['legacyMismatchTables']?['legacyToNonLegacyMismatch']"
+        }
+      },
+      "Set_NonLegacy_To_Legacy_Mismatch": {
+        "runAfter": {
+          "Set_Legacy_To_NonLegacy_Mismatch": ["Succeeded"]
+        },
+        "type": "SetVariable",
+        "inputs": {
+          "name": "nonLegacyToLegacyMismatch",
+          "value": "@body('Validate_Triaged_Sheet')?['legacyMismatchTables']?['nonLegacyToLegacyMismatch']"
+        }
+      },
+      "Build_Validation_Summary": {
+        "runAfter": {
+          "Set_NonLegacy_To_Legacy_Mismatch": ["Succeeded"]
+        },
+        "type": "Compose",
+        "inputs": {
+          "summary": "Validation Summary for @{variables('cycleId')}",
+          "statusMessage": "@{if(variables('validationIssuesFound'), 'Issues found during validation. Please review and address before proceeding.', 'No issues found during validation. Ready for IVM team review.')}",
+          "issueCount": "@{length(variables('validationIssues'))}",
+          "issues": "@{variables('validationIssues')}",
+          "triagingSheetPath": "@{variables('finaltriagingSheetPath')}",
+          "legacyMismatchTables": {
+            "legacyToNonLegacyMismatch": "@{variables('legacyToNonLegacyMismatch')}",
+            "nonLegacyToLegacyMismatch": "@{variables('nonLegacyToLegacyMismatch')}"
+          }
+        }
+      },
+      "Format_Validation_Issues_As_Bullets": {
+        "runAfter": {
+          "Build_Validation_Summary": ["Succeeded"]
+        },
+        "type": "Compose",
+        "inputs": "@if(variables('validationIssuesFound'), concat('<ul><li>', join(variables('validationIssues'), '</li><li>'), '</li></ul>'), '')"
+      },
+      "Send_Validation_Email_Notification": {
+        "runAfter": {
+          "Format_Validation_Issues_As_Bullets": ["Succeeded"]
+        },
+        "type": "Http",
+        "inputs": {
+          "uri": "@parameters('notificationServiceUrl')",
+          "method": "POST",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "WorkflowName": "ScopeValidate-Report",
+            "NotificationType": "ActionRequired",
+            "NotificationTitle": "Action Required: Validation for Vulnerability Triaging - @{variables('cycleId')}",
+            "NotificationContent": "<html><head><style>body{font-family:Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px;}.header{background:#007acc;color:white;padding:20px;text-align:center;border-radius:8px 8px 0 0;}.content{background:#f9f9f9;padding:30px;border:1px solid #ddd;}.task-details{background:white;padding:20px;margin:20px 0;border-left:4px solid #007acc;border-radius:4px;}.issues-section{background:#fff3cd;padding:15px;margin:20px 0;border-left:4px solid #ffc107;border-radius:4px;}.issue-item{background:#ffffff;padding:12px;margin:8px 0;border:1px solid #e0e0e0;border-radius:4px;}.status-ok{color:#28a745;font-weight:bold;}.status-issue{color:#dc3545;font-weight:bold;}.action-button{display:inline-block;background:#28a745;color:white;padding:15px 30px;text-decoration:none;border-radius:5px;font-weight:bold;margin:20px 0;text-align:center;}.footer{background:#f1f1f1;padding:15px;text-align:center;font-size:12px;color:#666;border-radius:0 0 8px 8px;}.success-section{background:#d4edda;padding:15px;margin:20px 0;border-left:4px solid #28a745;border-radius:4px;color:#155724;}.mismatch-section{background:#f8d7da;padding:15px;margin:20px 0;border-left:4px solid #dc3545;border-radius:4px;}.file-link-button{display:inline-block;background:#0078d4;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;margin:10px 0;}.info-box{background:#e7f3ff;border-left:4px solid #0078d4;padding:15px;margin:15px 0;border-radius:4px;}ul{padding-left:20px;margin:10px 0;}li{margin:8px 0;color:#333;}</style></head><body><div class='header'><h1>🔍 Validation for Vulnerability Triaging</h1></div><div class='content'><p>Hello,</p><p>The validation of vulnerability triaging has been completed.</p><div class='task-details'><h3>📌 Task Details</h3><p><strong>Task ID:</strong> @{variables('taskId')}</p><p><strong>Cycle ID:</strong> @{variables('cycleId')}</p><p><strong>Status:</strong> <span class='@{if(variables('validationIssuesFound'), 'status-issue', 'status-ok')}'>@{if(variables('validationIssuesFound'), 'Issues Found', 'Validation Passed')}</span></p><p><strong>Issue Count:</strong> @{length(variables('validationIssues'))}</p><p><strong>Status Message:</strong> @{body('Build_Validation_Summary')?['statusMessage']}</p><p><strong>Triaging Sheet:</strong> <a href='@{concat(parameters('sharePointSiteUrl'), variables('finaltriagingSheetPath'))}' class='action-button' style='color:white;'>📄 Open Triaging Sheet</a></p></div>@{if(variables('validationIssuesFound'), '<div class=\"issues-section\"><h3>⚠️ Validation Issues Found</h3><p>The following issues were identified during validation:</p>', '<div class=\"success-section\"><h3>✅ Validation Successful</h3><p>No issues were found during validation. The triaging sheet is ready for review.</p></div>')}@{if(variables('validationIssuesFound'), outputs('Format_Validation_Issues_As_Bullets'), '')}@{if(variables('validationIssuesFound'), '</div>', '')}@{if(variables('hasLegacyMismatches'), concat('<div class=\"mismatch-section\"><h3>🔄 Legacy Classification Mismatches Detected</h3><div class=\"info-box\"><p><strong>⚠️ Important:</strong> Legacy classification mismatches have been identified in the triaging data.</p><p>These mismatches indicate differences between the TCS Team classifications and our tracker records.</p></div><p><strong>Download the detailed mismatch report:</strong></p><a href=\"', parameters('sharePointSiteUrl'), variables('legacyMismatchFilePath'), '\" class=\"file-link-button\" style=\"color:white;\">📄 Open Legacy Mismatch Report</a><p style=\"margin-top:15px;font-size:13px;color:#666;\"><em>The report contains two sheets:</em></p><ul style=\"font-size:13px;color:#666;\"><li>Legacy → Non-Legacy conflicts</li><li>Non-Legacy → Legacy conflicts</li></ul></div>'), '<div class=\"success-section\"><h3>✅ No Legacy Classification Mismatches</h3><p>All legacy classifications are consistent between TCS Team data and tracker records.</p></div>')}<div class='task-details'>@{if(variables('validationIssuesFound'), '<p style=\"color:#dc3545;font-weight:bold;\">⚠️ Action Required: Please review and fix the issues above before proceeding.</p>', '<p style=\"color:#28a745;font-weight:bold;\">✅ Ready for Review: No issues found, proceed with IVM team review.</p>')}<p><strong>Mark as Completed:</strong> <a href='@{variables('completionUrl')}' class='action-button' style='color:white;'>✅ Mark as Completed</a></p></div></div><div class='footer'><p>This is an automated notification from the Vulnerability Reporting System.</p><p><strong>Task ID:</strong> @{variables('taskId')} | <strong>Cycle ID:</strong> @{variables('cycleId')} | <strong>Timestamp:</strong> @{utcNow()}</p></div></body></html>",
+            "NotificationChannels": ["Email"],
+            "TemplateVariables": [
+              {
+                "key": "taskId",
+                "value": "@{variables('taskId')}"
+              },
+              {
+                "key": "cycleId",
+                "value": "@{variables('cycleId')}"
+              },
+              {
+                "key": "statusClass",
+                "value": "@{if(variables('validationIssuesFound'), 'status-issue', 'status-ok')}"
+              },
+              {
+                "key": "statusText",
+                "value": "@{if(variables('validationIssuesFound'), 'Issues Found', 'Validation Passed')}"
+              },
+              {
+                "key": "issueCount",
+                "value": "@{length(variables('validationIssues'))}"
+              },
+              {
+                "key": "statusMessage",
+                "value": "@{body('Build_Validation_Summary')?['statusMessage']}"
+              },
+              {
+                "key": "triagingSheetUrl",
+               "value": "@{concat(parameters('sharePointSiteUrl'), variables('finaltriagingSheetPath'))}"
+              },
+              {
+                "key": "legacyMismatchFileUrl",
+                "value": "@{concat(parameters('sharePointSiteUrl'), variables('legacyMismatchFilePath'))}"
+              },
+              {
+                "key": "completionUrl",
+                "value": "@{variables('completionUrl')}"
+              },
+              {
+                "key": "timestamp",
+                "value": "@{utcNow()}"
+              },
+              {
+                "key": "actionColor",
+                "value": "@{if(variables('validationIssuesFound'), '#dc3545', '#28a745')}"
+              },
+              {
+                "key": "actionMessage",
+                "value": "@{if(variables('validationIssuesFound'), '⚠️ Action Required: Please review and fix the issues above before proceeding.', '✅ Ready for Review: No issues found, proceed with IVM team review.')}"
+              },
+              {
+                "key": "validationSection",
+                "value": "@{if(variables('validationIssuesFound'), concat('<div class=\"issues-section\"><h3>⚠️ Validation Issues Found</h3><p>The following issues were identified during validation:</p>', outputs('Format_Validation_Issues_As_Bullets'), '</div>'), '<div class=\"success-section\"><h3>✅ Validation Successful</h3><p>No issues were found during validation. The triaging sheet is ready for review.</p></div>')}"
+              },
+              {
+  "key": "legacyMismatchSection",
+  "value": "@{if(variables('hasLegacyMismatches'), concat('<div class=\"mismatch-section\"><h3>🔄 Legacy Classification Mismatches Detected</h3><div class=\"info-box\"><p><strong>⚠️ Important:</strong> Legacy classification mismatches have been identified in the triaging data.</p><p>These mismatches indicate differences between the TCS Team classifications and our tracker records.</p></div><p><strong>Download the detailed mismatch report:</strong></p><a href=\"', parameters('sharePointSiteUrl'), variables('legacyMismatchFilePath'), '\" class=\"file-link-button\" style=\"color:white;\">📄 Open Legacy Mismatch Report</a><p style=\"margin-top:15px;font-size:13px;color:#666;\"><em>The report contains two sheets:</em></p><ul style=\"font-size:13px;color:#666;\"><li>Legacy → Non-Legacy conflicts</li><li>Non-Legacy → Legacy conflicts</li></ul></div>'), '<div class=\"success-section\"><h3>✅ No Legacy Classification Mismatches</h3><p>All legacy classifications are consistent between TCS Team data and tracker records.</p></div>')}"
+},
+              {
+                "key": "hasLegacyMismatches",
+                "value": "@{variables('hasLegacyMismatches')}"
+              },
+              {
+                "key": "validationIssuesFound",
+                "value": "@{variables('validationIssuesFound')}"
+              }
+            ],
+            "TemplateId": "REPORT-03",
+            "Importance": "High",
+            "Attachments": []
+          }
+        }
+      },
+      "Triaging_Sheet_Validation_Followup": {
+        "runAfter": {
+          "Send_Validation_Email_Notification": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": "{\n  \"taskId\": \"@{variables('taskId')}\",\n  \"workflowName\": \"ScopeValidate-Report\",\n   \"recipientName\": \"Scoping Triaging Team\",\n  \"taskTitle\": \"Action Required: Scoping Triaging Validation for Vulnerability Report - @{variables('taskId')}\",\n  \"taskDescription\": \"Scoping triaging validation required for vulnerability report. Cycle: @{variables('cycleId')}\", \n  \"reminderCount\": 0,\n  \"maxReminderCount\": 3,\n  \"escalationLevel\": 1,\n  \"escalateAfterMaxReminders\": true,\n  \"NotificationChannels\": [\n    \"Email\",\n    \"Teams\"\n  ],\n\"TemplateVariables\": [\n    {\n        \"key\": \"taskId\",\n        \"value\": \"@{variables('taskId')}\"\n    },\n    {\n        \"key\": \"cycleId\",\n        \"value\": \"@{variables('cycleId')}\"\n    },\n    {\n        \"key\": \"requestedDateTime\",\n        \"value\": \"@{formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss')}\"\n    }\n],\n\"RecipientList\": [\n    \"IVM_Team\"\n  ],\n  \"TeamsList\": [\n    \"IVM_Team\"\n  ],\n  \"TemplateId\": \"REPORT-07\",\n  \"dueDate\": \"@{variables('dueDate')}\",\n  \"priority\": \"High\",\n  \"callbackType\": \"logicApp\",\n  \"callbackUri\": \"@{parameters('callbackUrl')}\",\n  \"executeAfterHours\": 2,\n  \"executeOnlyIfTaskPending\": true,\n  \"authenticationRequired\": false,\n  \"callbackParameters\": {\n    \"cycleId\": \"@{variables('cycleId')}\",\n   \"triagingSheetPath\": \"@{variables('finaltriagingSheetPath')}\",\n   \"validationDueDate\": \"@{formatDateTime(addDays(utcNow(),2), 'yyyy-MM-ddTHH:mm:ss')}\",\n   \"taskId\": \"@{variables('taskId')}\"\n  }\n}",
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent('taskreminder')}/messages"
+        }
+      },
+      "Log_Task_Completion": {
+        "runAfter": {
+          "Triaging_Sheet_Validation_Followup": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": {
+            "PartitionKey": "Reporting",
+            "RowKey": "@{guid()}",
+            "CycleId": "@{variables('cycleId')}",
+            "ActionType": "Validation",
+            "Timestamp": "@{utcNow()}",
+            "Status": "Completed",
+            "TaskId": "@{variables('taskId')}",
+            "ValidationIssuesFound": "@{string(variables('validationIssuesFound'))}",
+            "IssueCount": "@{length(variables('validationIssues'))}"
+          },
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('auditLogTableName'))}/entities"
+        }
+      }
+    },
+
+      "outputs": {},
+
+      "parameters": {
+  "$connections": {
+    "type": "Object",
+    "defaultValue": {}
+  },
+  "storageAccountName": {
+    "type": "String"
+  },
+  "auditLogTableName": {
+    "type": "String"
+  },
+  "sharePointSiteUrl": {
+    "type": "String"
+  },
+  "notificationServiceUrl": {
+    "type": "String"
+  },
+  "callbackUrl": {
+    "type": "String"
+  },
+  "completionUrl": {
+    "type": "String"
+  },
+  "afterScopingTriagingUrl": {
+    "type": "String"
+  },
+  "triagingValidatorUrl": {
+    "type": "String"
+  },
+ 
+  "callbackSecretKey": {
+    "type": "SecureString"
+  },
+  "completionSasToken": {
+    "type": "SecureString"
+  }
+}
+    },
+
+    "parameters": {
+      "$connections": {
+            "value": "[parameters('$connections')]"
+          },
+
+      "storageAccountName": {
+        "value": "[parameters('storageAccountName')]"
+      },
+      "auditLogTableName": {
+        "value": "[parameters('auditLogTableName')]"
+      },
+      "sharePointSiteUrl": {
+        "value": "[parameters('sharePointSiteUrl')]"
+      },
+      "notificationServiceUrl": {
+        "value": "[parameters('notificationServiceUrl')]"
+      },
+      "callbackUrl": {
+        "value": "[parameters('callbackUrl')]"
+      },
+      "completionUrl": {
+        "value": "[parameters('completionUrl')]"
+      },
+      "afterScopingTriagingUrl": {
+        "value": "[parameters('afterScopingTriagingUrl')]"
+      },
+      "triagingValidatorUrl": {
+        "value": "[parameters('triagingValidatorUrl')]"
+      },
+    
+      "callbackSecretKey": {
+        "value": "[parameters('callbackSecretKey')]"
+      },
+      "completionSasToken": {
+        "value": "[parameters('completionSasToken')]"
+      }
     }
+  }
+}
   ],
 
   "outputs": {

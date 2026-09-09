@@ -4,7 +4,7 @@ import uuid
 
 from pathlib import Path
 from typing import Any, Dict, Optional
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlparse, parse_qs, urlunparse
 
 import requests
 
@@ -24,9 +24,15 @@ class ReportingAzureManager:
 
         1. Resolve Azure Tables connection
         2. Resolve SharePoint connection
-        3. Resolve Split Vulnerabilities Function URL
-        4. Resolve Notification Logic App callback URL
-        5. Deploy arm/reporting.json
+        3. Resolve Azure Queue connection
+        4. Deploy Reporting 04 ONLY
+        5. Resolve Reporting 04 callback URL
+        6. Resolve Notification Logic App callback URL
+        7. Resolve Completion Logic App callback URL
+        8. Extract completionUrl and completionSasToken
+        9. Resolve Function URLs
+       10. Deploy Reporting 03 ONLY
+       11. Return deployment details
     """
 
     MANAGEMENT_API_VERSION = "2022-03-01"
@@ -130,17 +136,19 @@ class ReportingAzureManager:
         resource_group_name: str,
         azure_tables_connection_name: str,
         sharepoint_connection_name: str,
+        azure_queue_connection_name: str,
     ) -> Dict[str, str]:
         """
-        Resolve existing Azure Tables and SharePoint
-        API connection resource IDs.
+        Resolve existing Azure Tables, SharePoint and
+        Azure Queue API connection resource IDs.
         """
 
         logger.info(
             "Resolving Reporting API connections: "
-            "azure_tables=%s sharepoint=%s",
+            "azure_tables=%s sharepoint=%s azure_queue=%s",
             azure_tables_connection_name,
             sharepoint_connection_name,
+            azure_queue_connection_name,
         )
 
         resource_client = ResourceManagementClient(
@@ -151,6 +159,8 @@ class ReportingAzureManager:
         table_connection_id: Optional[str] = None
 
         sharepoint_connection_id: Optional[str] = None
+
+        queue_connection_id: Optional[str] = None
 
         connections = (
             resource_client.resources.list_by_resource_group(
@@ -174,6 +184,10 @@ class ReportingAzureManager:
 
                 sharepoint_connection_id = connection.id
 
+            elif connection_name == azure_queue_connection_name:
+
+                queue_connection_id = connection.id
+
         if not table_connection_id:
 
             raise ValueError(
@@ -188,6 +202,13 @@ class ReportingAzureManager:
                 f"{sharepoint_connection_name}"
             )
 
+        if not queue_connection_id:
+
+            raise ValueError(
+                "Azure Queue API connection was not found: "
+                f"{azure_queue_connection_name}"
+            )
+
         logger.info(
             "Reporting API connections resolved successfully."
         )
@@ -196,6 +217,9 @@ class ReportingAzureManager:
             "table_connection_id": table_connection_id,
             "sharepoint_connection_id": (
                 sharepoint_connection_id
+            ),
+            "queue_connection_id": (
+                queue_connection_id
             ),
         }
 
@@ -235,6 +259,9 @@ class ReportingAzureManager:
             ),
             "sharepointonline": (
                 f"{base}/sharepointonline"
+            ),
+            "azurequeues": (
+                f"{base}/azurequeues"
             ),
         }
 
@@ -576,7 +603,9 @@ class ReportingAzureManager:
         trigger_name: str,
     ) -> str:
         """
-        Resolve the callback URL for a Logic App trigger.
+        Resolve the complete callback URL for a Logic App trigger.
+
+        Calls Azure listCallbackUrl.
         """
 
         trigger_response = (
@@ -627,7 +656,6 @@ class ReportingAzureManager:
             ):
 
                 selected_trigger = trigger
-
                 break
 
         # --------------------------------------------------------
@@ -668,7 +696,6 @@ class ReportingAzureManager:
                     ):
 
                         selected_trigger = trigger
-
                         break
 
                 if selected_trigger:
@@ -791,36 +818,157 @@ class ReportingAzureManager:
         return str(resolved_url)
 
     # ============================================================
-    # DEPLOY REPORTING
+    # LOGIC APP CALLBACK DETAILS
     # ============================================================
 
-    def deploy(
+    def get_logic_app_callback_details(
         self,
-        request: Any,
-        connections: Dict[str, str],
-        notification_service_url: str,
-        split_vulnerabilities_function_url: str,
-    ) -> Dict[str, Any]:
+        subscription_id: str,
+        resource_group_name: str,
+        logic_app_name: str,
+        trigger_name: str,
+    ) -> Dict[str, str]:
         """
-        Deploy arm/reporting.json.
+        Resolve a Logic App callback URL and split it into:
 
-        Dynamic values:
+            completion_url
+            completion_sas_token
 
-            notification_service_url
-                -> notificationServiceUrl
+        completion_url contains only the URL path.
 
-            split_vulnerabilities_function_url
-                -> splitVulnerabilitiesFunctionUrl
+        The /complete/{taskId}/{workflowName}/{token}
+        path is NOT added here.
         """
 
-        resource_client = ResourceManagementClient(
-            self.credential,
-            request.subscription_id,
+        resolved_callback_url = (
+            self.get_logic_app_callback_url(
+                subscription_id=subscription_id,
+                resource_group_name=resource_group_name,
+                logic_app_name=logic_app_name,
+                trigger_name=trigger_name,
+            )
+        )
+
+        parsed = urlparse(
+            resolved_callback_url
+        )
+
+        if not parsed.scheme or not parsed.netloc:
+
+            raise ValueError(
+                "Azure returned an invalid Logic App "
+                f"callback URL: {resolved_callback_url}"
+            )
+
+        query_parameters = parse_qs(
+            parsed.query,
+            keep_blank_values=True,
+        )
+
+        sig_values = query_parameters.get(
+            "sig"
+        )
+
+        if not sig_values or not sig_values[0]:
+
+            raise ValueError(
+                "The Logic App callback URL does not "
+                "contain a 'sig' parameter."
+            )
+
+        completion_sas_token = str(
+            sig_values[0]
         )
 
         # --------------------------------------------------------
-        # ARM template
+        # Remove query string
         # --------------------------------------------------------
+
+        completion_url = urlunparse(
+            (
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path.rstrip("/"),
+                "",
+                "",
+                "",
+            )
+        )
+
+        if not completion_url:
+
+            raise ValueError(
+                "Unable to construct completion URL from "
+                f"Logic App callback URL: "
+                f"{resolved_callback_url}"
+            )
+
+        logger.info(
+            "Logic App completion URL resolved successfully: "
+            "logic_app=%s trigger=%s",
+            logic_app_name,
+            trigger_name,
+        )
+
+        logger.info(
+            "Logic App completion SAS token extracted "
+            "from callback URL."
+        )
+
+        return {
+            "completion_url": completion_url,
+            "completion_sas_token": (
+                completion_sas_token
+            ),
+        }
+
+    # ============================================================
+    # REPORTING 04 CALLBACK URL
+    # ============================================================
+
+    def get_reporting_callback_url(
+        self,
+        subscription_id: str,
+        resource_group_name: str,
+        reporting_logic_app_name: str,
+        trigger_name: str = "When_a_HTTP_request_is_received",
+    ) -> str:
+        """
+        Resolve the callback URL of Reporting 04.
+
+        This URL becomes callbackUrl for Reporting 03.
+        """
+
+        callback_url = (
+            self.get_logic_app_callback_url(
+                subscription_id=subscription_id,
+                resource_group_name=resource_group_name,
+                logic_app_name=reporting_logic_app_name,
+                trigger_name=trigger_name,
+            )
+        )
+
+        if not callback_url:
+
+            raise ValueError(
+                "Unable to resolve Reporting 04 "
+                "callback URL."
+            )
+
+        logger.info(
+            "Reporting 04 callback URL resolved successfully."
+        )
+
+        return callback_url
+
+    # ============================================================
+    # LOAD REPORTING ARM TEMPLATE
+    # ============================================================
+
+    def _load_reporting_template(self) -> Dict[str, Any]:
+        """
+        Load the combined Reporting ARM template.
+        """
 
         template_path = (
             Path(__file__).resolve().parent.parent.parent
@@ -843,171 +991,343 @@ class ReportingAzureManager:
 
             template = json.load(file)
 
-        # --------------------------------------------------------
-        # Connection IDs
-        # --------------------------------------------------------
+        if not isinstance(template, dict):
 
-        table_connection_id = connections.get(
-            "table_connection_id"
+            raise ValueError(
+                "Reporting ARM template must be a JSON object."
+            )
+
+        return template
+
+    # ============================================================
+    # GET REPORTING RESOURCE
+    # ============================================================
+
+    def _get_reporting_resource(
+        self,
+        template: Dict[str, Any],
+        resource_name_parameter: str,
+    ) -> Dict[str, Any]:
+        """
+        Extract one Reporting Logic App resource from
+        the combined ARM template.
+
+        Supports ARM parameter expressions such as:
+
+            [parameters('LA-reporting-04')]
+
+        and also handles minor formatting differences.
+        """
+
+        resources = template.get(
+            "resources",
+            [],
         )
 
-        sharepoint_connection_id = connections.get(
-            "sharepoint_connection_id"
+        if not isinstance(resources, list):
+
+            raise ValueError(
+                "Reporting ARM template resources "
+                "must be a list."
+            )
+
+        # --------------------------------------------------------
+        # Normalize target parameter expression
+        # --------------------------------------------------------
+
+        target_expression = (
+            f"[parameters('{resource_name_parameter}')]"
         )
 
-        if not table_connection_id:
-
-            raise ValueError(
-                "Azure Tables connection ID is missing."
-            )
-
-        if not sharepoint_connection_id:
-
-            raise ValueError(
-                "SharePoint connection ID is missing."
-            )
-
-        # --------------------------------------------------------
-        # Validate dynamic URLs
-        # --------------------------------------------------------
-
-        if not notification_service_url:
-
-            raise ValueError(
-                "Notification Service callback URL "
-                "could not be resolved."
-            )
-
-        if not split_vulnerabilities_function_url:
-
-            raise ValueError(
-                "Split Vulnerabilities Function URL "
-                "could not be resolved."
-            )
-
-        # --------------------------------------------------------
-        # Managed API IDs
-        # --------------------------------------------------------
-
-        managed_api_ids = (
-            self._get_managed_api_ids(
-                subscription_id=request.subscription_id,
-                location=request.location,
-            )
+        normalized_target = (
+            target_expression
+            .replace(" ", "")
+            .replace('"', "'")
+            .lower()
         )
 
         # --------------------------------------------------------
-        # $connections
-        #
-        # IMPORTANT:
-        #
-        # reporting.json currently references:
-        #
-        #   azuretables-1
-        #   sharepointonline-1
-        #
-        # inside:
-        #
-        #   @parameters('$connections')['azuretables-1']
-        #   @parameters('$connections')['sharepointonline-1']
-        #
-        # Therefore these keys must match those names.
+        # Search Logic App resources
         # --------------------------------------------------------
 
-        connections_parameter = {
-            "azuretables-1": {
-                "connectionId": table_connection_id,
-                "connectionName": (
-                    request.azure_tables_connection_name
-                ),
-                "id": managed_api_ids[
-                    "azuretables"
-                ],
-            },
-            "sharepointonline-1": {
-                "connectionId": sharepoint_connection_id,
-                "connectionName": (
-                    request.sharepoint_connection_name
-                ),
-                "id": managed_api_ids[
-                    "sharepointonline"
-                ],
-            },
+        available_resources = []
+
+        for resource in resources:
+
+            if not isinstance(resource, dict):
+                continue
+
+            resource_type = str(
+                resource.get(
+                    "type",
+                    "",
+                )
+            ).lower()
+
+            if resource_type != (
+                "microsoft.logic/workflows"
+            ).lower():
+                continue
+
+            resource_name = resource.get(
+                "name"
+            )
+
+            available_resources.append(
+                resource_name
+            )
+
+            if not isinstance(
+                resource_name,
+                str,
+            ):
+                continue
+
+            normalized_name = (
+                resource_name
+                .replace(" ", "")
+                .replace('"', "'")
+                .lower()
+            )
+
+            if normalized_name == normalized_target:
+
+                logger.info(
+                    "Found Reporting Logic App resource "
+                    "for parameter '%s'.",
+                    resource_name_parameter,
+                )
+
+                return resource
+
+        # --------------------------------------------------------
+        # Fallback:
+        # Search the resource JSON for the parameter reference.
+        # --------------------------------------------------------
+
+        parameter_reference = (
+            f"parameters('{resource_name_parameter}')"
+            .replace(" ", "")
+            .lower()
+        )
+
+        for resource in resources:
+
+            if not isinstance(resource, dict):
+                continue
+
+            resource_type = str(
+                resource.get(
+                    "type",
+                    "",
+                )
+            ).lower()
+
+            if resource_type != (
+                "microsoft.logic/workflows"
+            ).lower():
+                continue
+
+            resource_name = resource.get(
+                "name"
+            )
+
+            if not isinstance(
+                resource_name,
+                str,
+            ):
+                continue
+
+            normalized_name = (
+                resource_name
+                .replace(" ", "")
+                .replace('"', "'")
+                .lower()
+            )
+
+            if parameter_reference in normalized_name:
+
+                logger.info(
+                    "Found Reporting Logic App resource "
+                    "using parameter reference '%s'.",
+                    resource_name_parameter,
+                )
+
+                return resource
+
+        raise ValueError(
+            "Unable to find Reporting Logic App resource "
+            f"using parameter '{resource_name_parameter}'. "
+            f"Available Logic App resources: "
+            f"{available_resources}"
+        )
+
+    # ============================================================
+    # BUILD SINGLE LOGIC APP TEMPLATE
+    # ============================================================
+
+    def _build_single_logic_app_template(
+        self,
+        template: Dict[str, Any],
+        resource_name_parameter: str,
+    ) -> Dict[str, Any]:
+        """
+        Create an ARM template containing only one
+        Reporting Logic App resource.
+
+        This is required because reporting.json contains
+        both Reporting 04 and Reporting 03.
+        """
+
+        resource = self._get_reporting_resource(
+            template=template,
+            resource_name_parameter=resource_name_parameter,
+        )
+
+        original_parameters = template.get(
+            "parameters",
+            {},
+        )
+
+        if not isinstance(original_parameters, dict):
+
+            raise ValueError(
+                "Reporting ARM template parameters "
+                "must be an object."
+            )
+
+        required_parameter_names = {
+            resource_name_parameter,
+            "location",
         }
 
         # --------------------------------------------------------
-        # ARM PARAMETERS
+        # Keep only parameters needed by selected resource.
         # --------------------------------------------------------
 
-        parameters: Dict[str, Any] = {
+        filtered_parameters = {}
 
-            # Reporting Logic App
-            "LA-reporting-04": {
-                "value": (
-                    request.reporting_logic_app_name
-                ),
-            },
+        for name, definition in original_parameters.items():
 
-            # Azure region
-            "location": {
-                "value": request.location,
-            },
+            if name in required_parameter_names:
 
-            # Storage Account
-            "storageAccountName": {
-                "value": request.storage_account_name,
-            },
+                filtered_parameters[name] = definition
 
-            # DYNAMIC Notification Logic App URL
-            "notificationServiceUrl": {
-                "value": notification_service_url,
-            },
+        # --------------------------------------------------------
+        # Reporting 04 parameters
+        # --------------------------------------------------------
 
-            # SharePoint Site
-            "sharePointSiteUrl": {
-                "value": request.share_point_site_url,
-            },
+        if resource_name_parameter == "LA-reporting-04":
 
-            # Audit Log table
-          
+            reporting_04_parameters = {
+                "storageAccountName",
+                "notificationServiceUrl",
+                "sharePointSiteUrl",
+                "auditLogTableName",
+                "splitVulnerabilitiesFunctionUrl",
+                "$connections",
+            }
 
-            # DYNAMIC Function URL
-            "splitVulnerabilitiesFunctionUrl": {
-                "value": (
-                    split_vulnerabilities_function_url
-                ),
-            },
+            for name in reporting_04_parameters:
 
-            # API connection names
-            "azureTablesConnectionName": {
-                "value": (
-                    request.azure_tables_connection_name
-                ),
-            },
+                if name in original_parameters:
 
-            "sharePointOnlineConnectionName": {
-                "value": (
-                    request.sharepoint_connection_name
-                ),
-            },
+                    filtered_parameters[name] = (
+                        original_parameters[name]
+                    )
 
-            # Logic App $connections
-            "$connections": {
-                "value": connections_parameter,
-            },
+        # --------------------------------------------------------
+        # Reporting 03 parameters
+        # --------------------------------------------------------
+
+        elif resource_name_parameter == "LA-reporting-03":
+
+            reporting_03_parameters = {
+                "storageAccountName",
+                "auditLogTableName",
+                "sharePointSiteUrl",
+                "notificationServiceUrl",
+                "callbackUrl",
+                "completionUrl",
+                "completionSasToken",
+                "afterScopingTriagingUrl",
+                "triagingValidatorUrl",
+                "logicAppName",
+                "callbackSecretKey",
+                "$connections",
+            }
+
+            for name in reporting_03_parameters:
+
+                if name in original_parameters:
+
+                    filtered_parameters[name] = (
+                        original_parameters[name]
+                    )
+
+            # ----------------------------------------------------
+            # IMPORTANT:
+            #
+            # The combined ARM template may not declare
+            # logicAppName at the top level even though the
+            # Reporting 03 resource references:
+            #
+            # [parameters('logicAppName')]
+            #
+            # Add it dynamically if it is missing.
+            # ----------------------------------------------------
+
+            if "logicAppName" not in filtered_parameters:
+
+                filtered_parameters["logicAppName"] = {
+                    "type": "string",
+                    "defaultValue": "LA-reporting-03",
+                }
+
+        else:
+
+            raise ValueError(
+                "Unsupported Reporting resource parameter: "
+                f"{resource_name_parameter}"
+            )
+
+        return {
+            "$schema": template.get(
+                "$schema"
+            ),
+            "contentVersion": template.get(
+                "contentVersion",
+                "1.0.0.0",
+            ),
+            "parameters": filtered_parameters,
+            "resources": [
+                resource
+            ],
         }
 
-        # --------------------------------------------------------
-        # Deployment name
-        # --------------------------------------------------------
+    # ============================================================
+    # DEPLOY SINGLE REPORTING TEMPLATE
+    # ============================================================
+
+    def _deploy_reporting_template(
+        self,
+        request: Any,
+        template: Dict[str, Any],
+        parameters: Dict[str, Any],
+        deployment_prefix: str,
+    ) -> Dict[str, Any]:
+        """
+        Deploy a single Reporting ARM template.
+        """
+
+        resource_client = ResourceManagementClient(
+            self.credential,
+            request.subscription_id,
+        )
 
         deployment_name = (
-            f"reporting-{uuid.uuid4().hex[:8]}"
+            f"{deployment_prefix}-{uuid.uuid4().hex[:8]}"
         )
-
-        # --------------------------------------------------------
-        # Deployment body
-        # --------------------------------------------------------
 
         deployment_body = {
             "properties": {
@@ -1018,22 +1338,10 @@ class ReportingAzureManager:
         }
 
         logger.info(
-            "Deploying Reporting Logic App: %s",
-            request.reporting_logic_app_name,
+            "Starting ARM deployment: "
+            "deployment=%s",
+            deployment_name,
         )
-
-        logger.info(
-            "Notification Service URL resolved dynamically."
-        )
-
-        logger.info(
-            "Split Vulnerabilities Function URL "
-            "resolved dynamically."
-        )
-
-        # --------------------------------------------------------
-        # ARM deployment
-        # --------------------------------------------------------
 
         try:
 
@@ -1057,15 +1365,11 @@ class ReportingAzureManager:
                 )
 
             logger.info(
-                "Reporting deployment completed: "
+                "ARM deployment completed: "
                 "deployment=%s state=%s",
                 deployment_name,
                 provisioning_state,
             )
-
-            # ----------------------------------------------------
-            # Failed deployment
-            # ----------------------------------------------------
 
             if provisioning_state not in {
                 "Succeeded",
@@ -1102,10 +1406,6 @@ class ReportingAzureManager:
                     ),
                 }
 
-            # ----------------------------------------------------
-            # Success
-            # ----------------------------------------------------
-
             return {
                 "deployment_name": (
                     deployment_name
@@ -1118,7 +1418,8 @@ class ReportingAzureManager:
         except Exception as exc:
 
             logger.exception(
-                "Reporting ARM deployment failed."
+                "ARM deployment failed: %s",
+                deployment_name,
             )
 
             return {
@@ -1128,3 +1429,467 @@ class ReportingAzureManager:
                 "provisioning_state": "Failed",
                 "error": str(exc),
             }
+
+    # ============================================================
+    # DEPLOY REPORTING 04
+    # ============================================================
+
+    def deploy(
+        self,
+        request: Any,
+        connections: Dict[str, str],
+        notification_service_url: str,
+        split_vulnerabilities_function_url: str,
+    ) -> Dict[str, Any]:
+        """
+        Deploy Reporting 04 ONLY.
+
+        Reporting 03 is intentionally NOT deployed here.
+
+        Reporting 03 is deployed later using deploy_reporting_03()
+        after Reporting 04 callbackUrl has been resolved.
+        """
+
+        table_connection_id = connections.get(
+            "table_connection_id"
+        )
+
+        sharepoint_connection_id = connections.get(
+            "sharepoint_connection_id"
+        )
+
+        queue_connection_id = connections.get(
+            "queue_connection_id"
+        )
+
+        if not table_connection_id:
+
+            raise ValueError(
+                "Azure Tables connection ID is missing."
+            )
+
+        if not sharepoint_connection_id:
+
+            raise ValueError(
+                "SharePoint connection ID is missing."
+            )
+
+        if not queue_connection_id:
+
+            raise ValueError(
+                "Azure Queue connection ID is missing."
+            )
+
+        if not notification_service_url:
+
+            raise ValueError(
+                "Notification Service callback URL "
+                "could not be resolved."
+            )
+
+        if not split_vulnerabilities_function_url:
+
+            raise ValueError(
+                "Split Vulnerabilities Function URL "
+                "could not be resolved."
+            )
+
+        # --------------------------------------------------------
+        # Load combined template
+        # --------------------------------------------------------
+
+        combined_template = (
+            self._load_reporting_template()
+        )
+
+        # --------------------------------------------------------
+        # Extract Reporting 04 only
+        # --------------------------------------------------------
+
+        template = (
+            self._build_single_logic_app_template(
+                template=combined_template,
+                resource_name_parameter="LA-reporting-04",
+            )
+        )
+
+        # --------------------------------------------------------
+        # Managed API IDs
+        # --------------------------------------------------------
+
+        managed_api_ids = (
+            self._get_managed_api_ids(
+                subscription_id=request.subscription_id,
+                location=request.location,
+            )
+        )
+
+        # --------------------------------------------------------
+        # $connections
+        # --------------------------------------------------------
+
+        connections_parameter = {
+            "azuretables-1": {
+                "connectionId": table_connection_id,
+                "connectionName": (
+                    request.azure_tables_connection_name
+                ),
+                "id": managed_api_ids[
+                    "azuretables"
+                ],
+            },
+            "sharepointonline-1": {
+                "connectionId": sharepoint_connection_id,
+                "connectionName": (
+                    request.sharepoint_connection_name
+                ),
+                "id": managed_api_ids[
+                    "sharepointonline"
+                ],
+            },
+            "azurequeues-1": {
+                "connectionId": queue_connection_id,
+                "connectionName": (
+                    request.azure_queue_connection_name
+                ),
+                "id": managed_api_ids[
+                    "azurequeues"
+                ],
+            },
+        }
+
+        # --------------------------------------------------------
+        # ARM parameters - Reporting 04
+        # --------------------------------------------------------
+
+        parameters: Dict[str, Any] = {
+
+            "LA-reporting-04": {
+                "value": (
+                    request.reporting_logic_app_name
+                ),
+            },
+
+            "location": {
+                "value": request.location,
+            },
+
+            "storageAccountName": {
+                "value": request.storage_account_name,
+            },
+
+            "notificationServiceUrl": {
+                "value": notification_service_url,
+            },
+
+            "sharePointSiteUrl": {
+                "value": request.share_point_site_url,
+            },
+
+            "splitVulnerabilitiesFunctionUrl": {
+                "value": (
+                    split_vulnerabilities_function_url
+                ),
+            },
+
+            "auditLogTableName": {
+                "value": "NotificationLogs",
+            },
+
+            "$connections": {
+                "value": connections_parameter,
+            },
+        }
+
+        logger.info(
+            "Deploying Reporting 04 ONLY: %s",
+            request.reporting_logic_app_name,
+        )
+
+        return self._deploy_reporting_template(
+            request=request,
+            template=template,
+            parameters=parameters,
+            deployment_prefix="reporting-04",
+        )
+
+    # ============================================================
+    # DEPLOY REPORTING 03
+    # ============================================================
+
+    def deploy_reporting_03(
+        self,
+        request: Any,
+        connections: Dict[str, str],
+        notification_service_url: str,
+        callback_url: str,
+        completion_url: str,
+        completion_sas_token: str,
+        after_scoping_triaging_url: str,
+        triaging_validator_url: str,
+    ) -> Dict[str, Any]:
+        """
+        Deploy Reporting 03 ONLY.
+
+        Reporting 03 receives dynamically resolved values:
+
+            callbackUrl
+            completionUrl
+            completionSasToken
+            afterScopingTriagingUrl
+            triagingValidatorUrl
+        """
+
+        table_connection_id = connections.get(
+            "table_connection_id"
+        )
+
+        sharepoint_connection_id = connections.get(
+            "sharepoint_connection_id"
+        )
+
+        queue_connection_id = connections.get(
+            "queue_connection_id"
+        )
+
+        if not table_connection_id:
+
+            raise ValueError(
+                "Azure Tables connection ID is missing."
+            )
+
+        if not sharepoint_connection_id:
+
+            raise ValueError(
+                "SharePoint connection ID is missing."
+            )
+
+        if not queue_connection_id:
+
+            raise ValueError(
+                "Azure Queue connection ID is missing."
+            )
+
+        # --------------------------------------------------------
+        # Validate dynamic values
+        # --------------------------------------------------------
+
+        dynamic_values = {
+            "notificationServiceUrl": (
+                notification_service_url
+            ),
+            "callbackUrl": callback_url,
+            "completionUrl": completion_url,
+            "completionSasToken": completion_sas_token,
+            "afterScopingTriagingUrl": (
+                after_scoping_triaging_url
+            ),
+            "triagingValidatorUrl": (
+                triaging_validator_url
+            ),
+            "callbackSecretKey": (
+                request.callback_secret_key
+            ),
+        }
+
+        for name, value in dynamic_values.items():
+
+            if value is None or str(value).strip() == "":
+
+                raise ValueError(
+                    f"Required Reporting 03 value "
+                    f"'{name}' is missing."
+                )
+
+        # --------------------------------------------------------
+        # Load combined template
+        # --------------------------------------------------------
+
+        combined_template = (
+            self._load_reporting_template()
+        )
+
+        # --------------------------------------------------------
+        # Extract Reporting 03 only
+        # --------------------------------------------------------
+
+        template = (
+            self._build_single_logic_app_template(
+                template=combined_template,
+                resource_name_parameter="LA-reporting-03",
+            )
+        )
+
+        # --------------------------------------------------------
+        # Managed API IDs
+        # --------------------------------------------------------
+
+        managed_api_ids = (
+            self._get_managed_api_ids(
+                subscription_id=request.subscription_id,
+                location=request.location,
+            )
+        )
+
+        # --------------------------------------------------------
+        # $connections
+        # --------------------------------------------------------
+
+        connections_parameter = {
+            "azuretables-1": {
+                "connectionId": table_connection_id,
+                "connectionName": (
+                    request.azure_tables_connection_name
+                ),
+                "id": managed_api_ids[
+                    "azuretables"
+                ],
+            },
+            "sharepointonline-1": {
+                "connectionId": sharepoint_connection_id,
+                "connectionName": (
+                    request.sharepoint_connection_name
+                ),
+                "id": managed_api_ids[
+                    "sharepointonline"
+                ],
+            },
+            "azurequeues-1": {
+                "connectionId": queue_connection_id,
+                "connectionName": (
+                    request.azure_queue_connection_name
+                ),
+                "id": managed_api_ids[
+                    "azurequeues"
+                ],
+            },
+        }
+
+        # --------------------------------------------------------
+        # ARM parameters - Reporting 03
+        # --------------------------------------------------------
+
+        parameters: Dict[str, Any] = {
+
+            "LA-reporting-03": {
+                "value": (
+                    request.reporting_03_logic_app_name
+                ),
+            },
+
+            "location": {
+                "value": request.location,
+            },
+
+            "storageAccountName": {
+                "value": request.storage_account_name,
+            },
+
+            "auditLogTableName": {
+                "value": "NotificationLogs",
+            },
+
+            "sharePointSiteUrl": {
+                "value": request.share_point_site_url,
+            },
+
+            "notificationServiceUrl": {
+                "value": notification_service_url,
+            },
+
+            # ----------------------------------------------------
+            # Reporting 04 callback URL
+            # ----------------------------------------------------
+
+            "callbackUrl": {
+                "value": callback_url,
+            },
+
+            # ----------------------------------------------------
+            # Completion Logic App base URL
+            #
+            # Does NOT contain:
+            #
+            # /complete/{taskId}/...
+            #
+            # or query parameters.
+            # ----------------------------------------------------
+
+            "completionUrl": {
+                "value": completion_url,
+            },
+
+            # ----------------------------------------------------
+            # Raw sig value
+            # ----------------------------------------------------
+
+            "completionSasToken": {
+                "value": completion_sas_token,
+            },
+
+            # ----------------------------------------------------
+            # Function URLs
+            # ----------------------------------------------------
+
+            "afterScopingTriagingUrl": {
+                "value": (
+                    after_scoping_triaging_url
+                ),
+            },
+
+            "triagingValidatorUrl": {
+                "value": (
+                    triaging_validator_url
+                ),
+            },
+
+            # ----------------------------------------------------
+            # Reporting 03 workflow name
+            # ----------------------------------------------------
+
+            "logicAppName": {
+                "value": (
+                    request.reporting_03_logic_app_name
+                ),
+            },
+
+            # ----------------------------------------------------
+            # Callback secret
+            # ----------------------------------------------------
+
+            "callbackSecretKey": {
+                "value": (
+                    request.callback_secret_key
+                ),
+            },
+
+            # ----------------------------------------------------
+            # API connections
+            # ----------------------------------------------------
+
+            "$connections": {
+                "value": connections_parameter,
+            },
+        }
+
+        logger.info(
+            "Deploying Reporting 03 ONLY: %s",
+            request.reporting_03_logic_app_name,
+        )
+
+        logger.info(
+            "Reporting 03 callbackUrl is the "
+            "Reporting 04 callback URL."
+        )
+
+        logger.info(
+            "Reporting 03 completionUrl and "
+            "completionSasToken resolved dynamically."
+        )
+
+        return self._deploy_reporting_template(
+            request=request,
+            template=template,
+            parameters=parameters,
+            deployment_prefix="reporting-03",
+        )
