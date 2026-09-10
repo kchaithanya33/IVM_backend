@@ -1,4 +1,3 @@
-
 import logging
 
 from app.azure.reporting import ReportingAzureManager
@@ -36,27 +35,36 @@ class ReportingDeploymentService:
        14. Resolve Reporting 02 Function URLs
        15. Resolve Completion Notification Logic App callback URL
        16. Deploy Reporting 02 ONLY
-       17. Return all dynamically resolved values
+       17. Resolve Reporting 02 callback URL
+       18. Resolve Reporting 1.5 Function URLs
+       19. Deploy Reporting 1.5 ONLY
+       20. Return all dynamically resolved values
 
     IMPORTANT:
 
         callbackUrl:
-            Reporting 04 callback URL
+            Reporting 04 callback URL.
+            Used by Reporting 03.
 
         callbackUri02:
-            Reporting 03 callback URL
+            Reporting 03 callback URL.
+            Used by Reporting 02.
+
+        callbackUri1.5:
+            Reporting 02 callback URL.
+            Used by Reporting 1.5.
 
         completionUrl:
             Existing Completion Logic App callback URL
-            without query parameters
+            without query parameters.
 
         completionSasToken:
             'sig' value extracted from Existing Completion
-            Logic App callback
+            Logic App callback.
 
         completion_notification_LogicAppUrl:
             Separate Completion Notification Logic App
-            callback URL
+            callback URL.
     """
 
     def __init__(self) -> None:
@@ -79,25 +87,35 @@ class ReportingDeploymentService:
         sharepoint_connection_id = None
         queue_connection_id = None
 
+        # Reporting 04 / Reporting 03 Function URLs
         split_vulnerabilities_function_url = None
         after_scoping_triaging_url = None
         triaging_validator_url = None
 
-        # Reporting 02 function URLs
+        # Reporting 02 Function URLs
         data_merging_function_url = None
         new_vulnerabilities_function_url = None
         servicenow_api_url = None
         config_service_url = None
 
+        # Reporting 1.5 Function URLs
+        check_qualys_report_url = None
+        download_qualys_report_url = None
+        get_dfn_report_url = None
+
+        # Logic App URLs
         notification_service_url = None
 
         completion_url = None
         completion_sas_token = None
         completion_notification_logic_app_url = None
 
+        # Callback URLs
         callback_url = None
         callback_uri_02 = None
+        reporting_02_callback_url = None
 
+        # Deployment information
         deployment_name = None
         provisioning_state = None
 
@@ -106,6 +124,9 @@ class ReportingDeploymentService:
 
         reporting_02_deployment_name = None
         reporting_02_provisioning_state = None
+
+        reporting_1_5_deployment_name = None
+        reporting_1_5_provisioning_state = None
 
         try:
 
@@ -133,7 +154,12 @@ class ReportingDeploymentService:
             )
 
             logger.info(
-                "Reporting deployment flow: 04 -> 03 -> 02"
+                "Reporting 1.5 Logic App: %s",
+                request.reporting_1_5_logic_app_name,
+            )
+
+            logger.info(
+                "Reporting deployment flow: 04 -> 03 -> 02 -> 1.5"
             )
 
             logger.info(
@@ -448,6 +474,12 @@ class ReportingDeploymentService:
                     reporting_03_logic_app_name=(
                         request.reporting_03_logic_app_name
                     ),
+                    reporting_02_logic_app_name=(
+                        request.reporting_02_logic_app_name
+                    ),
+                    reporting_1_5_logic_app_name=(
+                        request.reporting_1_5_logic_app_name
+                    ),
                     storage_account_name=(
                         request.storage_account_name
                     ),
@@ -459,6 +491,8 @@ class ReportingDeploymentService:
                     reporting_03_provisioning_state=None,
                     reporting_02_deployment_name=None,
                     reporting_02_provisioning_state=None,
+                    reporting_1_5_deployment_name=None,
+                    reporting_1_5_provisioning_state=None,
                     table_connection_id=table_connection_id,
                     sharepoint_connection_id=(
                         sharepoint_connection_id
@@ -466,6 +500,8 @@ class ReportingDeploymentService:
                     queue_connection_id=queue_connection_id,
                     callback_url=None,
                     reporting_03_callback_url=None,
+                    reporting_02_callback_url=None,
+                    callback_uri_1_5=None,
                     function_urls=ReportingFunctionUrls(
                         split_vulnerabilities_function_url=(
                             split_vulnerabilities_function_url
@@ -484,6 +520,13 @@ class ReportingDeploymentService:
                         ),
                         servicenow_api_url=servicenow_api_url,
                         config_service_url=config_service_url,
+                        check_qualys_report_url=(
+                            check_qualys_report_url
+                        ),
+                        download_qualys_report_url=(
+                            download_qualys_report_url
+                        ),
+                        get_dfn_report_url=get_dfn_report_url,
                     ),
                     logic_app_urls=ReportingLogicAppUrls(
                         notification_service_url=(
@@ -496,6 +539,7 @@ class ReportingDeploymentService:
                         completion_notification_logic_app_url=(
                             completion_notification_logic_app_url
                         ),
+                        callback_uri_1_5=None,
                     ),
                     completion_url=completion_url,
                     completion_sas_token=completion_sas_token,
@@ -612,6 +656,12 @@ class ReportingDeploymentService:
                     reporting_03_logic_app_name=(
                         request.reporting_03_logic_app_name
                     ),
+                    reporting_02_logic_app_name=(
+                        request.reporting_02_logic_app_name
+                    ),
+                    reporting_1_5_logic_app_name=(
+                        request.reporting_1_5_logic_app_name
+                    ),
                     storage_account_name=(
                         request.storage_account_name
                     ),
@@ -625,6 +675,8 @@ class ReportingDeploymentService:
                     ),
                     reporting_02_deployment_name=None,
                     reporting_02_provisioning_state=None,
+                    reporting_1_5_deployment_name=None,
+                    reporting_1_5_provisioning_state=None,
                     table_connection_id=table_connection_id,
                     sharepoint_connection_id=(
                         sharepoint_connection_id
@@ -632,6 +684,8 @@ class ReportingDeploymentService:
                     queue_connection_id=queue_connection_id,
                     callback_url=callback_url,
                     reporting_03_callback_url=None,
+                    reporting_02_callback_url=None,
+                    callback_uri_1_5=None,
                     function_urls=ReportingFunctionUrls(
                         split_vulnerabilities_function_url=(
                             split_vulnerabilities_function_url
@@ -650,6 +704,13 @@ class ReportingDeploymentService:
                         ),
                         servicenow_api_url=servicenow_api_url,
                         config_service_url=config_service_url,
+                        check_qualys_report_url=(
+                            check_qualys_report_url
+                        ),
+                        download_qualys_report_url=(
+                            download_qualys_report_url
+                        ),
+                        get_dfn_report_url=get_dfn_report_url,
                     ),
                     logic_app_urls=ReportingLogicAppUrls(
                         notification_service_url=(
@@ -662,6 +723,7 @@ class ReportingDeploymentService:
                         completion_notification_logic_app_url=(
                             completion_notification_logic_app_url
                         ),
+                        callback_uri_1_5=None,
                     ),
                     completion_url=completion_url,
                     completion_sas_token=completion_sas_token,
@@ -914,8 +976,6 @@ class ReportingDeploymentService:
                         callback_uri_02
                     ),
 
-                  
-
                     completion_url=(
                         completion_url
                     ),
@@ -971,6 +1031,12 @@ class ReportingDeploymentService:
                     reporting_03_logic_app_name=(
                         request.reporting_03_logic_app_name
                     ),
+                    reporting_02_logic_app_name=(
+                        request.reporting_02_logic_app_name
+                    ),
+                    reporting_1_5_logic_app_name=(
+                        request.reporting_1_5_logic_app_name
+                    ),
                     storage_account_name=(
                         request.storage_account_name
                     ),
@@ -988,6 +1054,8 @@ class ReportingDeploymentService:
                     reporting_02_provisioning_state=(
                         reporting_02_provisioning_state
                     ),
+                    reporting_1_5_deployment_name=None,
+                    reporting_1_5_provisioning_state=None,
                     table_connection_id=table_connection_id,
                     sharepoint_connection_id=(
                         sharepoint_connection_id
@@ -995,6 +1063,8 @@ class ReportingDeploymentService:
                     queue_connection_id=queue_connection_id,
                     callback_url=callback_url,
                     reporting_03_callback_url=callback_uri_02,
+                    reporting_02_callback_url=None,
+                    callback_uri_1_5=None,
                     function_urls=ReportingFunctionUrls(
                         split_vulnerabilities_function_url=(
                             split_vulnerabilities_function_url
@@ -1013,6 +1083,13 @@ class ReportingDeploymentService:
                         ),
                         servicenow_api_url=servicenow_api_url,
                         config_service_url=config_service_url,
+                        check_qualys_report_url=(
+                            check_qualys_report_url
+                        ),
+                        download_qualys_report_url=(
+                            download_qualys_report_url
+                        ),
+                        get_dfn_report_url=get_dfn_report_url,
                     ),
                     logic_app_urls=ReportingLogicAppUrls(
                         notification_service_url=(
@@ -1025,6 +1102,7 @@ class ReportingDeploymentService:
                         completion_notification_logic_app_url=(
                             completion_notification_logic_app_url
                         ),
+                        callback_uri_1_5=None,
                     ),
                     completion_url=completion_url,
                     completion_sas_token=completion_sas_token,
@@ -1034,7 +1112,326 @@ class ReportingDeploymentService:
                 )
 
             # ====================================================
-            # 17. SUCCESS
+            # 17. RESOLVE REPORTING 02 CALLBACK URL
+            #
+            # This URL becomes callbackUri1.5 for Reporting 1.5.
+            # ====================================================
+
+            logger.info(
+                "STEP 17: Resolving Reporting 02 "
+                "callback URL for Reporting 1.5."
+            )
+
+            reporting_02_callback_url = (
+                self.azure_manager.get_reporting_02_callback_url(
+                    subscription_id=request.subscription_id,
+                    resource_group_name=request.resource_group_name,
+                    reporting_02_logic_app_name=(
+                        request.reporting_02_logic_app_name
+                    ),
+                )
+            )
+
+            if not reporting_02_callback_url:
+                raise ValueError(
+                    "Reporting 02 callback URL "
+                    "could not be resolved for Reporting 1.5."
+                )
+
+            logger.info(
+                "Reporting 02 callback URL resolved "
+                "successfully for Reporting 1.5."
+            )
+
+            # ====================================================
+            # 18. RESOLVE REPORTING 1.5 FUNCTION URLS
+            # ====================================================
+
+            logger.info(
+                "STEP 18: Resolving Reporting 1.5 "
+                "Function URLs."
+            )
+
+            # ----------------------------------------------------
+            # Check Qualys Report Function
+            # ----------------------------------------------------
+
+            logger.info(
+                "Resolving Check Qualys Report Function URL."
+            )
+
+            check_qualys_report_url = (
+                self.azure_manager.get_function_url(
+                    subscription_id=request.subscription_id,
+                    resource_group_name=request.resource_group_name,
+                    function_app_name=(
+                        request.check_qualys_report_function_app_name
+                    ),
+                    function_name=(
+                        request.check_qualys_report_function_name
+                    ),
+                )
+            )
+
+            if not check_qualys_report_url:
+                raise ValueError(
+                    "Check Qualys Report Function URL "
+                    "could not be resolved."
+                )
+
+            logger.info(
+                "Check Qualys Report Function URL "
+                "resolved successfully."
+            )
+
+            # ----------------------------------------------------
+            # Download Qualys Report Function
+            # ----------------------------------------------------
+
+            logger.info(
+                "Resolving Download Qualys Report Function URL."
+            )
+
+            download_qualys_report_url = (
+                self.azure_manager.get_function_url(
+                    subscription_id=request.subscription_id,
+                    resource_group_name=request.resource_group_name,
+                    function_app_name=(
+                        request.download_qualys_report_function_app_name
+                    ),
+                    function_name=(
+                        request.download_qualys_report_function_name
+                    ),
+                )
+            )
+
+            if not download_qualys_report_url:
+                raise ValueError(
+                    "Download Qualys Report Function URL "
+                    "could not be resolved."
+                )
+
+            logger.info(
+                "Download Qualys Report Function URL "
+                "resolved successfully."
+            )
+
+            # ----------------------------------------------------
+            # Get DFN Report Function
+            # ----------------------------------------------------
+
+            logger.info(
+                "Resolving Get DFN Report Function URL."
+            )
+
+            get_dfn_report_url = (
+                self.azure_manager.get_function_url(
+                    subscription_id=request.subscription_id,
+                    resource_group_name=request.resource_group_name,
+                    function_app_name=(
+                        request.get_dfn_report_function_app_name
+                    ),
+                    function_name=(
+                        request.get_dfn_report_function_name
+                    ),
+                )
+            )
+
+            if not get_dfn_report_url:
+                raise ValueError(
+                    "Get DFN Report Function URL "
+                    "could not be resolved."
+                )
+
+            logger.info(
+                "Get DFN Report Function URL "
+                "resolved successfully."
+            )
+
+            # ====================================================
+            # 19. DEPLOY REPORTING 1.5 ONLY
+            # ====================================================
+
+            logger.info(
+                "STEP 19: Deploying Reporting 1.5 ONLY."
+            )
+
+            reporting_1_5_deployment = (
+                self.azure_manager.deploy_reporting_1_5(
+                    request=request,
+                    connections=connections,
+
+                    check_qualys_report_url=(
+                        check_qualys_report_url
+                    ),
+
+                    download_qualys_report_url=(
+                        download_qualys_report_url
+                    ),
+
+                    get_dfn_report_url=(
+                        get_dfn_report_url
+                    ),
+
+                    callback_uri_1_5=(
+                        reporting_02_callback_url
+                    ),
+
+                    notification_service_url=(
+                        notification_service_url
+                    ),
+
+                    config_service_url=(
+                        config_service_url
+                    ),
+
+                    completion_notification_logic_app_url=(
+                        completion_notification_logic_app_url
+                    ),
+                )
+            )
+
+            reporting_1_5_deployment_name = (
+                reporting_1_5_deployment.get(
+                    "deployment_name"
+                )
+            )
+
+            reporting_1_5_provisioning_state = (
+                reporting_1_5_deployment.get(
+                    "provisioning_state"
+                )
+            )
+
+            # ====================================================
+            # 20. CHECK REPORTING 1.5 DEPLOYMENT
+            # ====================================================
+
+            if reporting_1_5_provisioning_state not in {
+                "Succeeded",
+                "succeeded",
+            }:
+
+                error_message = (
+                    reporting_1_5_deployment.get(
+                        "error",
+                        "Reporting 1.5 ARM deployment failed.",
+                    )
+                )
+
+                logger.error(
+                    "Reporting 1.5 deployment failed: %s",
+                    error_message,
+                )
+
+                return ReportingDeploymentResponse(
+                    success=False,
+                    message=(
+                        "Reporting 04, Reporting 03 and Reporting 02 "
+                        "deployed successfully, but Reporting 1.5 "
+                        f"deployment failed: {error_message}"
+                    ),
+                    subscription_id=request.subscription_id,
+                    resource_group_name=request.resource_group_name,
+                    location=request.location,
+                    reporting_logic_app_name=(
+                        request.reporting_logic_app_name
+                    ),
+                    reporting_03_logic_app_name=(
+                        request.reporting_03_logic_app_name
+                    ),
+                    reporting_02_logic_app_name=(
+                        request.reporting_02_logic_app_name
+                    ),
+                    reporting_1_5_logic_app_name=(
+                        request.reporting_1_5_logic_app_name
+                    ),
+                    storage_account_name=(
+                        request.storage_account_name
+                    ),
+                    deployment_name=deployment_name,
+                    provisioning_state=provisioning_state,
+                    reporting_03_deployment_name=(
+                        reporting_03_deployment_name
+                    ),
+                    reporting_03_provisioning_state=(
+                        reporting_03_provisioning_state
+                    ),
+                    reporting_02_deployment_name=(
+                        reporting_02_deployment_name
+                    ),
+                    reporting_02_provisioning_state=(
+                        reporting_02_provisioning_state
+                    ),
+                    reporting_1_5_deployment_name=(
+                        reporting_1_5_deployment_name
+                    ),
+                    reporting_1_5_provisioning_state=(
+                        reporting_1_5_provisioning_state
+                    ),
+                    table_connection_id=table_connection_id,
+                    sharepoint_connection_id=(
+                        sharepoint_connection_id
+                    ),
+                    queue_connection_id=queue_connection_id,
+                    callback_url=callback_url,
+                    reporting_03_callback_url=callback_uri_02,
+                    reporting_02_callback_url=(
+                        reporting_02_callback_url
+                    ),
+                    callback_uri_1_5=(
+                        reporting_02_callback_url
+                    ),
+                    function_urls=ReportingFunctionUrls(
+                        split_vulnerabilities_function_url=(
+                            split_vulnerabilities_function_url
+                        ),
+                        after_scoping_triaging_url=(
+                            after_scoping_triaging_url
+                        ),
+                        triaging_validator_url=(
+                            triaging_validator_url
+                        ),
+                        data_merging_function_url=(
+                            data_merging_function_url
+                        ),
+                        new_vulnerabilities_function_url=(
+                            new_vulnerabilities_function_url
+                        ),
+                        servicenow_api_url=servicenow_api_url,
+                        config_service_url=config_service_url,
+                        check_qualys_report_url=(
+                            check_qualys_report_url
+                        ),
+                        download_qualys_report_url=(
+                            download_qualys_report_url
+                        ),
+                        get_dfn_report_url=get_dfn_report_url,
+                    ),
+                    logic_app_urls=ReportingLogicAppUrls(
+                        notification_service_url=(
+                            notification_service_url
+                        ),
+                        completion_url=completion_url,
+                        completion_sas_token=(
+                            completion_sas_token
+                        ),
+                        completion_notification_logic_app_url=(
+                            completion_notification_logic_app_url
+                        ),
+                        callback_uri_1_5=(
+                            reporting_02_callback_url
+                        ),
+                    ),
+                    completion_url=completion_url,
+                    completion_sas_token=completion_sas_token,
+                    completion_notification_logic_app_url=(
+                        completion_notification_logic_app_url
+                    ),
+                )
+
+            # ====================================================
+            # 21. SUCCESS
             # ====================================================
 
             logger.info(
@@ -1061,12 +1458,22 @@ class ReportingDeploymentService:
             )
 
             logger.info(
+                "Reporting 1.5 Logic App: %s",
+                request.reporting_1_5_logic_app_name,
+            )
+
+            logger.info(
                 "Reporting 04 callback URL resolved."
             )
 
             logger.info(
                 "Reporting 03 callback URL resolved "
                 "for Reporting 02."
+            )
+
+            logger.info(
+                "Reporting 02 callback URL resolved "
+                "for Reporting 1.5."
             )
 
             logger.info(
@@ -1083,6 +1490,18 @@ class ReportingDeploymentService:
 
             logger.info(
                 "Config Service Function URL resolved."
+            )
+
+            logger.info(
+                "Check Qualys Report Function URL resolved."
+            )
+
+            logger.info(
+                "Download Qualys Report Function URL resolved."
+            )
+
+            logger.info(
+                "Get DFN Report Function URL resolved."
             )
 
             logger.info(
@@ -1109,6 +1528,11 @@ class ReportingDeploymentService:
             )
 
             logger.info(
+                "Reporting 1.5 deployed using Reporting 02 "
+                "callback URL."
+            )
+
+            logger.info(
                 "================================================"
             )
 
@@ -1116,12 +1540,14 @@ class ReportingDeploymentService:
                 success=True,
 
                 message=(
-                    "Reporting 04, Reporting 03 and Reporting 02 "
-                    "Logic Apps deployed successfully. Reporting 03 "
+                    "Reporting 04, Reporting 03, Reporting 02 and "
+                    "Reporting 1.5 Logic Apps deployed successfully. "
+                    "Reporting 03 was deployed using the dynamically "
+                    "resolved Reporting 04 callback URL, Reporting 02 "
                     "was deployed using the dynamically resolved "
-                    "Reporting 04 callback URL, and Reporting 02 "
+                    "Reporting 03 callback URL, and Reporting 1.5 "
                     "was deployed using the dynamically resolved "
-                    "Reporting 03 callback URL."
+                    "Reporting 02 callback URL."
                 ),
 
                 subscription_id=request.subscription_id,
@@ -1136,6 +1562,14 @@ class ReportingDeploymentService:
 
                 reporting_03_logic_app_name=(
                     request.reporting_03_logic_app_name
+                ),
+
+                reporting_02_logic_app_name=(
+                    request.reporting_02_logic_app_name
+                ),
+
+                reporting_1_5_logic_app_name=(
+                    request.reporting_1_5_logic_app_name
                 ),
 
                 storage_account_name=(
@@ -1162,6 +1596,14 @@ class ReportingDeploymentService:
                     reporting_02_provisioning_state
                 ),
 
+                reporting_1_5_deployment_name=(
+                    reporting_1_5_deployment_name
+                ),
+
+                reporting_1_5_provisioning_state=(
+                    reporting_1_5_provisioning_state
+                ),
+
                 table_connection_id=table_connection_id,
 
                 sharepoint_connection_id=(
@@ -1174,6 +1616,14 @@ class ReportingDeploymentService:
 
                 reporting_03_callback_url=(
                     callback_uri_02
+                ),
+
+                reporting_02_callback_url=(
+                    reporting_02_callback_url
+                ),
+
+                callback_uri_1_5=(
+                    reporting_02_callback_url
                 ),
 
                 function_urls=ReportingFunctionUrls(
@@ -1194,6 +1644,15 @@ class ReportingDeploymentService:
                     ),
                     servicenow_api_url=servicenow_api_url,
                     config_service_url=config_service_url,
+                    check_qualys_report_url=(
+                        check_qualys_report_url
+                    ),
+                    download_qualys_report_url=(
+                        download_qualys_report_url
+                    ),
+                    get_dfn_report_url=(
+                        get_dfn_report_url
+                    ),
                 ),
 
                 logic_app_urls=ReportingLogicAppUrls(
@@ -1206,6 +1665,9 @@ class ReportingDeploymentService:
                     ),
                     completion_notification_logic_app_url=(
                         completion_notification_logic_app_url
+                    ),
+                    callback_uri_1_5=(
+                        reporting_02_callback_url
                     ),
                 ),
 
@@ -1250,6 +1712,14 @@ class ReportingDeploymentService:
                     request.reporting_03_logic_app_name
                 ),
 
+                reporting_02_logic_app_name=(
+                    request.reporting_02_logic_app_name
+                ),
+
+                reporting_1_5_logic_app_name=(
+                    request.reporting_1_5_logic_app_name
+                ),
+
                 storage_account_name=(
                     request.storage_account_name
                 ),
@@ -1274,6 +1744,14 @@ class ReportingDeploymentService:
                     reporting_02_provisioning_state
                 ),
 
+                reporting_1_5_deployment_name=(
+                    reporting_1_5_deployment_name
+                ),
+
+                reporting_1_5_provisioning_state=(
+                    reporting_1_5_provisioning_state
+                ),
+
                 table_connection_id=(
                     table_connection_id
                 ),
@@ -1290,6 +1768,14 @@ class ReportingDeploymentService:
 
                 reporting_03_callback_url=(
                     callback_uri_02
+                ),
+
+                reporting_02_callback_url=(
+                    reporting_02_callback_url
+                ),
+
+                callback_uri_1_5=(
+                    reporting_02_callback_url
                 ),
 
                 function_urls=(
@@ -1315,6 +1801,15 @@ class ReportingDeploymentService:
                         config_service_url=(
                             config_service_url
                         ),
+                        check_qualys_report_url=(
+                            check_qualys_report_url
+                        ),
+                        download_qualys_report_url=(
+                            download_qualys_report_url
+                        ),
+                        get_dfn_report_url=(
+                            get_dfn_report_url
+                        ),
                     )
                     if split_vulnerabilities_function_url
                     else None
@@ -1333,6 +1828,9 @@ class ReportingDeploymentService:
                         ),
                         completion_notification_logic_app_url=(
                             completion_notification_logic_app_url
+                        ),
+                        callback_uri_1_5=(
+                            reporting_02_callback_url
                         ),
                     )
                     if notification_service_url

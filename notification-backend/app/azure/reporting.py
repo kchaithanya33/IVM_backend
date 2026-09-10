@@ -32,17 +32,22 @@ class ReportingAzureManager:
         8. Extract completionUrl and completionSasToken
         9. Resolve Function URLs
        10. Deploy Reporting 03 ONLY
-       11. Return deployment details
+       11. Resolve Reporting 03 callback URL
+       12. Resolve Reporting 02 Function URLs
+       13. Deploy Reporting 02 ONLY
+       14. Resolve Reporting 02 callback URL
+       15. Resolve Reporting 1.5 Function URLs
+       16. Deploy Reporting 1.5 ONLY
 
-    Reporting 02 is now additionally supported.
+    Reporting 1.5 flow:
 
-    Reporting 02 flow:
-
-        1. Reporting 03 must already be deployed
-        2. Resolve Reporting 03 callback URL
-        3. Resolve Reporting 02 Function URLs
-        4. Resolve separate Completion Notification Logic App URL
-        5. Deploy Reporting 02
+        1. Reporting 02 must already be deployed
+        2. Resolve Reporting 02 callback URL
+        3. Resolve Check Qualys Report Function URL
+        4. Resolve Download Qualys Report Function URL
+        5. Resolve Get DFN Report Function URL
+        6. Deploy Reporting 1.5
+        7. Pass Reporting 02 callback URL as callbackUri1.5
     """
 
     MANAGEMENT_API_VERSION = "2022-03-01"
@@ -422,10 +427,6 @@ class ReportingAzureManager:
         if not isinstance(properties, dict):
             properties = {}
 
-        # --------------------------------------------------------
-        # Find invoke URL template
-        # --------------------------------------------------------
-
         route = properties.get(
             "invokeUrlTemplate"
         )
@@ -435,10 +436,6 @@ class ReportingAzureManager:
             route = properties.get(
                 "invoke_url_template"
             )
-
-        # --------------------------------------------------------
-        # Fallback to config.route
-        # --------------------------------------------------------
 
         if not route:
 
@@ -450,10 +447,6 @@ class ReportingAzureManager:
 
                 route = config.get("route")
 
-        # --------------------------------------------------------
-        # Final fallback
-        # --------------------------------------------------------
-
         if not route:
 
             route = (
@@ -461,10 +454,6 @@ class ReportingAzureManager:
             )
 
         route = str(route)
-
-        # --------------------------------------------------------
-        # Get Function App site
-        # --------------------------------------------------------
 
         site_url = (
             f"{self.ARM_MANAGEMENT_URL}"
@@ -502,10 +491,6 @@ class ReportingAzureManager:
                 ".azurewebsites.net"
             )
 
-        # --------------------------------------------------------
-        # Normalize route
-        # --------------------------------------------------------
-
         if route.startswith(
             ("http://", "https://")
         ):
@@ -527,10 +512,6 @@ class ReportingAzureManager:
         if not route.startswith("/api/"):
 
             route = "/api" + route
-
-        # --------------------------------------------------------
-        # Get Function key
-        # --------------------------------------------------------
 
         function_key = (
             self.get_function_key(
@@ -644,10 +625,6 @@ class ReportingAzureManager:
             trigger_name.strip().lower()
         )
 
-        # --------------------------------------------------------
-        # Exact trigger-name match
-        # --------------------------------------------------------
-
         for trigger in triggers:
 
             if not isinstance(trigger, dict):
@@ -667,10 +644,6 @@ class ReportingAzureManager:
 
                 selected_trigger = trigger
                 break
-
-        # --------------------------------------------------------
-        # Match displayName/title/description
-        # --------------------------------------------------------
 
         if selected_trigger is None:
 
@@ -711,10 +684,6 @@ class ReportingAzureManager:
                 if selected_trigger:
                     break
 
-        # --------------------------------------------------------
-        # If there is only one Request trigger, use it
-        # --------------------------------------------------------
-
         if selected_trigger is None:
 
             request_triggers = []
@@ -749,10 +718,6 @@ class ReportingAzureManager:
                     request_triggers[0]
                 )
 
-        # --------------------------------------------------------
-        # Trigger not found
-        # --------------------------------------------------------
-
         if selected_trigger is None:
 
             available_triggers = [
@@ -773,10 +738,6 @@ class ReportingAzureManager:
         actual_trigger_name = (
             selected_trigger.get("name")
         )
-
-        # --------------------------------------------------------
-        # listCallbackUrl
-        # --------------------------------------------------------
 
         callback_url = (
             f"{self.ARM_MANAGEMENT_URL}"
@@ -844,11 +805,6 @@ class ReportingAzureManager:
             completion_url
             completion_sas_token
 
-        completion_url contains only the URL path.
-
-        The /complete/{taskId}/{workflowName}/{token}
-        path is NOT added here.
-
         EXISTING COMPLETION FLOW - DO NOT CHANGE.
         """
 
@@ -891,10 +847,6 @@ class ReportingAzureManager:
         completion_sas_token = str(
             sig_values[0]
         )
-
-        # --------------------------------------------------------
-        # Remove query string
-        # --------------------------------------------------------
 
         completion_url = urlunparse(
             (
@@ -1018,6 +970,48 @@ class ReportingAzureManager:
         return callback_url
 
     # ============================================================
+    # REPORTING 02 CALLBACK URL
+    # ============================================================
+
+    def get_reporting_02_callback_url(
+        self,
+        subscription_id: str,
+        resource_group_name: str,
+        reporting_02_logic_app_name: str,
+        trigger_name: str = "manual",
+    ) -> str:
+        """
+        Resolve the callback URL of Reporting 02.
+
+        This URL becomes callbackUri1.5 for Reporting 1.5.
+
+        Reporting 02 must already be deployed before this
+        method is called.
+        """
+
+        callback_url = (
+            self.get_logic_app_callback_url(
+                subscription_id=subscription_id,
+                resource_group_name=resource_group_name,
+                logic_app_name=reporting_02_logic_app_name,
+                trigger_name=trigger_name,
+            )
+        )
+
+        if not callback_url:
+
+            raise ValueError(
+                "Unable to resolve Reporting 02 "
+                "callback URL."
+            )
+
+        logger.info(
+            "Reporting 02 callback URL resolved successfully."
+        )
+
+        return callback_url
+
+    # ============================================================
     # COMPLETION NOTIFICATION LOGIC APP CALLBACK URL
     # ============================================================
 
@@ -1031,18 +1025,6 @@ class ReportingAzureManager:
         """
         Resolve the callback URL of the separate
         Completion Notification Logic App.
-
-        IMPORTANT:
-
-        This is NOT the existing Completion Logic App.
-
-        Existing Completion Logic App:
-            completion_logic_app_name
-            completion_logic_app_trigger_name
-
-        Separate Reporting 02 Completion Notification Logic App:
-            completion_notification_logic_app_name
-            completion_notification_logic_app_trigger_name
         """
 
         if not logic_app_name:
@@ -1135,12 +1117,6 @@ class ReportingAzureManager:
         """
         Extract one Reporting Logic App resource from
         the combined ARM template.
-
-        Supports ARM parameter expressions such as:
-
-            [parameters('LA-reporting-04')]
-
-        and also handles minor formatting differences.
         """
 
         resources = template.get(
@@ -1155,10 +1131,6 @@ class ReportingAzureManager:
                 "must be a list."
             )
 
-        # --------------------------------------------------------
-        # Normalize target parameter expression
-        # --------------------------------------------------------
-
         target_expression = (
             f"[parameters('{resource_name_parameter}')]"
         )
@@ -1169,10 +1141,6 @@ class ReportingAzureManager:
             .replace('"', "'")
             .lower()
         )
-
-        # --------------------------------------------------------
-        # Search Logic App resources
-        # --------------------------------------------------------
 
         available_resources = []
 
@@ -1223,11 +1191,6 @@ class ReportingAzureManager:
                 )
 
                 return resource
-
-        # --------------------------------------------------------
-        # Fallback:
-        # Search the resource JSON for the parameter reference.
-        # --------------------------------------------------------
 
         parameter_reference = (
             f"parameters('{resource_name_parameter}')"
@@ -1298,9 +1261,6 @@ class ReportingAzureManager:
         """
         Create an ARM template containing only one
         Reporting Logic App resource.
-
-        This is required because reporting.json contains
-        multiple Reporting Logic Apps.
         """
 
         resource = self._get_reporting_resource(
@@ -1324,10 +1284,6 @@ class ReportingAzureManager:
             resource_name_parameter,
             "location",
         }
-
-        # --------------------------------------------------------
-        # Keep only parameters needed by selected resource.
-        # --------------------------------------------------------
 
         filtered_parameters = {}
 
@@ -1389,18 +1345,6 @@ class ReportingAzureManager:
                         original_parameters[name]
                     )
 
-            # ----------------------------------------------------
-            # IMPORTANT:
-            #
-            # The combined ARM template may not declare
-            # logicAppName at the top level even though the
-            # Reporting 03 resource references:
-            #
-            # [parameters('logicAppName')]
-            #
-            # Add it dynamically if it is missing.
-            # ----------------------------------------------------
-
             if "logicAppName" not in filtered_parameters:
 
                 filtered_parameters["logicAppName"] = {
@@ -1433,6 +1377,38 @@ class ReportingAzureManager:
             }
 
             for name in reporting_02_parameters:
+
+                if name in original_parameters:
+
+                    filtered_parameters[name] = (
+                        original_parameters[name]
+                    )
+
+        # --------------------------------------------------------
+        # Reporting 1.5 parameters
+        # --------------------------------------------------------
+
+        elif resource_name_parameter == "LA-reporting-1.5":
+
+            reporting_1_5_parameters = {
+                "storageAccountName",
+                "auditLogTableName",
+                "configServiceUrl",
+                "notificationServiceUrl",
+                "sharePointSiteUrl",
+                "statusTableName",
+                "qidExcelSheet",
+                "legacyExcelSheet",
+                "callbackSecretKey1.5",
+                "completion_notification_LogicAppUrl",
+                "checkQualysReportUrl",
+                "downloadQualysReportUrl",
+                "getDfnReportUrl",
+                "callbackUri1.5",
+                "$connections",
+            }
+
+            for name in reporting_1_5_parameters:
 
                 if name in original_parameters:
 
@@ -1600,11 +1576,6 @@ class ReportingAzureManager:
         """
         Deploy Reporting 04 ONLY.
 
-        Reporting 03 is intentionally NOT deployed here.
-
-        Reporting 03 is deployed later using deploy_reporting_03()
-        after Reporting 04 callbackUrl has been resolved.
-
         EXISTING FLOW - DO NOT CHANGE.
         """
 
@@ -1652,17 +1623,9 @@ class ReportingAzureManager:
                 "could not be resolved."
             )
 
-        # --------------------------------------------------------
-        # Load combined template
-        # --------------------------------------------------------
-
         combined_template = (
             self._load_reporting_template()
         )
-
-        # --------------------------------------------------------
-        # Extract Reporting 04 only
-        # --------------------------------------------------------
 
         template = (
             self._build_single_logic_app_template(
@@ -1671,20 +1634,12 @@ class ReportingAzureManager:
             )
         )
 
-        # --------------------------------------------------------
-        # Managed API IDs
-        # --------------------------------------------------------
-
         managed_api_ids = (
             self._get_managed_api_ids(
                 subscription_id=request.subscription_id,
                 location=request.location,
             )
         )
-
-        # --------------------------------------------------------
-        # $connections
-        # --------------------------------------------------------
 
         connections_parameter = {
             "azuretables-1": {
@@ -1715,10 +1670,6 @@ class ReportingAzureManager:
                 ],
             },
         }
-
-        # --------------------------------------------------------
-        # ARM parameters - Reporting 04
-        # --------------------------------------------------------
 
         parameters: Dict[str, Any] = {
 
@@ -1789,13 +1740,215 @@ class ReportingAzureManager:
         """
         Deploy Reporting 03 ONLY.
 
-        Reporting 03 receives dynamically resolved values:
+        EXISTING FLOW - DO NOT CHANGE.
+        """
 
-            callbackUrl
-            completionUrl
-            completionSasToken
-            afterScopingTriagingUrl
-            triagingValidatorUrl
+        table_connection_id = connections.get(
+            "table_connection_id"
+        )
+
+        sharepoint_connection_id = connections.get(
+            "sharepoint_connection_id"
+        )
+
+        queue_connection_id = connections.get(
+            "queue_connection_id"
+        )
+
+        if not table_connection_id:
+
+            raise ValueError(
+                "Azure Tables connection ID is missing."
+            )
+
+        if not sharepoint_connection_id:
+
+            raise ValueError(
+                "SharePoint connection ID is missing."
+            )
+
+        if not queue_connection_id:
+
+            raise ValueError(
+                "Azure Queue connection ID is missing."
+            )
+
+        dynamic_values = {
+            "notificationServiceUrl": (
+                notification_service_url
+            ),
+            "callbackUrl": callback_url,
+            "completionUrl": completion_url,
+            "completionSasToken": completion_sas_token,
+            "afterScopingTriagingUrl": (
+                after_scoping_triaging_url
+            ),
+            "triagingValidatorUrl": (
+                triaging_validator_url
+            ),
+            "callbackSecretKey": (
+                request.callback_secret_key
+            ),
+        }
+
+        for name, value in dynamic_values.items():
+
+            if value is None or str(value).strip() == "":
+
+                raise ValueError(
+                    f"Required Reporting 03 value "
+                    f"'{name}' is missing."
+                )
+
+        combined_template = (
+            self._load_reporting_template()
+        )
+
+        template = (
+            self._build_single_logic_app_template(
+                template=combined_template,
+                resource_name_parameter="LA-reporting-03",
+            )
+        )
+
+        managed_api_ids = (
+            self._get_managed_api_ids(
+                subscription_id=request.subscription_id,
+                location=request.location,
+            )
+        )
+
+        connections_parameter = {
+            "azuretables-1": {
+                "connectionId": table_connection_id,
+                "connectionName": (
+                    request.azure_tables_connection_name
+                ),
+                "id": managed_api_ids[
+                    "azuretables"
+                ],
+            },
+            "sharepointonline-1": {
+                "connectionId": sharepoint_connection_id,
+                "connectionName": (
+                    request.sharepoint_connection_name
+                ),
+                "id": managed_api_ids[
+                    "sharepointonline"
+                ],
+            },
+            "azurequeues-1": {
+                "connectionId": queue_connection_id,
+                "connectionName": (
+                    request.azure_queue_connection_name
+                ),
+                "id": managed_api_ids[
+                    "azurequeues"
+                ],
+            },
+        }
+
+        parameters: Dict[str, Any] = {
+
+            "LA-reporting-03": {
+                "value": (
+                    request.reporting_03_logic_app_name
+                ),
+            },
+
+            "location": {
+                "value": request.location,
+            },
+
+            "storageAccountName": {
+                "value": request.storage_account_name,
+            },
+
+            "auditLogTableName": {
+                "value": "NotificationLogs",
+            },
+
+            "sharePointSiteUrl": {
+                "value": request.share_point_site_url,
+            },
+
+            "notificationServiceUrl": {
+                "value": notification_service_url,
+            },
+
+            "callbackUrl": {
+                "value": callback_url,
+            },
+
+            "completionUrl": {
+                "value": completion_url,
+            },
+
+            "completionSasToken": {
+                "value": completion_sas_token,
+            },
+
+            "afterScopingTriagingUrl": {
+                "value": (
+                    after_scoping_triaging_url
+                ),
+            },
+
+            "triagingValidatorUrl": {
+                "value": (
+                    triaging_validator_url
+                ),
+            },
+
+            "logicAppName": {
+                "value": (
+                    request.reporting_03_logic_app_name
+                ),
+            },
+
+            "callbackSecretKey": {
+                "value": (
+                    request.callback_secret_key
+                ),
+            },
+
+            "$connections": {
+                "value": connections_parameter,
+            },
+        }
+
+        logger.info(
+            "Deploying Reporting 03 ONLY: %s",
+            request.reporting_03_logic_app_name,
+        )
+
+        return self._deploy_reporting_template(
+            request=request,
+            template=template,
+            parameters=parameters,
+            deployment_prefix="reporting-03",
+        )
+
+    # ============================================================
+    # DEPLOY REPORTING 02
+    # ============================================================
+
+    def deploy_reporting_02(
+        self,
+        request: Any,
+        connections: Dict[str, str],
+        data_merging_function_url: str,
+        new_vulnerabilities_function_url: str,
+        servicenow_api_url: str,
+        completion_notification_logic_app_url: str,
+        callback_uri02: str,
+        config_service_url: str,
+        notification_service_url: str,
+        mulesoft_api_url: Optional[str] = None,
+        completion_url: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Deploy Reporting 02 ONLY.
 
         EXISTING FLOW - DO NOT CHANGE.
         """
@@ -1830,25 +1983,30 @@ class ReportingAzureManager:
                 "Azure Queue connection ID is missing."
             )
 
-        # --------------------------------------------------------
-        # Validate dynamic values
-        # --------------------------------------------------------
-
         dynamic_values = {
+            "dataMergingFunctionUrl": (
+                data_merging_function_url
+            ),
+            "newVulnerabilitiesFunctionUrl": (
+                new_vulnerabilities_function_url
+            ),
+            "servicenowApiUrl": (
+                servicenow_api_url
+            ),
+            "completion_notification_LogicAppUrl": (
+                completion_notification_logic_app_url
+            ),
+            "callbackUri02": (
+                callback_uri02
+            ),
+            "configServiceUrl": (
+                config_service_url
+            ),
             "notificationServiceUrl": (
                 notification_service_url
             ),
-            "callbackUrl": callback_url,
-            "completionUrl": completion_url,
-            "completionSasToken": completion_sas_token,
-            "afterScopingTriagingUrl": (
-                after_scoping_triaging_url
-            ),
-            "triagingValidatorUrl": (
-                triaging_validator_url
-            ),
-            "callbackSecretKey": (
-                request.callback_secret_key
+            "completionUrl": (
+                completion_url
             ),
         }
 
@@ -1857,32 +2015,20 @@ class ReportingAzureManager:
             if value is None or str(value).strip() == "":
 
                 raise ValueError(
-                    f"Required Reporting 03 value "
+                    f"Required Reporting 02 value "
                     f"'{name}' is missing."
                 )
-
-        # --------------------------------------------------------
-        # Load combined template
-        # --------------------------------------------------------
 
         combined_template = (
             self._load_reporting_template()
         )
 
-        # --------------------------------------------------------
-        # Extract Reporting 03 only
-        # --------------------------------------------------------
-
         template = (
             self._build_single_logic_app_template(
                 template=combined_template,
-                resource_name_parameter="LA-reporting-03",
+                resource_name_parameter="LA-Reporting02",
             )
         )
-
-        # --------------------------------------------------------
-        # Managed API IDs
-        # --------------------------------------------------------
 
         managed_api_ids = (
             self._get_managed_api_ids(
@@ -1890,10 +2036,6 @@ class ReportingAzureManager:
                 location=request.location,
             )
         )
-
-        # --------------------------------------------------------
-        # $connections
-        # --------------------------------------------------------
 
         connections_parameter = {
             "azuretables-1": {
@@ -1925,15 +2067,11 @@ class ReportingAzureManager:
             },
         }
 
-        # --------------------------------------------------------
-        # ARM parameters - Reporting 03
-        # --------------------------------------------------------
-
         parameters: Dict[str, Any] = {
 
-            "LA-reporting-03": {
+            "LA-Reporting02": {
                 "value": (
-                    request.reporting_03_logic_app_name
+                    request.reporting_02_logic_app_name
                 ),
             },
 
@@ -1945,83 +2083,61 @@ class ReportingAzureManager:
                 "value": request.storage_account_name,
             },
 
+            "dataMergingFunctionUrl": {
+                "value": data_merging_function_url,
+            },
+
+            "newVulnerabilitiesFunctionUrl": {
+                "value": (
+                    new_vulnerabilities_function_url
+                ),
+            },
+
             "auditLogTableName": {
                 "value": "NotificationLogs",
             },
 
-            "sharePointSiteUrl": {
-                "value": request.share_point_site_url,
+            "statusTableName": {
+                "value": "NotificationStatus",
+            },
+
+            "configServiceUrl": {
+                "value": config_service_url,
             },
 
             "notificationServiceUrl": {
                 "value": notification_service_url,
             },
 
-            # ----------------------------------------------------
-            # Reporting 04 callback URL
-            # ----------------------------------------------------
-
-            "callbackUrl": {
-                "value": callback_url,
+            "mulesoftApiUrl": {
+                "value": '6yhn7ujm8ik',
             },
 
-            # ----------------------------------------------------
-            # Completion Logic App base URL
-            #
-            # Existing completion flow.
-            # ----------------------------------------------------
+            "sharePointSiteUrl": {
+                "value": request.share_point_site_url,
+            },
+
+            "servicenowApiUrl": {
+                "value": servicenow_api_url,
+            },
+
+            "completion_notification_LogicAppUrl": {
+                "value": (
+                    completion_notification_logic_app_url
+                ),
+            },
 
             "completionUrl": {
                 "value": completion_url,
             },
 
-            # ----------------------------------------------------
-            # Raw sig value
-            # ----------------------------------------------------
-
-            "completionSasToken": {
-                "value": completion_sas_token,
+            "callbackUri02": {
+                "value": callback_uri02,
             },
 
-            # ----------------------------------------------------
-            # Function URLs
-            # ----------------------------------------------------
-
-            "afterScopingTriagingUrl": {
-                "value": (
-                    after_scoping_triaging_url
-                ),
+            "callbackSecretKey02": {
+                "value": request.callback_secret_key,
             },
-
-            "triagingValidatorUrl": {
-                "value": (
-                    triaging_validator_url
-                ),
-            },
-
-            # ----------------------------------------------------
-            # Reporting 03 workflow name
-            # ----------------------------------------------------
-
-            "logicAppName": {
-                "value": (
-                    request.reporting_03_logic_app_name
-                ),
-            },
-
-            # ----------------------------------------------------
-            # Callback secret
-            # ----------------------------------------------------
-
-            "callbackSecretKey": {
-                "value": (
-                    request.callback_secret_key
-                ),
-            },
-
-            # ----------------------------------------------------
-            # API connections
-            # ----------------------------------------------------
 
             "$connections": {
                 "value": connections_parameter,
@@ -2029,63 +2145,75 @@ class ReportingAzureManager:
         }
 
         logger.info(
-            "Deploying Reporting 03 ONLY: %s",
-            request.reporting_03_logic_app_name,
+            "Deploying Reporting 02 ONLY: %s",
+            request.reporting_02_logic_app_name,
         )
 
         logger.info(
-            "Reporting 03 callbackUrl is the "
-            "Reporting 04 callback URL."
+            "Reporting 02 dataMergingFunctionUrl resolved "
+            "dynamically from Function App and Function."
         )
 
         logger.info(
-            "Reporting 03 completionUrl and "
-            "completionSasToken resolved dynamically."
+            "Reporting 02 newVulnerabilitiesFunctionUrl "
+            "resolved dynamically from Function App and Function."
+        )
+
+        logger.info(
+            "Reporting 02 servicenowApiUrl resolved "
+            "dynamically from Function App and Function."
+        )
+
+        logger.info(
+            "Reporting 02 completion_notification_"
+            "LogicAppUrl resolved from the separate "
+            "Completion Notification Logic App."
+        )
+
+        logger.info(
+            "Reporting 02 callbackUri02 is the callback "
+            "URL of the already deployed Reporting 03."
         )
 
         return self._deploy_reporting_template(
             request=request,
             template=template,
             parameters=parameters,
-            deployment_prefix="reporting-03",
+            deployment_prefix="reporting-02",
         )
 
     # ============================================================
-    # DEPLOY REPORTING 02
+    # DEPLOY REPORTING 1.5
     # ============================================================
 
-    def deploy_reporting_02(
+    def deploy_reporting_1_5(
         self,
         request: Any,
         connections: Dict[str, str],
-        data_merging_function_url: str,
-        new_vulnerabilities_function_url: str,
-        servicenow_api_url: str,
-        completion_notification_logic_app_url: str,
-        callback_uri02: str,
-        config_service_url: str,
+        check_qualys_report_url: str,
+        download_qualys_report_url: str,
+        get_dfn_report_url: str,
+        callback_uri_1_5: str,
         notification_service_url: str,
-        mulesoft_api_url: Optional[str] = None,
-        completion_url: str = "",
+        config_service_url: str,
+        completion_notification_logic_app_url: str,
     ) -> Dict[str, Any]:
         """
-        Deploy Reporting 02 ONLY.
+        Deploy Reporting 1.5 ONLY.
 
-        Reporting 02 receives dynamically resolved values:
+        Reporting 1.5 receives dynamically resolved values:
 
-            dataMergingFunctionUrl
-            newVulnerabilitiesFunctionUrl
-            servicenowApiUrl
-            completion_notification_LogicAppUrl
-            callbackUri02
+            checkQualysReportUrl
+            downloadQualysReportUrl
+            getDfnReportUrl
+            callbackUri1.5
 
-        IMPORTANT:
+        callbackUri1.5 is the callback URL of the
+        already deployed Reporting 02 Logic App.
 
-        callbackUri02 must be the callback URL of the
-        already deployed Reporting 03 Logic App.
-
-        The existing Completion Logic App is NOT used for
-        completion_notification_LogicAppUrl.
+        The three Function URLs are resolved dynamically
+        from the Function App and Function names supplied
+        in the request.
         """
 
         # ========================================================
@@ -2123,34 +2251,33 @@ class ReportingAzureManager:
             )
 
         # ========================================================
-        # VALIDATE REPORTING 02 DYNAMIC VALUES
+        # VALIDATE REPORTING 1.5 DYNAMIC VALUES
         # ========================================================
 
         dynamic_values = {
-            "dataMergingFunctionUrl": (
-                data_merging_function_url
+            "checkQualysReportUrl": (
+                check_qualys_report_url
             ),
-            "newVulnerabilitiesFunctionUrl": (
-                new_vulnerabilities_function_url
+            "downloadQualysReportUrl": (
+                download_qualys_report_url
             ),
-            "servicenowApiUrl": (
-                servicenow_api_url
+            "getDfnReportUrl": (
+                get_dfn_report_url
             ),
-            "completion_notification_LogicAppUrl": (
-                completion_notification_logic_app_url
-            ),
-            "callbackUri02": (
-                callback_uri02
-            ),
-            "configServiceUrl": (
-                config_service_url
+            "callbackUri1.5": (
+                callback_uri_1_5
             ),
             "notificationServiceUrl": (
                 notification_service_url
             ),
-          
-            "completionUrl": (
-                completion_url
+            "configServiceUrl": (
+                config_service_url
+            ),
+            "completion_notification_LogicAppUrl": (
+                completion_notification_logic_app_url
+            ),
+            "callbackSecretKey1.5": (
+                request.callback_secret_key
             ),
         }
 
@@ -2159,7 +2286,7 @@ class ReportingAzureManager:
             if value is None or str(value).strip() == "":
 
                 raise ValueError(
-                    f"Required Reporting 02 value "
+                    f"Required Reporting 1.5 value "
                     f"'{name}' is missing."
                 )
 
@@ -2172,13 +2299,13 @@ class ReportingAzureManager:
         )
 
         # ========================================================
-        # EXTRACT REPORTING 02 ONLY
+        # EXTRACT REPORTING 1.5 ONLY
         # ========================================================
 
         template = (
             self._build_single_logic_app_template(
                 template=combined_template,
-                resource_name_parameter="LA-Reporting02",
+                resource_name_parameter="LA-reporting-1.5",
             )
         )
 
@@ -2228,18 +2355,18 @@ class ReportingAzureManager:
         }
 
         # ========================================================
-        # ARM PARAMETERS - REPORTING 02
+        # ARM PARAMETERS - REPORTING 1.5
         # ========================================================
 
         parameters: Dict[str, Any] = {
 
             # ----------------------------------------------------
-            # Reporting 02 Logic App name
+            # Reporting 1.5 Logic App name
             # ----------------------------------------------------
 
-            "LA-Reporting02": {
+            "LA-reporting-1.5": {
                 "value": (
-                    request.reporting_02_logic_app_name
+                    request.reporting_1_5_logic_app_name
                 ),
             },
 
@@ -2260,37 +2387,11 @@ class ReportingAzureManager:
             },
 
             # ----------------------------------------------------
-            # Dynamic Data Merging Function URL
-            # ----------------------------------------------------
-
-            "dataMergingFunctionUrl": {
-                "value": data_merging_function_url,
-            },
-
-            # ----------------------------------------------------
-            # Dynamic New Vulnerabilities Function URL
-            # ----------------------------------------------------
-
-            "newVulnerabilitiesFunctionUrl": {
-                "value": (
-                    new_vulnerabilities_function_url
-                ),
-            },
-
-            # ----------------------------------------------------
             # Audit Table
             # ----------------------------------------------------
 
             "auditLogTableName": {
                 "value": "NotificationLogs",
-            },
-
-            # ----------------------------------------------------
-            # Status Table
-            # ----------------------------------------------------
-
-            "statusTableName": {
-                "value": "NotificationStatus",
             },
 
             # ----------------------------------------------------
@@ -2310,14 +2411,6 @@ class ReportingAzureManager:
             },
 
             # ----------------------------------------------------
-            # MuleSoft API
-            # ----------------------------------------------------
-
-            "mulesoftApiUrl": {
-                "value": '6yhn7ujm8ik',
-            },
-
-            # ----------------------------------------------------
             # SharePoint
             # ----------------------------------------------------
 
@@ -2326,26 +2419,25 @@ class ReportingAzureManager:
             },
 
             # ----------------------------------------------------
-            # Dynamic ServiceNow Function URL
+            # Status Table
             # ----------------------------------------------------
 
-            "servicenowApiUrl": {
-                "value": servicenow_api_url,
+            "statusTableName": {
+                "value": "NotificationStatus",
             },
 
             # ----------------------------------------------------
-            # SEPARATE Completion Notification Logic App URL
-            #
-            # IMPORTANT:
-            #
-            # This is NOT completionUrl.
-            #
-            # This comes from:
-            #
-            # completion_notification_logic_app_name
-            # completion_notification_logic_app_trigger_name
-            #
-            # and is resolved independently.
+            # Callback Secret
+            # ----------------------------------------------------
+
+            "callbackSecretKey1.5": {
+                "value": (
+                    request.callback_secret_key
+                ),
+            },
+
+            # ----------------------------------------------------
+            # Completion Notification Logic App
             # ----------------------------------------------------
 
             "completion_notification_LogicAppUrl": {
@@ -2355,35 +2447,44 @@ class ReportingAzureManager:
             },
 
             # ----------------------------------------------------
-            # Existing completion URL
-            #
-            # Kept separate from the Completion Notification
-            # Logic App URL.
+            # Check Qualys Report Function URL
             # ----------------------------------------------------
 
-            "completionUrl": {
-                "value": completion_url,
+            "checkQualysReportUrl": {
+                "value": (
+                    check_qualys_report_url
+                ),
             },
 
             # ----------------------------------------------------
-            # Callback URI 02
-            #
-            # This is the Reporting 03 callback URL.
-            # Reporting 03 must be deployed first.
+            # Download Qualys Report Function URL
             # ----------------------------------------------------
 
-            "callbackUri02": {
-                "value": callback_uri02,
+            "downloadQualysReportUrl": {
+                "value": (
+                    download_qualys_report_url
+                ),
             },
 
             # ----------------------------------------------------
-            # Callback Secret
-            #
-            # Reporting 02 ARM template expects callbackSecretKey02.
+            # Get DFN Report Function URL
             # ----------------------------------------------------
 
-            "callbackSecretKey02": {
-                "value": request.callback_secret_key,
+            "getDfnReportUrl": {
+                "value": (
+                    get_dfn_report_url
+                ),
+            },
+
+            # ----------------------------------------------------
+            # Reporting 02 Callback URL
+            #
+            # This is dynamically resolved after Reporting 02
+            # deployment.
+            # ----------------------------------------------------
+
+            "callbackUri1.5": {
+                "value": callback_uri_1_5,
             },
 
             # ----------------------------------------------------
@@ -2396,39 +2497,33 @@ class ReportingAzureManager:
         }
 
         logger.info(
-            "Deploying Reporting 02 ONLY: %s",
-            request.reporting_02_logic_app_name,
+            "Deploying Reporting 1.5 ONLY: %s",
+            request.reporting_1_5_logic_app_name,
         )
 
         logger.info(
-            "Reporting 02 dataMergingFunctionUrl resolved "
+            "Reporting 1.5 checkQualysReportUrl resolved "
             "dynamically from Function App and Function."
         )
 
         logger.info(
-            "Reporting 02 newVulnerabilitiesFunctionUrl "
-            "resolved dynamically from Function App and Function."
-        )
-
-        logger.info(
-            "Reporting 02 servicenowApiUrl resolved "
+            "Reporting 1.5 downloadQualysReportUrl resolved "
             "dynamically from Function App and Function."
         )
 
         logger.info(
-            "Reporting 02 completion_notification_"
-            "LogicAppUrl resolved from the separate "
-            "Completion Notification Logic App."
+            "Reporting 1.5 getDfnReportUrl resolved "
+            "dynamically from Function App and Function."
         )
 
         logger.info(
-            "Reporting 02 callbackUri02 is the callback "
-            "URL of the already deployed Reporting 03."
+            "Reporting 1.5 callbackUri1.5 is the callback "
+            "URL of the already deployed Reporting 02."
         )
 
         return self._deploy_reporting_template(
             request=request,
             template=template,
             parameters=parameters,
-            deployment_prefix="reporting-02",
+            deployment_prefix="reporting-1-5",
         )

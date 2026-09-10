@@ -42,6 +42,7 @@ def deploy_reporting(
         "reporting_04=%s "
         "reporting_03=%s "
         "reporting_02=%s "
+        "reporting_1_5=%s "
         "notification_logic_app=%s "
         "notification_trigger=%s "
         "completion_logic_app=%s "
@@ -61,10 +62,17 @@ def deploy_reporting(
         "servicenow_function_app=%s "
         "servicenow_function=%s "
         "config_service_function_app=%s "
-        "config_service_function=%s",
+        "config_service_function=%s "
+        "check_qualys_report_function_app=%s "
+        "check_qualys_report_function=%s "
+        "download_qualys_report_function_app=%s "
+        "download_qualys_report_function=%s "
+        "get_dfn_report_function_app=%s "
+        "get_dfn_report_function=%s",
         request.reporting_logic_app_name,
         request.reporting_03_logic_app_name,
         request.reporting_02_logic_app_name,
+        request.reporting_1_5_logic_app_name,
         request.notification_logic_app_name,
         request.notification_logic_app_trigger_name,
         request.completion_logic_app_name,
@@ -85,6 +93,12 @@ def deploy_reporting(
         request.servicenow_function_name,
         request.config_service_function_app_name,
         request.config_service_function_name,
+        request.check_qualys_report_function_app_name,
+        request.check_qualys_report_function_name,
+        request.download_qualys_report_function_app_name,
+        request.download_qualys_report_function_name,
+        request.get_dfn_report_function_app_name,
+        request.get_dfn_report_function_name,
     )
 
     service = ReportingDeploymentService()
