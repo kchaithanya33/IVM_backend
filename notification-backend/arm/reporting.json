@@ -102,6 +102,48 @@
       "description": "Secret key used for callback authentication"
     }
   },
+  
+  "LA-Reporting02": {
+    "type": "string",
+    "defaultValue": "LA-Reporting02"
+  },
+
+  "dataMergingFunctionUrl": {
+    "type": "string"
+  },
+  "newVulnerabilitiesFunctionUrl": {
+    "type": "string"
+  },
+   "servicenowApiUrl": {
+    "type": "string"
+  },
+
+   "completion_notification_LogicAppUrl": {
+    "type": "string"
+  },
+  "callbackUri02": {
+    "type": "string"
+  },
+  "statusTableName": {
+    "type": "string",
+    "defaultValue": "NotificationStatus"
+  },
+
+  "mulesoftApiUrl": {
+    "type": "string",
+    "defaultValue": "6yhn7ujm8ik,"
+  },
+ "configServiceUrl": {
+  "type": "string",
+  "metadata": {
+    "description": "Config Service Function URL for Reporting 02"
+  }
+},
+  "callbackSecretKey02": {
+    "type": "secureString",
+    "defaultValue": "MySecretKey123!"
+  }
+  ,
     "$connections": {
   "type": "object",
   "defaultValue": {},
@@ -1380,6 +1422,844 @@
       "completionSasToken": {
         "value": "[parameters('completionSasToken')]"
       }
+    }
+  }
+},
+{
+  "type": "Microsoft.Logic/workflows",
+  "apiVersion": "2019-05-01",
+  "name": "[parameters('LA-Reporting02')]",
+  "location": "[resourceGroup().location]",
+  "properties": {
+    "state": "Enabled",
+
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+
+      "triggers": {
+        "manual": {
+          "type": "Request",
+          "kind": "Http",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "cycleId": {
+                  "type": "string"
+                },
+                "qualysReportPath": {
+                  "type": "string"
+                },
+                "cmdbDataPath": {
+                  "type": "string"
+                },
+                "dfnReportPath": {
+                  "type": "string"
+                },
+                "qidDataPath": {
+                  "type": "string"
+                },
+                "legacyDataPath": {
+                  "type": "string"
+                },
+                "taskId": {
+                  "type": "string"
+                },
+                "timestamp": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+"actions": {
+      "Initialize_Variables_From_HTTP": {
+        "runAfter": {},
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "cycleId",
+              "type": "string",
+              "value": "@{triggerBody()?['cycleId']}"
+            },
+            {
+              "name": "qualysReportPath",
+              "type": "string",
+              "value": "@{triggerBody()?['qualysReportPath']}"
+            },
+            {
+              "name": "dfnReportPath",
+              "type": "string",
+              "value": "@{triggerBody()?['dfnReportPath']}"
+            },
+            {
+              "name": "cmdbDataPath",
+              "type": "string",
+              "value": "@{triggerBody()?['cmdbDataPath']}"
+            },
+            {
+              "name": "qidDataPath",
+              "type": "string",
+              "value": "@{triggerBody()?['qidDataPath']}"
+            },
+            {
+              "name": "legacyDataPath",
+              "type": "string",
+              "value": "@{triggerBody()?['legacyDataPath']}"
+            },
+            {
+              "name": "taskId",
+              "type": "string",
+              "value": "@{guid()}"
+            },
+            {
+              "name": "sharePointPath",
+              "type": "string"
+            },
+            {
+              "name": "newVulnSharePointPath",
+              "type": "string"
+            },
+            {
+              "name": "ticketNumber",
+              "type": "string"
+            },
+            {
+              "name": "triagingSheetPath",
+              "type": "string"
+            },
+            {
+              "name": "newVulnSheetPath",
+              "type": "string"
+            },
+            {
+              "name": "completionUrl",
+              "type": "string"
+            },
+            {
+              "name": "dueDate",
+              "type": "string",
+              "value": "@{formatDateTime(addDays(utcNow(),5), 'yyyy-MM-ddTHH:mm:ss')}"
+            }
+          ]
+        }
+      },
+      "Log_Task_Start": {
+        "runAfter": {
+          "Initialize_Variables_From_HTTP": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": {
+            "PartitionKey": "Reporting",
+            "RowKey": "@{guid()}",
+            "CycleId": "@{variables('cycleId')}",
+            "ActionType": "DataMerging",
+            "Timestamp": "@{utcNow()}",
+            "Status": "Started",
+            "TaskId": "@{variables('taskId')}"
+          },
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('auditLogTableName'))}/entities"
+        }
+      },
+      "Get_Configuration": {
+        "runAfter": {
+          "Log_Task_Start": ["Succeeded"]
+        },
+        "type": "Http",
+        "inputs": {
+          "uri": "@replace(parameters('configServiceUrl'), '{partition}', 'Reporting')",
+          "method": "GET"
+        }
+      },
+      "Get_Cycle_Data": {
+        "runAfter": {
+          "Get_Configuration": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('Cycles')}/entities(PartitionKey='@{encodeURIComponent('Cycle')}',RowKey='@{encodeURIComponent(variables('cycleId'))}')"
+        }
+      },
+      "Get_CMDB_Data_Sheet_Content": {
+        "runAfter": {
+          "Get_Cycle_Data": ["Succeeded"]
+        },
+        "metadata": {
+          "%252fShared%2bDocuments%252fScoping%252fCMDBExports%252fScoping-2025-06-CYCLE-20250610-104336.xlsx": "/Shared Documents/Scoping/CMDBExports/Scoping-2025-06-CYCLE-20250610-104336.xlsx"
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files/@{encodeURIComponent(uriComponent(variables('cmdbDataPath')))}/content",
+          "queries": {
+            "inferContentType": true
+          }
+        }
+      },
+      "Get_Qualys_Scan_Report_Sheet_Content": {
+        "runAfter": {
+          "Get_CMDB_Data_Sheet_Content": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files/@{encodeURIComponent(uriComponent(variables('qualysReportPath')))}/content",
+          "queries": {
+            "inferContentType": true
+          }
+        }
+      },
+      "Get_DFN_Report_Content": {
+        "runAfter": {
+          "Get_Qualys_Scan_Report_Sheet_Content": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files/@{encodeURIComponent(uriComponent(variables('dfnReportPath')))}/content",
+          "queries": {
+            "inferContentType": true
+          }
+        }
+      },
+      "Get_QID_Data_Content": {
+        "runAfter": {
+          "Get_DFN_Report_Content": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files/@{encodeURIComponent(uriComponent(variables('qidDataPath')))}/content",
+          "queries": {
+            "inferContentType": true
+          }
+        }
+      },
+      "Get_Legacy_Data_Content": {
+        "runAfter": {
+          "Get_QID_Data_Content": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files/@{encodeURIComponent(uriComponent(variables('legacyDataPath')))}/content",
+          "queries": {
+            "inferContentType": true
+          }
+        }
+      },
+      "Call_Data_Merging_Function": {
+        "runAfter": {
+          "Get_Legacy_Data_Content": ["Succeeded"]
+        },
+        "type": "Http",
+        "inputs": {
+         "uri": "@parameters('dataMergingFunctionUrl')",
+          "method": "POST",
+          "body": {
+            "cycleId": "@{variables('cycleId')}",
+            "qualysReportContent": "@{base64(body('Get_Qualys_Scan_Report_Sheet_Content'))}",
+            "cmdbDataContent": "@{base64(body('Get_CMDB_Data_Sheet_Content'))}",
+            "dfnReportContent": "@{base64(body('Get_DFN_Report_Content'))}",
+            "qidDataContent": "@{base64(body('Get_QID_Data_Content'))}",
+            "legacyDataContent": "@{base64(body('Get_Legacy_Data_Content'))}",
+            "qualysFileType": "xlsx",
+            "cmdbFileType": "xlsx",
+            "dfnFileType": "xlsx",
+            "qidFileType": "xlsx",
+            "legacyFileType": "xlsx"
+          }
+        },
+        "runtimeConfiguration": {
+          "contentTransfer": {
+            "transferMode": "Chunked"
+          }
+        }
+      },
+      "Create_SharePoint_Folder_for_Triaging_Report": {
+        "runAfter": {
+          "Call_Data_Merging_Function": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": {
+            "path": "/Shared Documents/Reporting/@{variables('cycleId')}/Triaging/"
+          },
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/tables/@{encodeURIComponent(encodeURIComponent('6c55c5faf74b43e787ff5cf463978cd9'))}/createnewfolder"
+        }
+      },
+      "Store_Triaging_Sheet_to_Sharepoint": {
+        "runAfter": {
+          "Create_SharePoint_Folder_for_Triaging_Report": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": "@body('Call_Data_Merging_Function')",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files",
+          "queries": {
+            "folderPath": "/Shared Documents/Reporting/@{variables('cycleId')}/Triaging/",
+            "name": "@concat('vulnerability_report_', variables('cycleId'), '-', formatDateTime(utcNow(), 'yyyyMMdd_HHmmss'), '.xlsx')",
+            "queryParametersSingleEncoded": true
+          }
+        },
+        "runtimeConfiguration": {
+          "contentTransfer": {
+            "transferMode": "Chunked"
+          }
+        }
+      },
+      "Call_New_Vuln_Fun": {
+        "runAfter": {
+          "Store_Triaging_Sheet_to_Sharepoint": ["Succeeded"]
+        },
+        "type": "Http",
+        "inputs": {
+          "uri": "@parameters('newVulnerabilitiesFunctionUrl')",
+          "method": "POST",
+          "body": {
+            "cycleId": "@{variables('cycleId')}",
+            "dfnReportContent": "@{base64(body('Get_DFN_Report_Content'))}",
+            "mergedReportContent": "@{base64(body('Call_Data_Merging_Function'))}",
+            "mergedFileType": "xlsx",
+            "dfnFileType": "xlsx"
+          }
+        },
+        "runtimeConfiguration": {
+          "contentTransfer": {
+            "transferMode": "Chunked"
+          }
+        }
+      },
+      "Create_SharePoint_Folder_for_New_Vulnerabilities": {
+        "runAfter": {
+          "Call_New_Vuln_Fun": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": {
+            "path": "/Shared Documents/Reporting/@{variables('cycleId')}/Triaging/New Vulnerabilities/"
+          },
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/tables/@{encodeURIComponent(encodeURIComponent('6c55c5faf74b43e787ff5cf463978cd9'))}/createnewfolder"
+        }
+      },
+      "Store_New_Vulnerabilities_to_Sharepoint": {
+        "runAfter": {
+          "Create_SharePoint_Folder_for_New_Vulnerabilities": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": "@body('Call_New_Vuln_Fun')",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharePointSiteUrl')))}/files",
+          "queries": {
+            "folderPath": "/Shared Documents/Reporting/@{variables('cycleId')}/Triaging/New Vulnerabilities/",
+            "name": "@concat('new_vulnerabilities_report_', variables('cycleId'), '-', formatDateTime(utcNow(), 'yyyyMMdd_HHmmss'), '.xlsx')",
+            "queryParametersSingleEncoded": true
+          }
+        },
+        "runtimeConfiguration": {
+          "contentTransfer": {
+            "transferMode": "Chunked"
+          }
+        }
+      },
+      "Update_Triaging_Sheet_URL_in_Cycles_Table": {
+        "runAfter": {
+          "Store_New_Vulnerabilities_to_Sharepoint": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+            }
+          },
+          "method": "patch",
+          "body": {
+            "PartitionKey": "Cycle",
+            "RowKey": "@{variables('cycleId')}",
+            "CurrentPhase": "Reporting",
+            "Status": "Active",
+            "VulnTriagingReportURL": "@{body('Store_Triaging_Sheet_to_Sharepoint')?['Path']}",
+            "NewVulnReportURL": "@{body('Store_New_Vulnerabilities_to_Sharepoint')?['Path']}",
+            "LastUpdatedDate": "@{utcNow()}"
+          },
+          "headers": {
+            "If-Match": "*"
+          },
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent('Cycles')}/entities/etag(PartitionKey='@{encodeURIComponent('Cycle')}',RowKey='@{encodeURIComponent(variables('cycleId'))}')"
+        }
+      },
+      "Set_SharePoint_Path": {
+        "runAfter": {
+          "Update_Triaging_Sheet_URL_in_Cycles_Table": ["Succeeded"]
+        },
+        "type": "SetVariable",
+        "inputs": {
+          "name": "sharePointPath",
+          "value": "@{parameters('sharePointSiteUrl')}@{body('Store_Triaging_Sheet_to_Sharepoint')?['Path']}"
+        }
+      },
+      "Set_New_Vuln_SharePoint_Path": {
+        "runAfter": {
+          "Set_SharePoint_Path": ["Succeeded"]
+        },
+        "type": "SetVariable",
+        "inputs": {
+          "name": "newVulnSharePointPath",
+          "value": "@{parameters('sharePointSiteUrl')}@{body('Store_New_Vulnerabilities_to_Sharepoint')?['Path']}"
+        }
+      },
+      "Set_Triaging_Sheet_Path": {
+        "runAfter": {
+          "Set_New_Vuln_SharePoint_Path": ["Succeeded"]
+        },
+        "type": "SetVariable",
+        "inputs": {
+          "name": "triagingSheetPath",
+          "value": "@{body('Store_Triaging_Sheet_to_Sharepoint')?['Path']}"
+        }
+      },
+      "Set_New_Vuln_Sheet_Path": {
+        "runAfter": {
+          "Set_Triaging_Sheet_Path": ["Succeeded"]
+        },
+        "type": "SetVariable",
+        "inputs": {
+          "name": "newVulnSheetPath",
+          "value": "@{body('Store_New_Vulnerabilities_to_Sharepoint')?['Path']}"
+        }
+      },
+      "Create_ServiceNow_Ticket_for_Triaging": {
+        "runAfter": {
+          "Set_New_Vuln_Sheet_Path": ["Succeeded"]
+        },
+        "type": "Http",
+        "inputs": {
+          "uri": "@replace(parameters('servicenowApiUrl'), '{*route}','api/servicenow/task/records')",
+          "method": "POST",
+          "headers": {
+            "Content-Type": "application/json",
+            "x-api-key": "@{parameters('mulesoftApiKey')}"
+          },
+          "body": {
+            "short_description": "Vulnerability Report Triaging - @{variables('cycleId')}",
+            "description": "Please review and triage the vulnerabilities listed in the attached/linked Excel sheets. Update the 'Triage Status' and 'Triage Notes' columns. Due Date: @{addDays(utcNow(),5)}. Triaging Sheet: @{variables('sharePointPath')} | New Vulnerabilities Sheet: @{variables('newVulnSharePointPath')}",
+            "category": "Vulnerability Triaging",
+            "priority": "2",
+            "assignment_group": "Vulnerability Management",
+            "u_business_service": "Security Operations"
+          }
+        }
+      },
+      "Get_Windows_ServiceNow_Ticket_url": {
+        "runAfter": {
+          "Create_ServiceNow_Ticket_for_Triaging": ["Succeeded"]
+        },
+        "type": "Http",
+        "inputs": {
+          "uri": "@replace(parameters('servicenowApiUrl'), '{*route}', concat('/api/servicenow/task/ticket-url/', body('Create_ServiceNow_Ticket_for_Triaging')?['sys_id']))",
+          "method": "GET"
+        },
+        "runtimeConfiguration": {
+          "contentTransfer": {
+            "transferMode": "Chunked"
+          }
+        }
+      },
+      "Set_Ticket_Number": {
+        "runAfter": {
+          "Get_Windows_ServiceNow_Ticket_url": ["Succeeded"]
+        },
+        "type": "SetVariable",
+        "inputs": {
+          "name": "ticketNumber",
+          "value": "@{body('Create_ServiceNow_Ticket_for_Triaging')?['number']}"
+        }
+      },
+      "Check_NotificationStatus": {
+        "runAfter": {
+          "Set_Ticket_Number": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('statusTableName'))}/entities(PartitionKey='@{encodeURIComponent('ScopeTriaging-Report')}',RowKey='@{encodeURIComponent(variables('taskId'))}')"
+        }
+      },
+      "Log_Triaging_Monitoring_Start": {
+        "runAfter": {
+          "Add_NotificationStatus_Entry": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": {
+            "PartitionKey": "Reporting",
+            "RowKey": "@{guid()}",
+            "CycleId": "@{variables('cycleId')}",
+            "ActionType": "TriagingMonitoring",
+            "Timestamp": "@{utcNow()}",
+            "Status": "Started",
+            "TaskId": "@{variables('taskId')}"
+          },
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('auditLogTableName'))}/entities"
+        }
+      },
+      "Set_Completion_URL": {
+        "runAfter": {
+          "Log_Triaging_Monitoring_Start": ["Succeeded"]
+        },
+        "type": "SetVariable",
+        "inputs": {
+          "name": "completionUrl",
+          "value": "@{replace(replace(replace(parameters('completion_notification_LogicAppUrl'), '%7BtaskId%7D', encodeURIComponent(variables('taskId'))), '%7BworkflowName%7D', encodeURIComponent('ScopeTriaging-Report')), '%7Btoken%7D', encodeURIComponent(base64(concat(variables('taskId'), ':', 'ScopeTriaging-Report', ':', parameters('callbackSecretKey02')))))}"
+        }
+      },
+      "Send_Email_Notification": {
+        "runAfter": {
+          "Set_Completion_URL": ["Succeeded"]
+        },
+        "type": "Http",
+        "inputs": {
+          "uri": "@parameters('notificationServiceUrl')",
+          "method": "POST",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "WorkflowName": "ScopeTriaging-Report",
+            "NotificationType": "ActionRequired",
+            "NotificationTitle": "Action Required: Scoping Triaging for Vulnerability Report - @{variables('cycleId')}",
+            "NotificationContent": "<html><head><style>body{font-family:Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px;}.header{background:#007acc;color:white;padding:20px;text-align:center;border-radius:8px 8px 0 0;}.content{background:#f9f9f9;padding:30px;border:1px solid #ddd;}.task-details{background:white;padding:20px;margin:20px 0;border-left:4px solid #007acc;border-radius:4px;}.action-button{display:inline-block;background:#28a745;color:white;padding:15px 30px;text-decoration:none;border-radius:5px;font-weight:bold;margin:20px 0;text-align:center;}.priority-high{color:#dc3545;font-weight:bold;}.priority-medium{color:#ffc107;font-weight:bold;}.priority-low{color:#28a745;}.footer{background:#f1f1f1;padding:15px;text-align:center;font-size:12px;color:#666;border-radius:0 0 8px 8px;}</style></head><body><div class='header'><h1>🔍 Scoping Triaging for Vulnerability Report</h1></div><div class='content'><p>Hello,</p><p>Action is required for scoping triaging of vulnerability report.</p><div class='task-details'><h3>📌 Task Details</h3><p><strong>Task ID:</strong> @{variables('taskId')}</p><p><strong>Cycle ID:</strong> @{variables('cycleId')}</p><p><strong>Ticket Number:</strong> @{variables('ticketNumber')}</p><p><strong>Due Date:</strong> @{variables('dueDate')}</p><p><strong>Requested:</strong> @{formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss')} UTC</p></div><div style='background:#fff3cd;border:1px solid #ffeaa7;padding:15px;border-radius:4px;margin:20px 0;'><p style='margin:0;'><strong>📋 ACTION REQUIRED:</strong> Please review and complete the scoping triaging for the vulnerability report.</p></div><div style='text-align:center;margin:30px 0;'><h3>🔗 Quick Actions</h3><p><strong>New Vulnerabilities Triaging Sheet :</strong> <a href='@{variables('newVulnSharePointPath')}' class='action-button' style='color:white;'>🆕 Open New Vulnerabilities</a></p><p><strong>Mark as Completed:</strong> <a href='@{variables('completionUrl')}' class='action-button' style='color:white;'>✅ Mark as Completed</a></p></div></div><div class='footer'><p>This is an automated notification from the Vulnerability Reporting System.</p><p><strong>Task ID:</strong> @{variables('taskId')} | <strong>Cycle ID:</strong> @{variables('cycleId')} | <strong>Status:</strong> Pending</p></div></body></html>",
+            "RecipientList": ["TCS_Team"],
+            "TeamsList": ["IVM_Team"],
+            "NotificationChannels": ["Email"],
+            "TemplateVariables": [
+              {
+                "key": "cycleId",
+                "value": "@{variables('cycleId')}"
+              },
+              {
+                "key": "taskId",
+                "value": "@{variables('taskId')}"
+              },
+              {
+                "key": "ticketNumber",
+                "value": "@{variables('ticketNumber')}"
+              },
+              {
+                "key": "dueDate",
+                "value": "@{variables('dueDate')}"
+              },
+              {
+                "key": "requestedDateTime",
+                "value": "@{formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss')}"
+              },
+              {
+                "key": "newVulnSharePointPath",
+                "value": "@{variables('newVulnSharePointPath')}"
+              },
+              {
+                "key": "completionUrl",
+                "value": "@{variables('completionUrl')}"
+              }
+            ],
+            "TemplateId": "REPORT-02",
+            "Importance": "High",
+            "Attachments": []
+          }
+        },
+        "runtimeConfiguration": {
+          "contentTransfer": {
+            "transferMode": "Chunked"
+          }
+        }
+      },
+      "Add_Queue_Message_For_FollowUp": {
+        "runAfter": {
+          "Send_Email_Notification": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azurequeues-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": "{\n  \"taskId\": \"@{variables('taskId')}\",\n  \"workflowName\": \"ScopeTriaging-Report\",\n  \"recipientEmail\": \"vinil.m@cyberpwn.com\",\n  \"recipientName\": \"Scoping Triaging Team\",\n  \"taskTitle\": \"Action Required: Scoping Triaging for Vulnerability Report - @{variables('taskId')}\",\n  \"taskDescription\": \"Scoping triaging required for vulnerability report. Cycle: @{variables('cycleId')}, Ticket: @{variables('ticketNumber')}\",\n  \"reminderCount\": 0,\n  \"maxReminderCount\": 3,\n  \"escalationLevel\": 1,\n  \"escalateAfterMaxReminders\": true,\n  \"NotificationChannels\": [\n    \"Email\",\n    \"Teams\"\n  ],\n\"TemplateVariables\": [\n    {\n        \"key\": \"taskId\",\n        \"value\": \"@{variables('taskId')}\"\n    },\n    {\n        \"key\": \"cycleId\",\n        \"value\": \"@{variables('cycleId')}\"\n    },\n    {\n        \"key\": \"ticketNumber\",\n        \"value\": \"@{variables('ticketNumber')}\"\n    },\n    {\n        \"key\": \"requestedDateTime\",\n        \"value\": \"@{formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss')}\"\n    }\n],\n\"RecipientList\": [\n    \"IVM_Team\"\n  ],\n  \"TeamsList\": [\n    \"IVM_Team\"\n  ],\n  \"TemplateId\": \"REPORT-06\",\n  \"dueDate\": \"@{variables('dueDate')}\",\n  \"priority\": \"High\",\n  \"callbackType\": \"logicApp\",\n  \"callbackUri\": \"@parameters('callbackUri02')\",\n  \"executeAfterHours\": 2,\n  \"executeOnlyIfTaskPending\": true,\n  \"authenticationRequired\": false,\n  \"callbackParameters\": {\n    \"cycleId\": \"@{variables('cycleId')}\",\n    \"ticketNumber\": \"@{variables('ticketNumber')}\",\n    \"triagingSheetPath\": \"@{variables('triagingSheetPath')}\",\n    \"newVulnSheetPath\": \"@{variables('newVulnSheetPath')}\",\n    \"dueDate\": \"@{variables('dueDate')}\",\n    \"taskId\": \"@{variables('taskId')}\"\n  }\n}",
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/queues/@{encodeURIComponent('taskreminder')}/messages"
+        }
+      },
+      "Log_Task_Completion": {
+        "runAfter": {
+          "Add_Queue_Message_For_FollowUp": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": {
+            "PartitionKey": "Reporting",
+            "RowKey": "@{guid()}",
+            "CycleId": "@{variables('cycleId')}",
+            "ActionType": "DataMerging",
+            "Timestamp": "@{utcNow()}",
+            "Status": "Completed",
+            "TaskId": "@{variables('taskId')}",
+            "PhaseChange": "Changed to Reporting phase",
+            "TriagingSheetName": "@{concat('vulnerability_report_', variables('cycleId'), '.xlsx')}",
+            "NewVulnSheetName": "@{concat('new_vulnerabilities_report_', variables('cycleId'), '.xlsx')}"
+          },
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('auditLogTableName'))}/entities"
+        }
+      },
+      "Log_Triaging_Monitoring_Completion": {
+        "runAfter": {
+          "Log_Task_Completion": ["Succeeded"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": {
+            "PartitionKey": "Reporting",
+            "RowKey": "@{guid()}",
+            "CycleId": "@{variables('cycleId')}",
+            "ActionType": "TriagingMonitoring",
+            "Timestamp": "@{utcNow()}",
+            "Status": "Completed",
+            "TaskId": "@{variables('taskId')}"
+          },
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('auditLogTableName'))}/entities"
+        }
+      },
+      "Add_NotificationStatus_Entry": {
+        "runAfter": {
+          "Check_NotificationStatus": ["Succeeded", "Failed"]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['azuretables-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": {
+            "PartitionKey": "ScopeTriaging-Report",
+            "RowKey": "@{variables('taskId')}",
+            "Timestamp": "@{utcNow()}",
+            "WorkflowName": "@{parameters('LA-Reporting02')}",
+            "CycleId": "@{variables('cycleId')}",
+            "TaskId": "@{variables('taskId')}",
+            "Status": "Pending",
+            "CallbackUri": "@parameters('callbackUri02')",
+            "CallbackParameters": "@{string(json(concat('{\"cycleId\":\"', variables('cycleId'), '\",\"ticketNumber\":\"', variables('ticketNumber'), '\",\"triagingSheetPath\":\"', variables('triagingSheetPath'), '\",\"newVulnSheetPath\":\"', variables('newVulnSheetPath'), '\",\"dueDate\":\"', variables('dueDate'), '\",\"taskId\":\"', variables('taskId'), '\",\"qualysReportPath\":\"', variables('qualysReportPath'), '\",\"dfnReportPath\":\"', variables('dfnReportPath'), '\",\"cmdbDataPath\":\"', variables('cmdbDataPath'), '\",\"qidDataPath\":\"', variables('qidDataPath'), '\",\"legacyDataPath\":\"', variables('legacyDataPath'), '\"}')))}",
+            "CreatedAt": "@{utcNow()}",
+            "LastUpdated": "@{utcNow()}",
+            "TicketNumber": "@{variables('ticketNumber')}",
+            "TriagingSheetPath": "@{variables('triagingSheetPath')}",
+            "NewVulnSheetPath": "@{variables('newVulnSheetPath')}",
+            "DueDate": "@{variables('dueDate')}",
+            "QualysReportPath": "@{variables('qualysReportPath')}",
+            "DfnReportPath": "@{variables('dfnReportPath')}",
+            "CmdbDataPath": "@{variables('cmdbDataPath')}",
+            "QidDataPath": "@{variables('qidDataPath')}",
+            "LegacyDataPath": "@{variables('legacyDataPath')}"
+          },
+          "path": "/v2/storageAccounts/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/tables/@{encodeURIComponent(parameters('statusTableName'))}/entities"
+        }
+      }
+    },
+      
+
+      "outputs": {},
+
+      "parameters": {
+        "storageAccountName": {
+          "type": "String"
+        },
+        "dataMergingFunctionUrl": {
+          "type": "String"
+        },
+        "newVulnerabilitiesFunctionUrl": {
+          "type": "String"
+        },
+        "completionUrl": {
+          "type": "String"
+        },
+        "auditLogTableName": {
+          "type": "String"
+        },
+        "statusTableName": {
+          "type": "String"
+        },
+        "configServiceUrl": {
+          "type": "String"
+        },
+        "notificationServiceUrl": {
+          "type": "String"
+        },
+        "mulesoftApiUrl": {
+          "type": "String"
+        },
+        "sharePointSiteUrl": {
+          "type": "String"
+        },
+        "servicenowApiUrl": {
+          "type": "String"
+        },
+        "completion_notification_LogicAppUrl": {
+          "type": "String"
+        },
+        "callbackSecretKey02": {
+          "type": "SecureString"
+        },
+        "callbackUri02": {
+          "type": "String"
+        },
+
+        "$connections": {
+          "type": "Object",
+          "defaultValue": {}
+        }
+      }
+    },
+
+    "parameters": {
+      "storageAccountName": {
+        "value": "[parameters('storageAccountName')]"
+      },
+      "dataMergingFunctionUrl": {
+        "value": "[parameters('dataMergingFunctionUrl')]"
+      },
+      "newVulnerabilitiesFunctionUrl": {
+        "value": "[parameters('newVulnerabilitiesFunctionUrl')]"
+      },
+      "completionUrl": {
+        "value": "[parameters('completionUrl')]"
+      },
+      "auditLogTableName": {
+        "value": "[parameters('auditLogTableName')]"
+      },
+      "statusTableName": {
+        "value": "[parameters('statusTableName')]"
+      },
+      "configServiceUrl": {
+        "value": "[parameters('configServiceUrl')]"
+      },
+      "notificationServiceUrl": {
+        "value": "[parameters('notificationServiceUrl')]"
+      },
+      "mulesoftApiUrl": {
+        "value": "[parameters('mulesoftApiUrl')]"
+      },
+      "sharePointSiteUrl": {
+        "value": "[parameters('sharePointSiteUrl')]"
+      },
+      "servicenowApiUrl": {
+        "value": "[parameters('servicenowApiUrl')]"
+      },
+      "completion_notification_LogicAppUrl": {
+        "value": "[parameters('completion_notification_LogicAppUrl')]"
+      },
+      "callbackSecretKey02": {
+        "value": "[parameters('callbackSecretKey02')]"
+      },
+      "callbackUri02": {
+        "value": "[parameters('callbackUri02')]"
+      },
+
+       "$connections": {
+            "value": "[parameters('$connections')]"
+          }
     }
   }
 }

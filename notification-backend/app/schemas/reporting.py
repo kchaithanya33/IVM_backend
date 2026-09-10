@@ -10,12 +10,37 @@ from pydantic import BaseModel
 class ReportingFunctionUrls(BaseModel):
     """
     Dynamically resolved Azure Function URLs required
-    by Reporting 03 and Reporting 04.
+    by Reporting 02, Reporting 03 and Reporting 04.
     """
 
+    # --------------------------------------------------------
+    # Reporting 04 / existing
+    # --------------------------------------------------------
+
     split_vulnerabilities_function_url: str
+
+    # --------------------------------------------------------
+    # Reporting 03 / existing
+    # --------------------------------------------------------
+
     after_scoping_triaging_url: Optional[str] = None
     triaging_validator_url: Optional[str] = None
+
+    # --------------------------------------------------------
+    # Reporting 02
+    # --------------------------------------------------------
+
+    # Data Merging Function
+    data_merging_function_url: Optional[str] = None
+
+    # New Vulnerabilities Function
+    new_vulnerabilities_function_url: Optional[str] = None
+
+    # ServiceNow Function
+    servicenow_api_url: Optional[str] = None
+
+    # Config Service Function
+    config_service_url: Optional[str] = None
 
 
 # ============================================================
@@ -24,17 +49,34 @@ class ReportingFunctionUrls(BaseModel):
 
 class ReportingLogicAppUrls(BaseModel):
     """
-    Dynamically resolved Logic App URLs.
+    Dynamically resolved Logic App callback URLs.
     """
 
-    # Notification Logic App callback URL.
+    # --------------------------------------------------------
+    # Notification Logic App
+    # --------------------------------------------------------
+
     notification_service_url: str
 
-    # Completion Logic App callback URL without query string.
+    # --------------------------------------------------------
+    # Existing Completion Logic App
+    #
+    # DO NOT CHANGE EXISTING FLOW
+    # --------------------------------------------------------
+
+    # Completion callback URL without query string.
     completion_url: Optional[str] = None
 
-    # Raw 'sig' value from the completion Logic App callback URL.
+    # Raw 'sig' value from the completion callback URL.
     completion_sas_token: Optional[str] = None
+
+    # --------------------------------------------------------
+    # Reporting 02 - Completion Notification Logic App
+    #
+    # SEPARATE from the existing Completion Logic App.
+    # --------------------------------------------------------
+
+    completion_notification_logic_app_url: Optional[str] = None
 
 
 # ============================================================
@@ -47,104 +89,174 @@ class ReportingDeploymentRequest(BaseModel):
 
     Deployment order:
 
-        1. Reporting 04
-        2. Resolve Reporting 04 callback URL
-        3. Resolve Completion Logic App callback URL
-        4. Resolve Function URLs
-        5. Reporting 03
+        Reporting 04
+            ↓
+        Reporting 03
+            ↓
+        Reporting 03 callback URL
+            ↓
+        Reporting 02
 
-    Reporting 04 callback URL becomes callbackUrl
-    for Reporting 03.
+    Reporting 02 dynamically resolves:
+
+        - Data Merging Function URL
+        - New Vulnerabilities Function URL
+        - ServiceNow Function URL
+        - Config Service Function URL
+
+    MuleSoft API URL remains handled by its existing
+    default/static source.
     """
 
-    # --------------------------------------------------------
+    # ========================================================
     # Azure infrastructure
-    # --------------------------------------------------------
+    # ========================================================
 
     subscription_id: str
     resource_group_name: str
     location: str
 
-    # --------------------------------------------------------
+    # ========================================================
     # Reporting Logic Apps
+    # ========================================================
+
+    # --------------------------------------------------------
+    # Reporting 04
     # --------------------------------------------------------
 
-    # Reporting 04 - deployed first.
     reporting_logic_app_name: str = "LA-reporting-04"
 
-    # Reporting 03 - deployed second.
+    # --------------------------------------------------------
+    # Reporting 03
+    # --------------------------------------------------------
+
     reporting_03_logic_app_name: str = "LA-reporting-03"
 
     # --------------------------------------------------------
-    # Storage Account
+    # Reporting 02
     # --------------------------------------------------------
+
+    reporting_02_logic_app_name: str = "LA-Reporting02"
+
+    # ========================================================
+    # Storage Account
+    # ========================================================
 
     storage_account_name: str
 
-    # --------------------------------------------------------
+    # ========================================================
     # SharePoint
-    # --------------------------------------------------------
+    # ========================================================
 
     share_point_site_url: str
 
-    # --------------------------------------------------------
+    # ========================================================
     # Notification Logic App
-    # --------------------------------------------------------
+    # ========================================================
 
-    # User provides the Logic App and trigger.
-    # Backend dynamically resolves its callback URL.
     notification_logic_app_name: str
     notification_logic_app_trigger_name: str
 
-    # --------------------------------------------------------
-    # Completion Logic App
-    # --------------------------------------------------------
-
-    # User provides the Logic App and trigger.
+    # ========================================================
+    # Existing Completion Logic App
     #
-    # Backend calls Azure listCallbackUrl and extracts:
-    #
-    #   completion_url
-    #   completion_sas_token
-    #
-    # The /complete/{taskId}/{workflowName}/{token}
-    # path is constructed by Reporting 03 at runtime.
-    # --------------------------------------------------------
+    # DO NOT CHANGE EXISTING FLOW
+    # ========================================================
 
     completion_logic_app_name: str
     completion_logic_app_trigger_name: str
 
-    # --------------------------------------------------------
-    # Split Vulnerabilities Azure Function
-    # --------------------------------------------------------
+    # ========================================================
+    # Separate Completion Notification Logic App
+    #
+    # Used only by Reporting 02.
+    # ========================================================
+
+    completion_notification_logic_app_name: str
+    completion_notification_logic_app_trigger_name: str
+
+    # ========================================================
+    # Reporting 04 - Split Vulnerabilities Function
+    # ========================================================
 
     function_app_name: str
     split_vulnerabilities_function_name: str
 
-    # --------------------------------------------------------
-    # After Scoping Triaging Azure Function
-    # --------------------------------------------------------
+    # ========================================================
+    # Reporting 03 - After Scoping Triaging Function
+    # ========================================================
 
     after_scoping_triaging_function_app_name: Optional[str] = None
     after_scoping_triaging_function_name: Optional[str] = None
 
-    # --------------------------------------------------------
-    # Triaging Validator Azure Function
-    # --------------------------------------------------------
+    # ========================================================
+    # Reporting 03 - Triaging Validator Function
+    # ========================================================
 
     triaging_validator_function_app_name: Optional[str] = None
     triaging_validator_function_name: Optional[str] = None
 
-    # --------------------------------------------------------
-    # Callback Secret
-    # --------------------------------------------------------
+    # ========================================================
+    # Reporting 02 - Data Merging Function
+    #
+    # Backend dynamically resolves:
+    #
+    #     dataMergingFunctionUrl
+    # ========================================================
 
-    # Used by Reporting 03 to generate the completion token.
+    data_merging_function_app_name: str
+    data_merging_function_name: str
+
+    # ========================================================
+    # Reporting 02 - New Vulnerabilities Function
+    #
+    # Backend dynamically resolves:
+    #
+    #     newVulnerabilitiesFunctionUrl
+    # ========================================================
+
+    new_vulnerabilities_function_app_name: str
+    new_vulnerabilities_function_name: str
+
+    # ========================================================
+    # Reporting 02 - ServiceNow Function
+    #
+    # Backend dynamically resolves:
+    #
+    #     servicenowApiUrl
+    # ========================================================
+
+    servicenow_function_app_name: str
+    servicenow_function_name: str
+
+    # ========================================================
+    # Reporting 02 - Config Service Function
+    #
+    # Backend dynamically resolves:
+    #
+    #     configServiceUrl
+    #
+    # The frontend/user provides:
+    #
+    #     Function App Name
+    #     Function Name
+    #
+    # Backend calls get_function_url().
+    # ========================================================
+
+    config_service_function_app_name: str
+    config_service_function_name: str
+
+    # ========================================================
+    # Callback Secret
+    # ========================================================
+
+    # Existing callback secret used by Reporting 03.
     callback_secret_key: str
 
-    # --------------------------------------------------------
+    # ========================================================
     # Azure API Connections
-    # --------------------------------------------------------
+    # ========================================================
 
     # Azure Tables
     azure_tables_connection_name: str = "azuretables-1"
@@ -162,24 +274,24 @@ class ReportingDeploymentRequest(BaseModel):
 
 class ReportingDeploymentResponse(BaseModel):
     """
-    Response returned after Reporting 04 and Reporting 03
-    deployment.
+    Response returned after Reporting 04, Reporting 03
+    and Reporting 02 deployment.
     """
 
     success: bool
     message: str
 
-    # --------------------------------------------------------
+    # ========================================================
     # Azure infrastructure
-    # --------------------------------------------------------
+    # ========================================================
 
     subscription_id: str
     resource_group_name: str
     location: str
 
-    # --------------------------------------------------------
+    # ========================================================
     # Reporting Logic Apps
-    # --------------------------------------------------------
+    # ========================================================
 
     # Reporting 04
     reporting_logic_app_name: str
@@ -187,66 +299,84 @@ class ReportingDeploymentResponse(BaseModel):
     # Reporting 03
     reporting_03_logic_app_name: Optional[str] = None
 
-    # --------------------------------------------------------
+    # ========================================================
     # Storage
-    # --------------------------------------------------------
+    # ========================================================
 
     storage_account_name: str
 
-    # --------------------------------------------------------
+    # ========================================================
     # Reporting 04 deployment
-    # --------------------------------------------------------
+    # ========================================================
 
     deployment_name: Optional[str] = None
     provisioning_state: Optional[str] = None
 
-    # --------------------------------------------------------
+    # ========================================================
     # Reporting 03 deployment
-    # --------------------------------------------------------
+    # ========================================================
 
     reporting_03_deployment_name: Optional[str] = None
     reporting_03_provisioning_state: Optional[str] = None
 
-    # --------------------------------------------------------
+    # ========================================================
+    # Reporting 02 deployment
+    # ========================================================
+
+    reporting_02_deployment_name: Optional[str] = None
+    reporting_02_provisioning_state: Optional[str] = None
+
+    # ========================================================
     # API connection IDs
-    # --------------------------------------------------------
+    # ========================================================
 
     table_connection_id: Optional[str] = None
-
     sharepoint_connection_id: Optional[str] = None
-
-    # Azure Queue connection ID
     queue_connection_id: Optional[str] = None
 
-    # --------------------------------------------------------
+    # ========================================================
     # Reporting 04 callback URL
     #
-    # This is dynamically resolved after Reporting 04
-    # deployment and passed to Reporting 03 as:
+    # Existing flow.
     #
-    #     callbackUrl
-    # --------------------------------------------------------
+    # Resolved after Reporting 04 deployment and passed
+    # to Reporting 03 as callbackUrl.
+    # ========================================================
 
     callback_url: Optional[str] = None
 
-    # --------------------------------------------------------
+    # ========================================================
+    # Reporting 03 callback URL
+    #
+    # Resolved after Reporting 03 deployment and passed
+    # to Reporting 02 as callbackUri02.
+    # ========================================================
+
+    reporting_03_callback_url: Optional[str] = None
+
+    # ========================================================
     # Dynamically resolved Function URLs
-    # --------------------------------------------------------
+    # ========================================================
 
     function_urls: Optional[ReportingFunctionUrls] = None
 
-    # --------------------------------------------------------
+    # ========================================================
     # Dynamically resolved Logic App URLs
-    # --------------------------------------------------------
+    # ========================================================
 
     logic_app_urls: Optional[ReportingLogicAppUrls] = None
 
-    # --------------------------------------------------------
-    # Completion callback values
-    # --------------------------------------------------------
+    # ========================================================
+    # Existing Completion callback values
+    #
+    # DO NOT CHANGE EXISTING FLOW
+    # ========================================================
 
-    # Base callback URL without query string.
     completion_url: Optional[str] = None
-
-    # Raw sig value extracted from listCallbackUrl response.
     completion_sas_token: Optional[str] = None
+
+    # ========================================================
+    # Reporting 02 Completion Notification URL
+    # ========================================================
+
+    completion_notification_logic_app_url: Optional[str] = None
