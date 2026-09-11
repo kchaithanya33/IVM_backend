@@ -38,6 +38,9 @@ class ReportingAzureManager:
        14. Resolve Reporting 02 callback URL
        15. Resolve Reporting 1.5 Function URLs
        16. Deploy Reporting 1.5 ONLY
+       17. Resolve Reporting 1.5 callback URL
+       18. Resolve Reporting 01 Function URLs
+       19. Deploy Reporting 01 ONLY
 
     Reporting 1.5 flow:
 
@@ -48,6 +51,15 @@ class ReportingAzureManager:
         5. Resolve Get DFN Report Function URL
         6. Deploy Reporting 1.5
         7. Pass Reporting 02 callback URL as callbackUri1.5
+
+    Reporting 01 flow:
+
+        1. Reporting 1.5 must already be deployed
+        2. Resolve Reporting 1.5 callback URL
+        3. Resolve CMDB Reporting IP Function URL dynamically
+        4. Resolve Qualys Launch Report Function URL dynamically
+        5. Deploy Reporting 01
+        6. Pass Reporting 1.5 callback URL as reportingPart2LogicAppUrl
     """
 
     MANAGEMENT_API_VERSION = "2022-03-01"
@@ -1012,6 +1024,49 @@ class ReportingAzureManager:
         return callback_url
 
     # ============================================================
+    # REPORTING 1.5 CALLBACK URL
+    # ============================================================
+
+    def get_reporting_1_5_callback_url(
+        self,
+        subscription_id: str,
+        resource_group_name: str,
+        reporting_1_5_logic_app_name: str,
+        trigger_name: str = "manual",
+    ) -> str:
+        """
+        Resolve the callback URL of Reporting 1.5.
+
+        This URL becomes reportingPart2LogicAppUrl
+        for Reporting 01.
+
+        Reporting 1.5 must already be deployed before
+        this method is called.
+        """
+
+        callback_url = (
+            self.get_logic_app_callback_url(
+                subscription_id=subscription_id,
+                resource_group_name=resource_group_name,
+                logic_app_name=reporting_1_5_logic_app_name,
+                trigger_name=trigger_name,
+            )
+        )
+
+        if not callback_url:
+
+            raise ValueError(
+                "Unable to resolve Reporting 1.5 "
+                "callback URL."
+            )
+
+        logger.info(
+            "Reporting 1.5 callback URL resolved successfully."
+        )
+
+        return callback_url
+
+    # ============================================================
     # COMPLETION NOTIFICATION LOGIC APP CALLBACK URL
     # ============================================================
 
@@ -1409,6 +1464,27 @@ class ReportingAzureManager:
             }
 
             for name in reporting_1_5_parameters:
+
+                if name in original_parameters:
+
+                    filtered_parameters[name] = (
+                        original_parameters[name]
+                    )
+
+        # --------------------------------------------------------
+        # Reporting 01 parameters
+        # --------------------------------------------------------
+
+        elif resource_name_parameter == "LA-reporting-01":
+
+            reporting_01_parameters = {
+                "cmdbReportingIpFunctionUrl",
+                "qualysLaunchReportFunctionUrl",
+                "reportingPart2LogicAppUrl",
+                "$connections",
+            }
+
+            for name in reporting_01_parameters:
 
                 if name in original_parameters:
 
@@ -2526,4 +2602,246 @@ class ReportingAzureManager:
             template=template,
             parameters=parameters,
             deployment_prefix="reporting-1-5",
+        )
+
+    # ============================================================
+    # DEPLOY REPORTING 01
+    # ============================================================
+
+    def deploy_reporting_01(
+        self,
+        request: Any,
+        connections: Dict[str, str],
+        cmdb_reporting_ip_function_url: str,
+        qualys_launch_report_function_url: str,
+        reporting_part2_logic_app_url: str,
+    ) -> Dict[str, Any]:
+        """
+        Deploy Reporting 01 ONLY.
+
+        Reporting 01 receives three dynamically resolved values:
+
+            cmdbReportingIpFunctionUrl
+            qualysLaunchReportFunctionUrl
+            reportingPart2LogicAppUrl
+
+        cmdbReportingIpFunctionUrl:
+            Dynamically resolved from the Function App name
+            and Function name supplied in the request.
+
+        qualysLaunchReportFunctionUrl:
+            Dynamically resolved from the Function App name
+            and Function name supplied in the request.
+
+        reportingPart2LogicAppUrl:
+            Dynamically resolved from the already deployed
+            Reporting 1.5 Logic App callback URL.
+        """
+
+        # ========================================================
+        # VALIDATE REPORTING 01 DYNAMIC VALUES
+        # ========================================================
+
+        dynamic_values = {
+            "cmdbReportingIpFunctionUrl": (
+                cmdb_reporting_ip_function_url
+            ),
+            "qualysLaunchReportFunctionUrl": (
+                qualys_launch_report_function_url
+            ),
+            "reportingPart2LogicAppUrl": (
+                reporting_part2_logic_app_url
+            ),
+        }
+
+        for name, value in dynamic_values.items():
+
+            if value is None or str(value).strip() == "":
+
+                raise ValueError(
+                    f"Required Reporting 01 value "
+                    f"'{name}' is missing."
+                )
+
+        # ========================================================
+        # LOAD COMBINED TEMPLATE
+        # ========================================================
+
+        combined_template = (
+            self._load_reporting_template()
+        )
+
+        # ========================================================
+        # EXTRACT REPORTING 01 ONLY
+        # ========================================================
+
+        template = (
+            self._build_single_logic_app_template(
+                template=combined_template,
+                resource_name_parameter="LA-reporting-01",
+            )
+        )
+
+        # ========================================================
+        # MANAGED API IDS
+        # ========================================================
+
+        managed_api_ids = (
+            self._get_managed_api_ids(
+                subscription_id=request.subscription_id,
+                location=request.location,
+            )
+        )
+
+        # ========================================================
+        # CONNECTIONS
+        #
+        # Reporting 01 uses the same existing connections
+        # when they are present in the ARM template.
+        # ========================================================
+
+        connections_parameter: Dict[str, Any] = {}
+
+        table_connection_id = connections.get(
+            "table_connection_id"
+        )
+
+        sharepoint_connection_id = connections.get(
+            "sharepoint_connection_id"
+        )
+
+        queue_connection_id = connections.get(
+            "queue_connection_id"
+        )
+
+        if table_connection_id:
+
+            connections_parameter["azuretables-1"] = {
+                "connectionId": table_connection_id,
+                "connectionName": (
+                    request.azure_tables_connection_name
+                ),
+                "id": managed_api_ids[
+                    "azuretables"
+                ],
+            }
+
+        if sharepoint_connection_id:
+
+            connections_parameter["sharepointonline-1"] = {
+                "connectionId": sharepoint_connection_id,
+                "connectionName": (
+                    request.sharepoint_connection_name
+                ),
+                "id": managed_api_ids[
+                    "sharepointonline"
+                ],
+            }
+
+        if queue_connection_id:
+
+            connections_parameter["azurequeues-1"] = {
+                "connectionId": queue_connection_id,
+                "connectionName": (
+                    request.azure_queue_connection_name
+                ),
+                "id": managed_api_ids[
+                    "azurequeues"
+                ],
+            }
+
+        # ========================================================
+        # ARM PARAMETERS - REPORTING 01
+        # ========================================================
+
+        parameters: Dict[str, Any] = {
+
+            # ----------------------------------------------------
+            # Reporting 01 Logic App name
+            # ----------------------------------------------------
+
+            "LA-reporting-01": {
+                "value": (
+                    request.reporting_01_logic_app_name
+                ),
+            },
+
+            # ----------------------------------------------------
+            # Location
+            # ----------------------------------------------------
+
+            "location": {
+                "value": request.location,
+            },
+
+            # ----------------------------------------------------
+            # CMDB Reporting IP Function URL
+            # ----------------------------------------------------
+
+            "cmdbReportingIpFunctionUrl": {
+                "value": (
+                    cmdb_reporting_ip_function_url
+                ),
+            },
+
+            # ----------------------------------------------------
+            # Qualys Launch Report Function URL
+            # ----------------------------------------------------
+
+            "qualysLaunchReportFunctionUrl": {
+                "value": (
+                    qualys_launch_report_function_url
+                ),
+            },
+
+            # ----------------------------------------------------
+            # Reporting 1.5 callback URL
+            #
+            # This is the callback URL of the already deployed
+            # Reporting 1.5 Logic App.
+            # ----------------------------------------------------
+
+            "reportingPart2LogicAppUrl": {
+                "value": (
+                    reporting_part2_logic_app_url
+                ),
+            },
+
+            # ----------------------------------------------------
+            # API connections
+            # ----------------------------------------------------
+
+            "$connections": {
+                "value": connections_parameter,
+            },
+        }
+
+        logger.info(
+            "Deploying Reporting 01 ONLY: %s",
+            request.reporting_01_logic_app_name,
+        )
+
+        logger.info(
+            "Reporting 01 cmdbReportingIpFunctionUrl "
+            "resolved dynamically from Function App and "
+            "Function."
+        )
+
+        logger.info(
+            "Reporting 01 qualysLaunchReportFunctionUrl "
+            "resolved dynamically from Function App and "
+            "Function."
+        )
+
+        logger.info(
+            "Reporting 01 reportingPart2LogicAppUrl is the "
+            "callback URL of the already deployed "
+            "Reporting 1.5 Logic App."
+        )
+
+        return self._deploy_reporting_template(
+            request=request,
+            template=template,
+            parameters=parameters,
+            deployment_prefix="reporting-01",
         )

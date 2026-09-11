@@ -16,7 +16,10 @@ from azure.core.exceptions import (
 )
 import xlsxwriter
 import base64
-
+import pandas as pd
+import io
+import base64
+import xlsxwriter
 
 # ============================================================
 # QUALYS COLUMN MAPPING
@@ -2696,3 +2699,276 @@ def ensure_container_exists(
         raise
 
     return container_client
+
+
+def to_excel_bytes(df):
+    """
+    Convert a pandas DataFrame into Excel bytes.
+    """
+
+    buf = io.BytesIO()
+
+    with pd.ExcelWriter(
+        buf,
+        engine="xlsxwriter"
+    ) as writer:
+
+        df.to_excel(
+            writer,
+            index=False
+        )
+
+    buf.seek(0)
+
+    return buf.getvalue()
+
+
+def to_excel_multi_sheet(sheets_dict):
+    """
+    Create an Excel workbook containing
+    multiple DataFrame sheets.
+    """
+
+    buf = io.BytesIO()
+
+    with pd.ExcelWriter(
+        buf,
+        engine="xlsxwriter"
+    ) as writer:
+
+        for sheet_name, df in sheets_dict.items():
+
+            df.to_excel(
+                writer,
+                sheet_name=sheet_name,
+                index=False
+            )
+
+    buf.seek(0)
+
+    return buf.getvalue()
+
+
+def merge_qualys_reports(body):
+    """
+    Merge Qualys reports and identify DFN records
+    that are missing from the merged Qualys report.
+    """
+
+    qualys1_b = base64.b64decode(
+        body["qualysReportContent"]
+    )
+
+    qualys2_content = body.get(
+        "qualysReportContent2",
+        ""
+    )
+
+    dfn_b = base64.b64decode(
+        body["dfnReportContent"]
+    )
+
+    logging.info(
+        f"Qualys1 bytes size: {len(qualys1_b)}, "
+        f"DFN bytes size: {len(dfn_b)}"
+    )
+
+    qualys1 = pd.read_excel(
+        io.BytesIO(qualys1_b)
+    )
+
+    logging.info(
+        f"Qualys1 shape: {qualys1.shape}"
+    )
+
+    has_qualys2 = (
+        qualys2_content
+        and qualys2_content.strip() != ""
+    )
+
+    if has_qualys2:
+
+        qualys2_b = base64.b64decode(
+            qualys2_content
+        )
+
+        logging.info(
+            f"Qualys2 bytes size: {len(qualys2_b)}"
+        )
+
+        qualys2 = pd.read_excel(
+            io.BytesIO(qualys2_b)
+        )
+
+        logging.info(
+            f"Qualys2 shape: {qualys2.shape}"
+        )
+
+        qualys_merged = (
+            pd.concat(
+                [qualys1, qualys2],
+                ignore_index=True
+            )
+            .drop_duplicates()
+        )
+
+    else:
+
+        logging.info(
+            "Qualys2 content is empty or null, "
+            "using only Qualys1"
+        )
+
+        qualys_merged = qualys1.copy()
+
+    logging.info(
+        f"Merged Qualys shape after deduplication: "
+        f"{qualys_merged.shape}"
+    )
+
+    dfn = pd.read_excel(
+        io.BytesIO(dfn_b)
+    )
+
+    logging.info(
+        f"DFN shape: {dfn.shape}"
+    )
+
+    merged_ids = set(
+        qualys_merged["Import Id"].astype(str)
+    )
+
+    logging.info(
+        f"Merged Qualys unique Import Id count: "
+        f"{len(merged_ids)}"
+    )
+
+    missing_dfn = dfn[
+        ~dfn["Import ID"]
+        .astype(str)
+        .isin(merged_ids)
+    ]
+
+    logging.info(
+        f"Missing DFN shape: {missing_dfn.shape}"
+    )
+
+    output_dfn = missing_dfn[
+        [
+            "Import ID",
+            "IP Address",
+            "ID",
+            "Status (IVM)"
+        ]
+    ]
+
+    logging.info(
+        f"Output DFN shape: {output_dfn.shape}"
+    )
+
+    # --------------------------------------------------------
+    # Create merged Qualys Excel
+    # --------------------------------------------------------
+
+    merged_excel_b64 = base64.b64encode(
+        to_excel_bytes(qualys_merged)
+    ).decode("utf-8")
+
+    # --------------------------------------------------------
+    # Create missing DFN Excel
+    # --------------------------------------------------------
+
+    missing_dfn_excel_b64 = base64.b64encode(
+        to_excel_bytes(output_dfn)
+    ).decode("utf-8")
+
+    # --------------------------------------------------------
+    # Create multi-sheet Excel
+    # --------------------------------------------------------
+
+    if has_qualys2:
+
+        sheets = {
+            "Merged Qualys Report": qualys_merged,
+            "1st Download": qualys1,
+            "2nd Download": qualys2
+        }
+
+        logging.info(
+            "Created multi-sheet Excel with 3 sheets"
+        )
+
+    else:
+
+        sheets = {
+            "Merged Qualys Report": qualys_merged,
+            "1st Download": qualys1
+        }
+
+        logging.info(
+            "Created multi-sheet Excel with 2 sheets "
+            "(no 2nd download)"
+        )
+
+    merge_qualys_sheet_b64 = base64.b64encode(
+        to_excel_multi_sheet(sheets)
+    ).decode("utf-8")
+
+    return {
+        "merge_qualys_report": merged_excel_b64,
+        "missing_dfn_report": missing_dfn_excel_b64,
+        "missing_count": len(output_dfn),
+        "merge_qualys_sheet": merge_qualys_sheet_b64
+    }
+    
+
+def extract_missing_dfn_ips(body):
+    qualys_b = base64.b64decode(body["qualysReportContent"])
+    dfn_b = base64.b64decode(body["dfnReportContent"])
+
+    logging.info(
+        f"Qualys bytes size: {len(qualys_b)}, "
+        f"DFN bytes size: {len(dfn_b)}"
+    )
+
+    qualys = pd.read_excel(io.BytesIO(qualys_b))
+    logging.info(f"Qualys shape: {qualys.shape}")
+
+    dfn = pd.read_excel(io.BytesIO(dfn_b))
+    logging.info(f"DFN shape: {dfn.shape}")
+
+    # Get unique Import Ids from Qualys report
+    qualys_ids = set(
+        qualys["Import Id"].astype(str)
+    )
+
+    logging.info(
+        f"Qualys unique Import Id count: {len(qualys_ids)}"
+    )
+
+    # Find DFN records whose Import ID is not in Qualys
+    missing_dfn = dfn[
+        ~dfn["Import ID"].astype(str).isin(qualys_ids)
+    ]
+
+    logging.info(
+        f"Missing DFN records count: {len(missing_dfn)}"
+    )
+
+    # Extract unique IP addresses from missing records
+    missing_ips = (
+        missing_dfn["IP Address"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    logging.info(
+        f"Missing unique IP addresses count: "
+        f"{len(missing_ips)}"
+    )
+
+    return {
+        "missing_ips": missing_ips,
+        "missing_count": len(missing_ips)
+    }

@@ -51,6 +51,14 @@ from app.api.reporting import (
     router as reporting_router,
 )
 
+# ============================================================
+# Remediation
+# ============================================================
+
+from app.api.remediation import (
+    router as remediation_router,
+)
+
 
 # ============================================================
 # FASTAPI APPLICATION
@@ -173,6 +181,15 @@ app.include_router(
 
 app.include_router(
     reporting_router
+)
+
+
+# ------------------------------------------------------------
+# Remediation-04 Logic App Deployment
+# ------------------------------------------------------------
+
+app.include_router(
+    remediation_router
 )
 
 

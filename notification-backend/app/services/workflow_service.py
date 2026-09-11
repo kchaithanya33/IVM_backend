@@ -49,7 +49,9 @@ class WorkflowService:
     "ScanCompletionLog",
     "CHGFormRequests",
     "CHGStatusTracking",
-    "AssetScanGroups"
+    "AssetScanGroups",
+    "SecurityReportingCycles"
+    
             
         ]
 
@@ -78,13 +80,15 @@ class WorkflowService:
             # ------------------------------------------------
 
             "qualysscanstatusqueue",
+            
 
             "vulnscan00",
 
             "authscanresultshandlerqueue",
             "chgfollowup",
             "vulnscanbatchqueue",
-            "meydiageo"
+            "meydiageo",
+            "remediationweeklyqueue"
         ]
 
         # ====================================================
