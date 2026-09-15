@@ -39,8 +39,9 @@ def deploy_remediation(
 
     logger.info(
         "Received Remediation deployment request: "
-        "logic_app=%s",
+        "logic_app=%s remediation_01_logic_app=%s",
         request.logic_app_name,
+        request.remediation_01_logic_app_name,
     )
 
     service = RemediationDeploymentService()
