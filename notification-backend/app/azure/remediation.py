@@ -1,4 +1,3 @@
-
 import json
 import logging
 import uuid
@@ -844,66 +843,65 @@ class RemediationAzureManager:
             "$connections",
         }
 
-        
         remediation_01_parameters = {
-    "LA-Remediation-01",
-    "location",
-    "storageAccountName",
-    "auditLogTableName",
+            "LA-Remediation-01",
+            "location",
+            "storageAccountName",
+            "auditLogTableName",
 
-    "CallbackUri02",
+            "CallbackUri02",
 
-    "configServiceUrl",
-    "sharePointSiteUrl",
+            "configServiceUrl",
+            "sharePointSiteUrl",
 
-    "excelProcessingFunctionUrl",
-    "qualysQIDOptionProfileUrl",
-    "dfnFileContentFunctionUrl",
-    "cmdbIpExtractorFunctionUrl",
-    "allIpQidExtractorFunctionUrl",
+            "excelProcessingFunctionUrl",
+            "qualysQIDOptionProfileUrl",
+            "dfnFileContentFunctionUrl",
+            "cmdbIpExtractorFunctionUrl",
+            "allIpQidExtractorFunctionUrl",
 
-    "remediationScanUrl",
-    "remediationSasToken",
-    "notificationServiceUrl",
+            "remediationScanUrl",
+            "remediationSasToken",
+            "notificationServiceUrl",
 
-    "dfnPortalUrl",
-    "remediation03LogicAppUrl",
+            "dfnPortalUrl",
+            "remediation03LogicAppUrl",
 
-    "cyclesTableName",
-    "scanStatusTableName",
+            "cyclesTableName",
+            "scanStatusTableName",
 
-    "auditLogPartitionKey",
-    "cyclePartitionKey",
-    "scanStatusPartitionKey",
-    "configPartitionKey",
+            "auditLogPartitionKey",
+            "cyclePartitionKey",
+            "scanStatusPartitionKey",
+            "configPartitionKey",
 
-    "defaultCycleId",
-    "defaultVulnerabilityFileName",
-    "vulnerabilityFolderPath",
-    "workflowName",
+            "defaultCycleId",
+            "defaultVulnerabilityFileName",
+            "vulnerabilityFolderPath",
+            "workflowName",
 
-    "excelProcessingType",
-    "cmdbProcessingType",
+            "excelProcessingType",
+            "cmdbProcessingType",
 
-    "defaultScannerName",
-    "scanTitlePrefix",
-    "scannerNamePrefix",
-    "defaultScanPriority",
-    "defaultOptionProfile",
-    "scanStatusInitialValue",
+            "defaultScannerName",
+            "scanTitlePrefix",
+            "scannerNamePrefix",
+            "defaultScanPriority",
+            "defaultOptionProfile",
+            "scanStatusInitialValue",
 
-    "notificationType",
-    "notificationTitle",
-    "emailImportance",
-    "notificationChannels",
+            "notificationType",
+            "notificationTitle",
+            "emailImportance",
+            "notificationChannels",
 
-    "remediationWorkflowName",
-    "remediationCallbackSecretKey",
+            "remediationWorkflowName",
+            "remediationCallbackSecretKey",
 
-    "qualysScanStatusQueueName",
+            "qualysScanStatusQueueName",
 
-    "$connections",
-}
+            "$connections",
+        }
 
         remediation_05_parameters = {
             "LA-Remediation-0.5",
@@ -913,6 +911,30 @@ class RemediationAzureManager:
             "getNextBusinessDayUrl",
             "queueName",
             "BusinessDayLogicAppUrl",
+            "$connections",
+        }
+
+        # ----------------------------------------------------
+        # NEW:
+        # Remediation-00 parameters
+        # ----------------------------------------------------
+
+        remediation_00_parameters = {
+            "LA-Remediation-00",
+            "location",
+            "storageAccountName",
+            "auditLogTableName",
+            "configServiceUrl",
+            "rowCounterFunctionUrl",
+            "sharePointSiteUrl",
+            "callbackUri0.5",
+            "dfnPortalUrl",
+            "dfnFileContentFunctionUrl",
+            "remediationWorkflowName",
+            "remediationCallbackSecretKey",
+            "remediationSasToken",
+            "remediationScanUrl",
+           "notificationServiceUrl",
             "$connections",
         }
 
@@ -927,6 +949,15 @@ class RemediationAzureManager:
         elif logic_app_parameter_name == "LA-Remediation-0.5":
 
             allowed_parameters = remediation_05_parameters
+
+        # ----------------------------------------------------
+        # NEW:
+        # Remediation-00 selection
+        # ----------------------------------------------------
+
+        elif logic_app_parameter_name == "LA-Remediation-00":
+
+            allowed_parameters = remediation_00_parameters
 
         else:
 
@@ -1611,3 +1642,254 @@ class RemediationAzureManager:
                 "error": str(exc),
             }
 
+    # ========================================================
+    # DEPLOY REMEDIATION-00
+    # NEW
+    # ========================================================
+
+    def deploy_remediation_00(
+        self,
+        request,
+        connections: Dict[str, str],
+        function_urls: Dict[str, str],
+        callback_urls: Dict[str, str],
+        callback_uri_01: str,
+        dfn_portal_url: str,
+    ) -> Dict[str, Any]:
+
+        logger.info(
+            "Starting Remediation-00 deployment: %s",
+            request.remediation_00_logic_app_name,
+        )
+
+        resource_client = ResourceManagementClient(
+            self.credential,
+            request.subscription_id,
+        )
+
+        # ----------------------------------------------------
+        # Load ARM template
+        # ----------------------------------------------------
+
+        template = self._load_remediation_template()
+
+        # ----------------------------------------------------
+        # FILTER ARM TEMPLATE
+        #
+        # Only Remediation-00 is sent to ARM.
+        # ----------------------------------------------------
+
+        template = self._filter_template_for_logic_app(
+            template=template,
+            logic_app_parameter_name="LA-Remediation-00",
+        )
+
+        # ----------------------------------------------------
+        # Managed API IDs
+        # ----------------------------------------------------
+
+        subscription_id = request.subscription_id
+        location = request.location
+
+        azure_tables_api_id = (
+            f"/subscriptions/{subscription_id}"
+            f"/providers/Microsoft.Web/locations/{location}"
+            f"/managedApis/azuretables"
+        )
+
+        azure_queues_api_id = (
+            f"/subscriptions/{subscription_id}"
+            f"/providers/Microsoft.Web/locations/{location}"
+            f"/managedApis/azurequeues"
+        )
+
+        # ----------------------------------------------------
+        # ARM parameters - Remediation 00
+        # ----------------------------------------------------
+
+        parameters = {
+            "LA-Remediation-00": {
+                "value":
+                    request.remediation_00_logic_app_name
+            },
+
+            "location": {
+                "value": request.location
+            },
+
+            "storageAccountName": {
+                "value": request.storage_account_name
+            },
+
+            "auditLogTableName": {
+                "value": request.audit_log_table_name
+            },
+
+            "configServiceUrl": {
+                "value": function_urls[
+                    "config_service_url"
+                ]
+            },
+
+            "rowCounterFunctionUrl": {
+                "value": function_urls[
+                    "row_counter_function_url"
+                ]
+            },
+
+            "sharePointSiteUrl": {
+                "value": request.share_point_site_url
+            },
+
+            # ------------------------------------------------
+            # IMPORTANT:
+            #
+            # CallbackUri0.5 parameter in Remediation-00
+            # receives the callback URL of Remediation-01.
+            # ------------------------------------------------
+
+            "CallbackUri0.5": {
+                "value": callback_uri_01
+            },
+
+            "dfnPortalUrl": {
+                "value": dfn_portal_url
+            },
+
+            "dfnFileContentFunctionUrl": {
+                "value": function_urls[
+                    "dfn_file_content_function_url"
+                ]
+            },
+
+            "remediationWorkflowName": {
+                "value": "IVM-Remediation"
+            },
+
+            "remediationCallbackSecretKey": {
+                "value": "MySecretKey123!"
+            },
+
+            "remediationSasToken": {
+                "value": callback_urls[
+                    "remediation_sas_token"
+                ]
+            },
+
+            "remediationScanUrl": {
+                "value": callback_urls[
+                    "remediation_scan_url"
+                ]
+            },
+            "notificationServiceUrl": {
+    "value": callback_urls[
+        "notification_service_url"
+    ]
+},
+            "$connections": {
+                "value": {
+
+                    "azuretables-1": {
+                        "connectionId": connections[
+                            "table_connection_id"
+                        ],
+                        "connectionName":
+                            request.table_connection_name,
+                        "id":
+                            azure_tables_api_id,
+                    },
+
+                    "azurequeues-1": {
+                        "connectionId": connections[
+                            "queue_connection_id"
+                        ],
+                        "connectionName":
+                            request.queue_connection_name,
+                        "id":
+                            azure_queues_api_id,
+                    },
+                }
+            },
+        }
+
+        # ----------------------------------------------------
+        # Deployment object
+        # ----------------------------------------------------
+
+        deployment_properties = {
+            "mode": "Incremental",
+            "template": template,
+            "parameters": parameters,
+        }
+
+        deployment_name = (
+            f"remediation-00-{uuid.uuid4().hex[:8]}"
+        )
+
+        logger.info(
+            "Creating Remediation-00 ARM deployment: %s",
+            deployment_name,
+        )
+
+        try:
+
+            poller = (
+                resource_client.deployments
+                .begin_create_or_update(
+                    request.resource_group_name,
+                    deployment_name,
+                    {
+                        "properties":
+                            deployment_properties
+                    },
+                )
+            )
+
+            deployment_result = poller.result()
+
+            provisioning_state = (
+                deployment_result.properties
+                .provisioning_state
+            )
+
+            logger.info(
+                "Remediation-00 deployment completed: "
+                "name=%s state=%s",
+                deployment_name,
+                provisioning_state,
+            )
+
+            if provisioning_state != "Succeeded":
+
+                return {
+                    "success": False,
+                    "deployment_name":
+                        deployment_name,
+                    "provisioning_state":
+                        provisioning_state,
+                    "error":
+                        "Remediation-00 ARM deployment "
+                        "did not succeed",
+                }
+
+            return {
+                "success": True,
+                "deployment_name":
+                    deployment_name,
+                "provisioning_state":
+                    provisioning_state,
+            }
+
+        except Exception as exc:
+
+            logger.exception(
+                "Remediation-00 ARM deployment failed"
+            )
+
+            return {
+                "success": False,
+                "deployment_name":
+                    deployment_name,
+                "provisioning_state": "Failed",
+                "error": str(exc),
+            }

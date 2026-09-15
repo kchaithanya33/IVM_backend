@@ -1,4 +1,3 @@
-
 import logging
 from typing import Any, Dict
 
@@ -52,6 +51,19 @@ class NotificationARMService:
         completion_logic_app_name: str,
         notification_followup_logic_app_name: str,
         vuln_scan_complete_logic_app_name: str,
+
+        # -----------------------------------------------------
+        # NEW: STS Change Approval Check Logic App
+        # -----------------------------------------------------
+
+        sts_change_approval_check_logic_app_name: str,
+        chg_approval_recipients: str,
+
+        # -----------------------------------------------------
+        # NEW: Status Tracking System Logic App
+        # -----------------------------------------------------
+
+        status_tracking_system_logic_app_name: str,
 
         # -----------------------------------------------------
         # Queue
@@ -263,6 +275,27 @@ class NotificationARMService:
                 vuln_scan_complete_logic_app_name,
 
             # -------------------------------------------------
+            # NEW: STS Change Approval Check Logic App
+            # -------------------------------------------------
+
+            "LA-STS-ChangeApprovalCheck":
+                sts_change_approval_check_logic_app_name,
+
+            # -------------------------------------------------
+            # NEW: Status Tracking System Logic App
+            # -------------------------------------------------
+
+            "LA-StatusTrackingSystem":
+                status_tracking_system_logic_app_name,
+
+            # -------------------------------------------------
+            # NEW: CHG Approval Recipients
+            # -------------------------------------------------
+
+            "chgApprovalRecipients":
+                chg_approval_recipients,
+
+            # -------------------------------------------------
             # Queue
             # -------------------------------------------------
 
@@ -355,6 +388,9 @@ class NotificationARMService:
         #
         # If it does not exist, notificationServiceUrl is empty.
         # ARM creates Notification-service and the other resources.
+        #
+        # LA-StatusTrackingSystem is also deployed here because
+        # it is defined as a resource in the same ARM template.
         #
         # =====================================================
 
@@ -539,4 +575,3 @@ class NotificationARMService:
             "resources":
                 resources,
         }
-

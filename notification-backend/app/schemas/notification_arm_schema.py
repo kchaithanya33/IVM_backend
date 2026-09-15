@@ -88,6 +88,30 @@ class NotificationARMDeploymentRequest(BaseModel):
         description="Vulnerability Scan Complete Logic App name",
     )
 
+    # NEW: STS CHANGE APPROVAL CHECK
+    sts_change_approval_check_logic_app_name: str = Field(
+        "LA-STS-ChangeApprovalCheck",
+        min_length=1,
+        description="STS Change Approval Check Logic App name",
+    )
+
+    # NEW: STATUS TRACKING SYSTEM
+    status_tracking_system_logic_app_name: str = Field(
+        "LA-StatusTrackingSystem",
+        min_length=1,
+        description="Status Tracking System Logic App name",
+    )
+
+    # =========================================================
+    # CHG APPROVAL
+    # =========================================================
+
+    chg_approval_recipients: str = Field(
+        ...,
+        min_length=1,
+        description="Recipients for CHG approval notifications, separated by semicolon",
+    )
+
     # =========================================================
     # QUEUE
     # =========================================================

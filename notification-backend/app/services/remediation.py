@@ -1,4 +1,3 @@
-
 import logging
 
 from app.azure.remediation import RemediationAzureManager
@@ -68,8 +67,6 @@ class RemediationDeploymentService:
             # =================================================
             # STEP 2
             # Get Remediation-02 Function URLs
-            #
-            # Existing Remediation-02 logic remains unchanged.
             # =================================================
 
             logger.info(
@@ -103,8 +100,6 @@ class RemediationDeploymentService:
             # =================================================
             # STEP 3
             # Deploy LA-Remediation-02 FIRST
-            #
-            # Existing Remediation-02 deployment is untouched.
             # =================================================
 
             logger.info(
@@ -182,9 +177,6 @@ class RemediationDeploymentService:
             # =================================================
             # STEP 5
             # Get Remediation-02 callback URL
-            #
-            # IMPORTANT:
-            # This happens only after 02 succeeds.
             # =================================================
 
             logger.info(
@@ -214,9 +206,6 @@ class RemediationDeploymentService:
             # =================================================
             # STEP 6
             # Resolve Remediation-01 Function URLs
-            #
-            # These are dynamically resolved from:
-            # Function App + Function Name
             # =================================================
 
             logger.info(
@@ -267,24 +256,6 @@ class RemediationDeploymentService:
             # =================================================
             # STEP 7
             # MERGE FUNCTION URLS
-            #
-            # IMPORTANT:
-            #
-            # Remediation-02 provides:
-            #
-            #   config_service_url
-            #   qualys_asset_group_creation_function_url
-            #   qualys_scan_function_url
-            #
-            # Remediation-01 provides:
-            #
-            #   excel_processing_function_url
-            #   qualys_qid_option_profile_url
-            #   dfn_file_content_function_url
-            #   cmdb_ip_extractor_function_url
-            #   all_ip_qid_extractor_function_url
-            #
-            # Keep them together exactly like the Scoping pattern.
             # =================================================
 
             all_function_urls = {
@@ -304,9 +275,6 @@ class RemediationDeploymentService:
             # =================================================
             # STEP 8
             # Resolve Remediation-01 callback URLs
-            #
-            # 1. Remediation Scan callback + SAS
-            # 2. Notification Service callback
             # =================================================
 
             logger.info(
@@ -339,16 +307,6 @@ class RemediationDeploymentService:
             # =================================================
             # STEP 9
             # Deploy LA-Remediation-01
-            #
-            # IMPORTANT:
-            #
-            # Pass ALL function URLs, not only the 01 URLs.
-            #
-            # This means:
-            #
-            # all_function_urls
-            #
-            # contains both 02 + 01 function URLs.
             # =================================================
 
             logger.info(
@@ -457,9 +415,6 @@ class RemediationDeploymentService:
             # =================================================
             # STEP 11
             # Resolve Remediation-0.5 Function URLs
-            #
-            # Function App + Function Name are supplied in the
-            # request and the Azure manager resolves the URLs.
             # =================================================
 
             logger.info(
@@ -493,8 +448,8 @@ class RemediationDeploymentService:
             # STEP 12
             # Resolve Remediation-0.5 Logic App callback URL
             #
-            # Logic App name + trigger name are supplied in the
-            # request and the Azure manager resolves the URL.
+            # This existing callback is used by Remediation-0.5.
+            # It is NOT used as CallbackUri0.5 for Remediation-00.
             # =================================================
 
             logger.info(
@@ -521,9 +476,6 @@ class RemediationDeploymentService:
             # =================================================
             # STEP 13
             # Deploy LA-Remediation-0.5
-            #
-            # Existing Remediation-02 and Remediation-01
-            # deployment logic remains unchanged.
             # =================================================
 
             logger.info(
@@ -634,12 +586,243 @@ class RemediationDeploymentService:
 
             # =================================================
             # STEP 15
-            # SUCCESS
+            # Resolve LA-Remediation-01 callback URI
+            #
+            # IMPORTANT:
+            #
+            # This is the callback URL of LA-Remediation-01.
+            #
+            # This value will be passed to LA-Remediation-00
+            # as the ARM parameter:
+            #
+            #     CallbackUri0.5
+            #
             # =================================================
 
             logger.info(
-                "LA-Remediation-02, LA-Remediation-01 and "
-                "LA-Remediation-0.5 deployed successfully"
+                "Resolving deployed LA-Remediation-01 callback URL"
+            )
+
+            callback_uri_01 = (
+                self.azure_manager.get_logic_app_callback_url(
+                    subscription_id=
+                        request.subscription_id,
+
+                    resource_group_name=
+                        request.resource_group_name,
+
+                    logic_app_name=
+                        request.remediation_01_logic_app_name,
+
+                    trigger_name=
+                        "When_a_HTTP_request_is_received",
+                )
+            )
+
+            logger.info(
+                "LA-Remediation-01 callback URL resolved"
+            )
+
+            # =================================================
+            # STEP 16
+            # Resolve Row Counter Function URL
+            # =================================================
+
+            logger.info(
+                "Resolving Row Counter Function URL"
+            )
+
+            row_counter_function_url = (
+                self.azure_manager.get_function_url(
+                    subscription_id=
+                        request.subscription_id,
+
+                    resource_group_name=
+                        request.resource_group_name,
+
+                    function_app_name=
+                        request.row_counter_function_app_name,
+
+                    function_name=
+                        request.row_counter_function_name,
+                )
+            )
+
+            logger.info(
+                "Row Counter Function URL resolved"
+            )
+
+            # =================================================
+            # STEP 17
+            # Merge Function URLs for Remediation-00
+            # =================================================
+
+            all_function_urls_with_00 = {
+                **all_function_urls,
+                **remediation_05_function_urls,
+                "row_counter_function_url":
+                    row_counter_function_url,
+            }
+
+            logger.info(
+                "Remediation-00 Function URLs resolved successfully"
+            )
+
+            logger.info(
+                "Resolved Function URL keys for Remediation-00: %s",
+                sorted(all_function_urls_with_00.keys()),
+            )
+
+            # =================================================
+            # STEP 18
+            # Get DFN Portal URL
+            # =================================================
+
+            dfn_portal_url = request.dfn_portal_url
+
+            logger.info(
+                "DFN Portal URL received for Remediation-00"
+            )
+
+            # =================================================
+            # STEP 19
+            # Deploy LA-Remediation-00
+            #
+            # CallbackUri0.5 = callback URL of LA-Remediation-01
+            # =================================================
+
+            logger.info(
+                "Deploying Logic App: %s",
+                request.remediation_00_logic_app_name,
+            )
+
+            remediation_00_result = (
+                self.azure_manager.deploy_remediation_00(
+                    request=request,
+
+                    connections=connections,
+
+                    function_urls=
+                        all_function_urls_with_00,
+
+                    callback_urls=
+                        remediation_01_callback_urls,
+
+                    callback_uri_01=
+                        callback_uri_01,
+
+                    dfn_portal_url=
+                        dfn_portal_url,
+                )
+            )
+
+            # =================================================
+            # STEP 20
+            # Handle Remediation-00 deployment failure
+            # =================================================
+
+            if not remediation_00_result.get("success"):
+
+                return RemediationDeploymentResponse(
+                    success=False,
+
+                    message=(
+                        "LA-Remediation-02, "
+                        "LA-Remediation-01 and "
+                        "LA-Remediation-0.5 deployed successfully, "
+                        "but LA-Remediation-00 deployment failed: "
+                        + remediation_00_result.get(
+                            "error",
+                            "Unknown deployment error",
+                        )
+                    ),
+
+                    subscription_id=
+                        request.subscription_id,
+
+                    resource_group_name=
+                        request.resource_group_name,
+
+                    location=
+                        request.location,
+
+                    logic_app_name=
+                        request.logic_app_name,
+
+                    remediation_01_logic_app_name=
+                        request.remediation_01_logic_app_name,
+
+                    remediation_00_logic_app_name=
+                        request.remediation_00_logic_app_name,
+
+                    storage_account_name=
+                        request.storage_account_name,
+
+                    deployment_name=
+                        remediation_00_result.get(
+                            "deployment_name"
+                        ),
+
+                    provisioning_state=
+                        remediation_00_result.get(
+                            "provisioning_state"
+                        ),
+
+                    table_connection_id=
+                        connections.get(
+                            "table_connection_id"
+                        ),
+
+                    queue_connection_id=
+                        connections.get(
+                            "queue_connection_id"
+                        ),
+
+                    function_urls=
+                        RemediationFunctionUrls(
+                            **all_function_urls_with_00
+                        ),
+
+                    remediation_scan_url=
+                        remediation_01_callback_urls.get(
+                            "remediation_scan_url"
+                        ),
+
+                    remediation_sas_token=
+                        remediation_01_callback_urls.get(
+                            "remediation_sas_token"
+                        ),
+
+                    notification_service_url=
+                        remediation_01_callback_urls.get(
+                            "notification_service_url"
+                        ),
+
+                    callback_uri_02=
+                        callback_uri_02,
+
+                    callback_uri_05=
+                        callback_uri_01,
+
+                    business_day_logic_app_url=
+                        business_day_logic_app_url,
+
+                    dfn_portal_url=
+                        dfn_portal_url,
+
+                    row_counter_function_url=
+                        row_counter_function_url,
+                )
+
+            # =================================================
+            # STEP 21
+            # FINAL SUCCESS
+            # =================================================
+
+            logger.info(
+                "LA-Remediation-02, LA-Remediation-01, "
+                "LA-Remediation-0.5 and "
+                "LA-Remediation-00 deployed successfully"
             )
 
             return RemediationDeploymentResponse(
@@ -647,8 +830,9 @@ class RemediationDeploymentService:
 
                 message=(
                     "LA-Remediation-02, "
-                    "LA-Remediation-01 and "
-                    "LA-Remediation-0.5 deployed successfully"
+                    "LA-Remediation-01, "
+                    "LA-Remediation-0.5 and "
+                    "LA-Remediation-00 deployed successfully"
                 ),
 
                 subscription_id=
@@ -666,16 +850,19 @@ class RemediationDeploymentService:
                 remediation_01_logic_app_name=
                     request.remediation_01_logic_app_name,
 
+                remediation_00_logic_app_name=
+                    request.remediation_00_logic_app_name,
+
                 storage_account_name=
                     request.storage_account_name,
 
                 deployment_name=
-                    remediation_05_result.get(
+                    remediation_00_result.get(
                         "deployment_name"
                     ),
 
                 provisioning_state=
-                    remediation_05_result.get(
+                    remediation_00_result.get(
                         "provisioning_state"
                     ),
 
@@ -691,10 +878,7 @@ class RemediationDeploymentService:
 
                 function_urls=
                     RemediationFunctionUrls(
-                        **{
-                            **all_function_urls,
-                            **remediation_05_function_urls,
-                        }
+                        **all_function_urls_with_00
                     ),
 
                 remediation_scan_url=
@@ -714,85 +898,18 @@ class RemediationDeploymentService:
 
                 callback_uri_02=
                     callback_uri_02,
+
+                callback_uri_05=
+                    callback_uri_01,
 
                 business_day_logic_app_url=
                     business_day_logic_app_url,
-            )
 
+                dfn_portal_url=
+                    dfn_portal_url,
 
-            logger.info(
-                "LA-Remediation-02 and LA-Remediation-01 "
-                "deployed successfully"
-            )
-
-            return RemediationDeploymentResponse(
-                success=True,
-
-                message=(
-                    "LA-Remediation-02 and "
-                    "LA-Remediation-01 deployed successfully"
-                ),
-
-                subscription_id=
-                    request.subscription_id,
-
-                resource_group_name=
-                    request.resource_group_name,
-
-                location=
-                    request.location,
-
-                logic_app_name=
-                    request.logic_app_name,
-
-                remediation_01_logic_app_name=
-                    request.remediation_01_logic_app_name,
-
-                storage_account_name=
-                    request.storage_account_name,
-
-                deployment_name=
-                    remediation_01_result.get(
-                        "deployment_name"
-                    ),
-
-                provisioning_state=
-                    remediation_01_result.get(
-                        "provisioning_state"
-                    ),
-
-                table_connection_id=
-                    connections.get(
-                        "table_connection_id"
-                    ),
-
-                queue_connection_id=
-                    connections.get(
-                        "queue_connection_id"
-                    ),
-
-                function_urls=
-                    RemediationFunctionUrls(
-                        **all_function_urls
-                    ),
-
-                remediation_scan_url=
-                    remediation_01_callback_urls.get(
-                        "remediation_scan_url"
-                    ),
-
-                remediation_sas_token=
-                    remediation_01_callback_urls.get(
-                        "remediation_sas_token"
-                    ),
-
-                notification_service_url=
-                    remediation_01_callback_urls.get(
-                        "notification_service_url"
-                    ),
-
-                callback_uri_02=
-                    callback_uri_02,
+                row_counter_function_url=
+                    row_counter_function_url,
             )
 
         # =====================================================
@@ -824,6 +941,9 @@ class RemediationDeploymentService:
 
                 remediation_01_logic_app_name=
                     request.remediation_01_logic_app_name,
+
+                remediation_00_logic_app_name=
+                    request.remediation_00_logic_app_name,
 
                 storage_account_name=
                     request.storage_account_name,

@@ -1,4 +1,3 @@
-
 from typing import Optional
 
 from pydantic import BaseModel
@@ -30,6 +29,12 @@ class RemediationFunctionUrls(BaseModel):
     business_days_service_url: Optional[str] = None
     get_next_business_day_url: Optional[str] = None
 
+    # --------------------------------------------------------
+    # Remediation 00 Function URLs
+    # --------------------------------------------------------
+
+    row_counter_function_url: Optional[str] = None
+
 
 # ============================================================
 # REMEDIATION DEPLOYMENT REQUEST
@@ -58,6 +63,13 @@ class RemediationDeploymentRequest(BaseModel):
 
     remediation_01_logic_app_name: str = "LA-Remediation-01"
     remediation_05_logic_app_name: str = "LA-Remediation-0.5"
+
+    # --------------------------------------------------------
+    # Logic App - Remediation 00
+    # --------------------------------------------------------
+
+    remediation_00_logic_app_name: str = "LA-Remediation-00"
+
     # --------------------------------------------------------
     # Storage
     # --------------------------------------------------------
@@ -203,11 +215,31 @@ class RemediationDeploymentRequest(BaseModel):
     business_day_logic_app_name: Optional[str] = None
     business_day_logic_app_trigger_name: Optional[str] = None
 
+    # ========================================================
+    # REMEDIATION 00
+    # ========================================================
+
     # --------------------------------------------------------
+    # Function 11
+    # Row Counter Function
+    # Used to generate rowCounterFunctionUrl
+    # --------------------------------------------------------
+
+    row_counter_function_app_name: Optional[str] = None
+    row_counter_function_name: Optional[str] = None
+
+    # --------------------------------------------------------
+    # DFN Portal
+    # Passed directly to LA-Remediation-00
+    # --------------------------------------------------------
+
+    dfn_portal_url: Optional[str] = None
+
+    # ========================================================
     # Azure API Connections
     # These are handled by backend.
     # User does not need to provide connection IDs.
-    # --------------------------------------------------------
+    # ========================================================
 
     table_connection_name: str = "azuretables-1"
     queue_connection_name: str = "azurequeues-1"
@@ -262,3 +294,11 @@ class RemediationDeploymentResponse(BaseModel):
     # --------------------------------------------------------
 
     business_day_logic_app_url: Optional[str] = None
+
+    # --------------------------------------------------------
+    # Remediation 00
+    # --------------------------------------------------------
+
+    remediation_00_logic_app_name: Optional[str] = None
+    callback_uri_05: Optional[str] = None
+    dfn_portal_url: Optional[str] = None

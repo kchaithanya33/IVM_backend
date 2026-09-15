@@ -50,7 +50,9 @@ class WorkflowService:
     "CHGFormRequests",
     "CHGStatusTracking",
     "AssetScanGroups",
-    "SecurityReportingCycles"
+    "SecurityReportingCycles",
+    "ScanStatus",
+    "ScanAudit"
     
             
         ]

@@ -1,4 +1,3 @@
-
 import logging
 
 from fastapi import APIRouter, HTTPException
@@ -80,6 +79,23 @@ def deploy_notification_service(
 
                 vuln_scan_complete_logic_app_name=
                     request.vuln_scan_complete_logic_app_name,
+
+                # =================================================
+                # STS CHANGE APPROVAL CHECK
+                # =================================================
+
+                sts_change_approval_check_logic_app_name=
+                    request.sts_change_approval_check_logic_app_name,
+
+                chg_approval_recipients=
+                    request.chg_approval_recipients,
+
+                # =================================================
+                # STATUS TRACKING SYSTEM
+                # =================================================
+
+                status_tracking_system_logic_app_name=
+                    request.status_tracking_system_logic_app_name,
 
                 # =================================================
                 # QUEUES
