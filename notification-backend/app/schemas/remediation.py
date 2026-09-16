@@ -35,6 +35,20 @@ class RemediationFunctionUrls(BaseModel):
 
     row_counter_function_url: Optional[str] = None
 
+    # ========================================================
+    # Remediation 03 Function URLs
+    # ========================================================
+
+    vulnerability_service_url: Optional[str] = None
+    qualys_scan_report_url: Optional[str] = None
+    fa_launch_qualys_report_url: Optional[str] = None
+    fa_check_qualys_report_url: Optional[str] = None
+    download_qualys_report_url: Optional[str] = None
+    cross_check_remediated_vulnerabilities_url: Optional[str] = None
+    call_value_stream_report_function_url: Optional[str] = None
+    merge_qualys_report_url: Optional[str] = None
+    check_next_week_url: Optional[str] = None
+
 
 # ============================================================
 # REMEDIATION DEPLOYMENT REQUEST
@@ -70,6 +84,14 @@ class RemediationDeploymentRequest(BaseModel):
 
     remediation_00_logic_app_name: str = "LA-Remediation-00"
 
+    # ========================================================
+    # Logic App - Remediation 03
+    # Added only
+    # ========================================================
+
+    remediation_03_logic_app_name: str = "LA-Remediation-03"
+    qualys_api_url: str = "https://qualysapi.qg1.apps.qualys.in"
+    report_template_id: str = "92280226"
     # --------------------------------------------------------
     # Storage
     # --------------------------------------------------------
@@ -207,9 +229,6 @@ class RemediationDeploymentRequest(BaseModel):
     get_next_business_day_function_app_name: Optional[str] = None
     get_next_business_day_function_name: Optional[str] = None
 
-  
-   
-
     # ========================================================
     # REMEDIATION 00
     # ========================================================
@@ -229,6 +248,93 @@ class RemediationDeploymentRequest(BaseModel):
     # --------------------------------------------------------
 
     dfn_portal_url: Optional[str] = None
+
+    # ========================================================
+    # REMEDIATION 03 FUNCTIONS
+    # Added only
+    # ========================================================
+
+    # --------------------------------------------------------
+    # Function 12
+    # Vulnerability Service
+    # Used to generate vulnerabilityServiceUrl
+    # --------------------------------------------------------
+
+    vulnerability_service_function_app_name: Optional[str] = None
+    vulnerability_service_function_name: Optional[str] = None
+
+    # --------------------------------------------------------
+    # Function 13
+    # Qualys Scan Report
+    # Used to generate qualysScanReportUrl
+    # --------------------------------------------------------
+
+    qualys_scan_report_function_app_name: Optional[str] = None
+    qualys_scan_report_function_name: Optional[str] = None
+
+    # --------------------------------------------------------
+    # Function 14
+    # Launch Qualys Report
+    # Used to generate FA-Launch_Qualys_Report
+    # --------------------------------------------------------
+
+    fa_launch_qualys_report_function_app_name: Optional[str] = None
+    fa_launch_qualys_report_function_name: Optional[str] = None
+
+    # --------------------------------------------------------
+    # Function 15
+    # Check Qualys Report
+    # Used to generate FA-Check_Qualys_Report
+    # --------------------------------------------------------
+
+    fa_check_qualys_report_function_app_name: Optional[str] = None
+    fa_check_qualys_report_function_name: Optional[str] = None
+
+    # --------------------------------------------------------
+    # Function 16
+    # Download Qualys Report
+    # Used to generate Download_Qualys_Report
+    # --------------------------------------------------------
+
+    download_qualys_report_function_app_name: Optional[str] = None
+    download_qualys_report_function_name: Optional[str] = None
+
+    # --------------------------------------------------------
+    # Function 17
+    # Cross Check Remediated Vulnerabilities
+    # Used to generate
+    # Cross_Check_Remediated_Vulnerabilities_in_DFN_with_Scan_Report
+    # --------------------------------------------------------
+
+    cross_check_remediated_vulnerabilities_function_app_name: Optional[str] = None
+    cross_check_remediated_vulnerabilities_function_name: Optional[str] = None
+
+    # --------------------------------------------------------
+    # Function 18
+    # Call Value Stream Report
+    # Used to generate Call_Value_Stream_Report_Function
+    # --------------------------------------------------------
+
+    call_value_stream_report_function_app_name: Optional[str] = None
+    call_value_stream_report_function_name: Optional[str] = None
+
+    # --------------------------------------------------------
+    # Function 19
+    # Merge Qualys Report
+    # Used to generate Merge_Qualys_Report
+    # --------------------------------------------------------
+
+    merge_qualys_report_function_app_name: Optional[str] = None
+    merge_qualys_report_function_name: Optional[str] = None
+
+    # --------------------------------------------------------
+    # Function 20
+    # Check Next Week
+    # Used to generate Check_Next_Week
+    # --------------------------------------------------------
+
+    check_next_week_function_app_name: Optional[str] = None
+    check_next_week_function_name: Optional[str] = None
 
     # ========================================================
     # Azure API Connections
@@ -288,8 +394,6 @@ class RemediationDeploymentResponse(BaseModel):
     # Remediation 0.5 callback URL
     # --------------------------------------------------------
 
-   
-
     # --------------------------------------------------------
     # Remediation 00
     # --------------------------------------------------------
@@ -297,3 +401,11 @@ class RemediationDeploymentResponse(BaseModel):
     remediation_00_logic_app_name: Optional[str] = None
     callback_uri_05: Optional[str] = None
     dfn_portal_url: Optional[str] = None
+
+    # ========================================================
+    # Remediation 03
+    # Added only
+    # ========================================================
+
+    remediation_03_logic_app_name: Optional[str] = None
+    callback_uri_03: Optional[str] = None

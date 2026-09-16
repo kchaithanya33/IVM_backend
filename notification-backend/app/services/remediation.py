@@ -45,6 +45,9 @@ class RemediationDeploymentService:
             # =================================================
             # STEP 1
             # Get Azure API connections
+            #
+            # Existing logic unchanged.
+            # This resolves only Table + Queue connections.
             # =================================================
 
             logger.info(
@@ -389,9 +392,6 @@ class RemediationDeploymentService:
             # =================================================
             # STEP 10.5
             # Resolve deployed LA-Remediation-01 callback URL
-            #
-            # callback_uri_01 will be passed to
-            # LA-Remediation-0.5 as callbackUri0.5
             # =================================================
 
             logger.info(
@@ -453,9 +453,6 @@ class RemediationDeploymentService:
             # =================================================
             # STEP 12
             # Deploy LA-Remediation-0.5
-            #
-            # callbackUri0.5 =
-            # LA-Remediation-01 callback URL
             # =================================================
 
             logger.info(
@@ -627,9 +624,6 @@ class RemediationDeploymentService:
             # =================================================
             # STEP 17
             # Deploy LA-Remediation-00
-            #
-            # CallbackUri0.5 =
-            # LA-Remediation-01 callback URL
             # =================================================
 
             logger.info(
@@ -753,13 +747,332 @@ class RemediationDeploymentService:
 
             # =================================================
             # STEP 19
+            # Resolve Remediation-03 Function URLs
+            # =================================================
+
+            logger.info(
+                "Resolving Remediation-03 Function URLs"
+            )
+
+            remediation_03_function_urls = (
+                self.azure_manager
+                .get_remediation_03_function_urls(
+                    subscription_id=
+                        request.subscription_id,
+
+                    resource_group_name=
+                        request.resource_group_name,
+
+                    vulnerability_service_function_app_name=
+                        request.vulnerability_service_function_app_name,
+
+                    vulnerability_service_function_name=
+                        request.vulnerability_service_function_name,
+
+                    qualys_scan_report_function_app_name=
+                        request.qualys_scan_report_function_app_name,
+
+                    qualys_scan_report_function_name=
+                        request.qualys_scan_report_function_name,
+
+                    fa_launch_qualys_report_function_app_name=
+                        request.fa_launch_qualys_report_function_app_name,
+
+                    fa_launch_qualys_report_function_name=
+                        request.fa_launch_qualys_report_function_name,
+
+                    fa_check_qualys_report_function_app_name=
+                        request.fa_check_qualys_report_function_app_name,
+
+                    fa_check_qualys_report_function_name=
+                        request.fa_check_qualys_report_function_name,
+
+                    download_qualys_report_function_app_name=
+                        request.download_qualys_report_function_app_name,
+
+                    download_qualys_report_function_name=
+                        request.download_qualys_report_function_name,
+
+                    cross_check_remediated_vulnerabilities_function_app_name=
+                        request.cross_check_remediated_vulnerabilities_function_app_name,
+
+                    cross_check_remediated_vulnerabilities_function_name=
+                        request.cross_check_remediated_vulnerabilities_function_name,
+
+                    call_value_stream_report_function_app_name=
+                        request.call_value_stream_report_function_app_name,
+
+                    call_value_stream_report_function_name=
+                        request.call_value_stream_report_function_name,
+
+                    merge_qualys_report_function_app_name=
+                        request.merge_qualys_report_function_app_name,
+
+                    merge_qualys_report_function_name=
+                        request.merge_qualys_report_function_name,
+
+                    check_next_week_function_app_name=
+                        request.check_next_week_function_app_name,
+
+                    check_next_week_function_name=
+                        request.check_next_week_function_name,
+                )
+            )
+
+            # =================================================
+            # STEP 20
+            # Merge Function URLs for Remediation-03
+            # =================================================
+
+            all_function_urls_with_03 = {
+                **all_function_urls_with_00,
+                **remediation_03_function_urls,
+            }
+
+            logger.info(
+                "Remediation-03 Function URLs resolved successfully"
+            )
+
+            logger.info(
+                "Resolved Function URL keys for Remediation-03: %s",
+                sorted(
+                    all_function_urls_with_03.keys()
+                ),
+            )
+
+            # =================================================
+            # STEP 21
+            # Resolve Remediation-00 callback URL
+            # =================================================
+
+            logger.info(
+                "Resolving Remediation-00 callback URL"
+            )
+
+            callback_uri_00 = (
+                self.azure_manager.get_logic_app_callback_url(
+                    subscription_id=
+                        request.subscription_id,
+
+                    resource_group_name=
+                        request.resource_group_name,
+
+                    logic_app_name=
+                        request.remediation_00_logic_app_name,
+
+                    trigger_name=
+                        "When_a_HTTP_request_is_received",
+                )
+            )
+
+            logger.info(
+                "LA-Remediation-00 callback URL resolved"
+            )
+
+            # =================================================
+            # STEP 21.5
+            # Resolve SharePoint connection ONLY for
+            # Remediation-03
+            #
+            # Existing Table + Queue connection logic is not
+            # changed.
+            # =================================================
+
+            logger.info(
+                "Resolving SharePoint connection for Remediation-03"
+            )
+
+            sharepoint_connection_id = (
+                self.azure_manager.get_sharepoint_connection(
+                    subscription_id=
+                        request.subscription_id,
+
+                    resource_group_name=
+                        request.resource_group_name,
+
+                    sharepoint_connection_name=
+                        "sharepointonline-1",
+                )
+            )
+
+            connections["sharepoint_connection_id"] = (
+                sharepoint_connection_id
+            )
+
+            logger.info(
+                "SharePoint connection resolved successfully"
+            )
+
+            # =================================================
+            # STEP 21.6
+            # Deploy LA-Remediation-03
+            # =================================================
+
+            logger.info(
+                "Deploying Logic App: %s",
+                request.remediation_03_logic_app_name,
+            )
+
+            remediation_03_result = (
+                self.azure_manager.deploy_remediation_03(
+                    request=request,
+
+                    connections=connections,
+
+                    function_urls=
+                        all_function_urls_with_03,
+
+                    callback_uri_00=
+                        callback_uri_00,
+
+                    notification_service_url=
+                        remediation_01_callback_urls.get(
+                            "notification_service_url"
+                        ),
+                )
+            )
+
+            # =================================================
+            # STEP 22
+            # Handle Remediation-03 deployment failure
+            # =================================================
+
+            if not remediation_03_result.get("success"):
+
+                return RemediationDeploymentResponse(
+                    success=False,
+
+                    message=(
+                        "LA-Remediation-02, "
+                        "LA-Remediation-01, "
+                        "LA-Remediation-0.5 and "
+                        "LA-Remediation-00 deployed successfully, "
+                        "but LA-Remediation-03 deployment failed: "
+                        + remediation_03_result.get(
+                            "error",
+                            "Unknown deployment error",
+                        )
+                    ),
+
+                    subscription_id=
+                        request.subscription_id,
+
+                    resource_group_name=
+                        request.resource_group_name,
+
+                    location=request.location,
+
+                    logic_app_name=
+                        request.logic_app_name,
+
+                    remediation_01_logic_app_name=
+                        request.remediation_01_logic_app_name,
+
+                    remediation_00_logic_app_name=
+                        request.remediation_00_logic_app_name,
+
+                    remediation_03_logic_app_name=
+                        request.remediation_03_logic_app_name,
+
+                    storage_account_name=
+                        request.storage_account_name,
+
+                    deployment_name=
+                        remediation_03_result.get(
+                            "deployment_name"
+                        ),
+
+                    provisioning_state=
+                        remediation_03_result.get(
+                            "provisioning_state"
+                        ),
+
+                    table_connection_id=
+                        connections.get(
+                            "table_connection_id"
+                        ),
+
+                    queue_connection_id=
+                        connections.get(
+                            "queue_connection_id"
+                        ),
+
+                    function_urls=
+                        RemediationFunctionUrls(
+                            **all_function_urls_with_03
+                        ),
+
+                    remediation_scan_url=
+                        remediation_01_callback_urls.get(
+                            "remediation_scan_url"
+                        ),
+
+                    remediation_sas_token=
+                        remediation_01_callback_urls.get(
+                            "remediation_sas_token"
+                        ),
+
+                    notification_service_url=
+                        remediation_01_callback_urls.get(
+                            "notification_service_url"
+                        ),
+
+                    callback_uri_02=
+                        callback_uri_02,
+
+                    callback_uri_05=
+                        callback_uri_01,
+
+                    callback_uri_03=
+                        None,
+
+                    dfn_portal_url=
+                        dfn_portal_url,
+
+                    row_counter_function_url=
+                        row_counter_function_url,
+                )
+
+            # =================================================
+            # STEP 23
+            # Get Remediation-03 callback URL
+            # =================================================
+
+            logger.info(
+                "Resolving Remediation-03 callback URL"
+            )
+
+            callback_uri_03 = (
+                self.azure_manager.get_logic_app_callback_url(
+                    subscription_id=
+                        request.subscription_id,
+
+                    resource_group_name=
+                        request.resource_group_name,
+
+                    logic_app_name=
+                        request.remediation_03_logic_app_name,
+
+                    trigger_name=
+                        "When_a_HTTP_request_is_received",
+                )
+            )
+
+            logger.info(
+                "LA-Remediation-03 callback URL resolved"
+            )
+
+            # =================================================
+            # STEP 24
             # FINAL SUCCESS
             # =================================================
 
             logger.info(
-                "LA-Remediation-02, LA-Remediation-01, "
-                "LA-Remediation-0.5 and "
-                "LA-Remediation-00 deployed successfully"
+                "LA-Remediation-02, "
+                "LA-Remediation-01, "
+                "LA-Remediation-0.5, "
+                "LA-Remediation-00 and "
+                "LA-Remediation-03 deployed successfully"
             )
 
             return RemediationDeploymentResponse(
@@ -768,8 +1081,9 @@ class RemediationDeploymentService:
                 message=(
                     "LA-Remediation-02, "
                     "LA-Remediation-01, "
-                    "LA-Remediation-0.5 and "
-                    "LA-Remediation-00 deployed successfully"
+                    "LA-Remediation-0.5, "
+                    "LA-Remediation-00 and "
+                    "LA-Remediation-03 deployed successfully"
                 ),
 
                 subscription_id=
@@ -789,16 +1103,19 @@ class RemediationDeploymentService:
                 remediation_00_logic_app_name=
                     request.remediation_00_logic_app_name,
 
+                remediation_03_logic_app_name=
+                    request.remediation_03_logic_app_name,
+
                 storage_account_name=
                     request.storage_account_name,
 
                 deployment_name=
-                    remediation_00_result.get(
+                    remediation_03_result.get(
                         "deployment_name"
                     ),
 
                 provisioning_state=
-                    remediation_00_result.get(
+                    remediation_03_result.get(
                         "provisioning_state"
                     ),
 
@@ -814,7 +1131,7 @@ class RemediationDeploymentService:
 
                 function_urls=
                     RemediationFunctionUrls(
-                        **all_function_urls_with_00
+                        **all_function_urls_with_03
                     ),
 
                 remediation_scan_url=
@@ -837,6 +1154,9 @@ class RemediationDeploymentService:
 
                 callback_uri_05=
                     callback_uri_01,
+
+                callback_uri_03=
+                    callback_uri_03,
 
                 dfn_portal_url=
                     dfn_portal_url,
@@ -872,6 +1192,9 @@ class RemediationDeploymentService:
 
                 remediation_00_logic_app_name=
                     request.remediation_00_logic_app_name,
+
+                remediation_03_logic_app_name=
+                    request.remediation_03_logic_app_name,
 
                 storage_account_name=
                     request.storage_account_name,

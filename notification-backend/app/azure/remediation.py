@@ -1,3 +1,4 @@
+
 import json
 import logging
 import uuid
@@ -84,6 +85,7 @@ class RemediationAzureManager:
 
     # ========================================================
     # GET CONNECTIONS
+    # Existing logic - table + queue only
     # ========================================================
 
     def get_connections(
@@ -141,9 +143,85 @@ class RemediationAzureManager:
         }
 
     # ========================================================
-    # GET FUNCTION RESOURCE
+    # GET SHAREPOINT CONNECTION ID
+    # NEW - ONLY USED BY REMEDIATION-03
     # ========================================================
 
+    def get_sharepoint_connection_id(
+        self,
+        subscription_id: str,
+        resource_group_name: str,
+        sharepoint_connection_name: str = "sharepointonline-1",
+    ) -> str:
+
+        logger.info(
+            "Getting SharePoint API connection: %s",
+            sharepoint_connection_name,
+        )
+
+        resource_client = ResourceManagementClient(
+            self.credential,
+            subscription_id,
+        )
+
+        resources = resource_client.resources.list_by_resource_group(
+            resource_group_name,
+            filter="resourceType eq 'Microsoft.Web/connections'",
+        )
+
+        for resource in resources:
+
+            if resource.name == sharepoint_connection_name:
+
+                logger.info(
+                    "SharePoint connection found: %s",
+                    resource.id,
+                )
+
+                return resource.id
+
+        raise ValueError(
+            "Required Azure API connection not found: "
+            f"{sharepoint_connection_name}"
+        )
+
+    # ========================================================
+    # GET FUNCTION RESOURCE
+    # ========================================================
+    def get_sharepoint_connection(
+    self,
+    subscription_id: str,
+    resource_group_name: str,
+    sharepoint_connection_name: str = "sharepointonline-1",
+) -> str:
+     logger.info(
+        "Getting SharePoint API connection: %s",
+        sharepoint_connection_name,
+    )
+
+     resource_client = ResourceManagementClient(
+        self.credential,
+        subscription_id,
+    )
+
+     resources = resource_client.resources.list_by_resource_group(
+        resource_group_name,
+        filter="resourceType eq 'Microsoft.Web/connections'",
+    )
+
+     for resource in resources:
+        if resource.name == sharepoint_connection_name:
+            logger.info(
+                "SharePoint connection found: %s",
+                resource.id,
+            )
+            return resource.id
+
+     raise ValueError(
+        "Required SharePoint API connection not found: "
+        + sharepoint_connection_name
+    )
+    
     def get_function_resource(
         self,
         subscription_id: str,
@@ -689,31 +767,176 @@ class RemediationAzureManager:
         )
 
         return {
-            "business_days_service_url": business_days_service_url,
-            "get_next_business_day_url": get_next_business_day_url,
+            "business_days_service_url":
+                business_days_service_url,
+            "get_next_business_day_url":
+                get_next_business_day_url,
+        }
+
+    # ========================================================
+    # GET REMEDIATION 03 FUNCTION URLS
+    # NEW - ONLY REMEDIATION-03
+    # ========================================================
+
+    def get_remediation_03_function_urls(
+        self,
+        subscription_id: str,
+        resource_group_name: str,
+
+        vulnerability_service_function_app_name: str,
+        vulnerability_service_function_name: str,
+
+        qualys_scan_report_function_app_name: str,
+        qualys_scan_report_function_name: str,
+
+        fa_launch_qualys_report_function_app_name: str,
+        fa_launch_qualys_report_function_name: str,
+
+        fa_check_qualys_report_function_app_name: str,
+        fa_check_qualys_report_function_name: str,
+
+        download_qualys_report_function_app_name: str,
+        download_qualys_report_function_name: str,
+
+        cross_check_remediated_vulnerabilities_function_app_name: str,
+        cross_check_remediated_vulnerabilities_function_name: str,
+
+        call_value_stream_report_function_app_name: str,
+        call_value_stream_report_function_name: str,
+
+        merge_qualys_report_function_app_name: str,
+        merge_qualys_report_function_name: str,
+
+        check_next_week_function_app_name: str,
+        check_next_week_function_name: str,
+    ) -> Dict[str, str]:
+
+        logger.info(
+            "Resolving Remediation-03 Function URLs"
+        )
+
+        vulnerability_service_url = self.get_function_url(
+            subscription_id=subscription_id,
+            resource_group_name=resource_group_name,
+            function_app_name=vulnerability_service_function_app_name,
+            function_name=vulnerability_service_function_name,
+        )
+
+        qualys_scan_report_url = self.get_function_url(
+            subscription_id=subscription_id,
+            resource_group_name=resource_group_name,
+            function_app_name=qualys_scan_report_function_app_name,
+            function_name=qualys_scan_report_function_name,
+        )
+
+        fa_launch_qualys_report_url = self.get_function_url(
+            subscription_id=subscription_id,
+            resource_group_name=resource_group_name,
+            function_app_name=fa_launch_qualys_report_function_app_name,
+            function_name=fa_launch_qualys_report_function_name,
+        )
+
+        fa_check_qualys_report_url = self.get_function_url(
+            subscription_id=subscription_id,
+            resource_group_name=resource_group_name,
+            function_app_name=fa_check_qualys_report_function_app_name,
+            function_name=fa_check_qualys_report_function_name,
+        )
+
+        download_qualys_report_url = self.get_function_url(
+            subscription_id=subscription_id,
+            resource_group_name=resource_group_name,
+            function_app_name=download_qualys_report_function_app_name,
+            function_name=download_qualys_report_function_name,
+        )
+
+        cross_check_remediated_vulnerabilities_url = (
+            self.get_function_url(
+                subscription_id=subscription_id,
+                resource_group_name=resource_group_name,
+                function_app_name=(
+                    cross_check_remediated_vulnerabilities_function_app_name
+                ),
+                function_name=(
+                    cross_check_remediated_vulnerabilities_function_name
+                ),
+            )
+        )
+
+        call_value_stream_report_function_url = (
+            self.get_function_url(
+                subscription_id=subscription_id,
+                resource_group_name=resource_group_name,
+                function_app_name=(
+                    call_value_stream_report_function_app_name
+                ),
+                function_name=(
+                    call_value_stream_report_function_name
+                ),
+            )
+        )
+
+        merge_qualys_report_url = self.get_function_url(
+            subscription_id=subscription_id,
+            resource_group_name=resource_group_name,
+            function_app_name=merge_qualys_report_function_app_name,
+            function_name=merge_qualys_report_function_name,
+        )
+
+        check_next_week_url = self.get_function_url(
+            subscription_id=subscription_id,
+            resource_group_name=resource_group_name,
+            function_app_name=check_next_week_function_app_name,
+            function_name=check_next_week_function_name,
+        )
+
+        return {
+            "vulnerability_service_url":
+                vulnerability_service_url,
+
+            "qualys_scan_report_url":
+                qualys_scan_report_url,
+
+            "fa_launch_qualys_report_url":
+                fa_launch_qualys_report_url,
+
+            "fa_check_qualys_report_url":
+                fa_check_qualys_report_url,
+
+            "download_qualys_report_url":
+                download_qualys_report_url,
+
+            "cross_check_remediated_vulnerabilities_url":
+                cross_check_remediated_vulnerabilities_url,
+
+            "call_value_stream_report_function_url":
+                call_value_stream_report_function_url,
+
+            "merge_qualys_report_url":
+                merge_qualys_report_url,
+
+            "check_next_week_url":
+                check_next_week_url,
         }
 
     # ========================================================
     # GET REMEDIATION 0.5 LOGIC APP CALLBACK URL
+    # Existing code untouched
     # ========================================================
 
     def get_remediation_05_callback_url(
         self,
         subscription_id: str,
         resource_group_name: str,
-      
     ) -> str:
 
         logger.info(
-            "Resolving Remediation-0.5 Logic App callback URL: "
-            "app=%s trigger=%s",
-           
+            "Resolving Remediation-0.5 Logic App callback URL"
         )
 
         return self.get_logic_app_callback_url(
             subscription_id=subscription_id,
             resource_group_name=resource_group_name,
-           
         )
 
     # ========================================================
@@ -744,12 +967,6 @@ class RemediationAzureManager:
 
     # ========================================================
     # FILTER REMEDIATION ARM TEMPLATE
-    #
-    # IMPORTANT:
-    # Each Logic App gets ONLY its own ARM parameters.
-    #
-    # This prevents parameters belonging to Remediation-01
-    # from being required during Remediation-02 deployment.
     # ========================================================
 
     def _filter_template_for_logic_app(
@@ -787,18 +1004,13 @@ class RemediationAzureManager:
             )
 
         # ----------------------------------------------------
-        # Keep ONLY the selected Logic App resource.
+        # Keep ONLY selected Logic App resource
         # ----------------------------------------------------
 
         template["resources"] = selected_resources
 
         # ----------------------------------------------------
-        # Remediation-01 currently contains:
-        #
-        # "condition": "[parameters('deployRemediation01')]"
-        #
-        # Backend already decides whether 01 is deployed,
-        # so remove this condition from the in-memory resource.
+        # Remove condition if requested
         # ----------------------------------------------------
 
         if remove_condition_parameter:
@@ -811,20 +1023,7 @@ class RemediationAzureManager:
                 )
 
         # ----------------------------------------------------
-        # IMPORTANT FIX:
-        #
-        # Keep ONLY parameters required by the selected
-        # Logic App.
-        #
-        # Remediation-02 must NOT contain:
-        # - excelProcessingFunctionUrl
-        # - qualysQIDOptionProfileUrl
-        # - dfnFileContentFunctionUrl
-        # - cmdbIpExtractorFunctionUrl
-        # - allIpQidExtractorFunctionUrl
-        # - etc.
-        #
-        # Those belong to Remediation-01.
+        # Remediation-02 parameters
         # ----------------------------------------------------
 
         remediation_02_parameters = {
@@ -839,6 +1038,10 @@ class RemediationAzureManager:
             "remediation03LogicAppUrl",
             "$connections",
         }
+
+        # ----------------------------------------------------
+        # Remediation-01 parameters
+        # ----------------------------------------------------
 
         remediation_01_parameters = {
             "LA-Remediation-01",
@@ -900,6 +1103,10 @@ class RemediationAzureManager:
             "$connections",
         }
 
+        # ----------------------------------------------------
+        # Remediation-0.5 parameters
+        # ----------------------------------------------------
+
         remediation_05_parameters = {
             "LA-Remediation-0.5",
             "location",
@@ -907,12 +1114,11 @@ class RemediationAzureManager:
             "businessDaysServiceUrl",
             "getNextBusinessDayUrl",
             "queueName",
-         "callbackUri0.5",
+            "callbackUri0.5",
             "$connections",
         }
 
         # ----------------------------------------------------
-        # NEW:
         # Remediation-00 parameters
         # ----------------------------------------------------
 
@@ -931,9 +1137,59 @@ class RemediationAzureManager:
             "remediationCallbackSecretKey",
             "remediationSasToken",
             "remediationScanUrl",
-           "notificationServiceUrl",
+            "notificationServiceUrl",
             "$connections",
         }
+
+        # ----------------------------------------------------
+        # Remediation-03 parameters
+        # NEW - ONLY REMEDIATION-03
+        # ----------------------------------------------------
+
+        remediation_03_parameters = {
+            "LA-Remediation-03",
+            "location",
+            "storageAccountName",
+            "auditLogTableName",
+
+            "qualysApiUrl",
+
+            "vulnerabilityServiceUrl",
+            "qualysScanReportUrl",
+
+            "notificationServiceUrl",
+
+            "reportTemplateId",
+
+            "callbackUri00",
+
+            "configServiceUrl",
+
+            "sharePointSiteUrl",
+
+            "dfnFileContentFunctionUrl",
+
+            "FA-Launch_Qualys_Report",
+            "FA-Check_Qualys_Report",
+
+            "Download_Qualys_Report",
+
+            "Cross_Check_Remediated_Vulnerabilities_in_DFN_with_Scan_Report",
+
+            "Call_Value_Stream_Report_Function",
+
+            "Merge_Qualys_Report",
+
+            "Check_Next_Week",
+
+            # IMPORTANT:
+            # ARM template uses parameters('connections')
+            "$connections",
+        }
+
+        # ----------------------------------------------------
+        # Select parameter set
+        # ----------------------------------------------------
 
         if logic_app_parameter_name == "LA-Remediation-02":
 
@@ -947,14 +1203,13 @@ class RemediationAzureManager:
 
             allowed_parameters = remediation_05_parameters
 
-        # ----------------------------------------------------
-        # NEW:
-        # Remediation-00 selection
-        # ----------------------------------------------------
-
         elif logic_app_parameter_name == "LA-Remediation-00":
 
             allowed_parameters = remediation_00_parameters
+
+        elif logic_app_parameter_name == "LA-Remediation-03":
+
+            allowed_parameters = remediation_03_parameters
 
         else:
 
@@ -993,6 +1248,7 @@ class RemediationAzureManager:
 
     # ========================================================
     # DEPLOY REMEDIATION-02
+    # EXISTING LOGIC - UNCHANGED
     # ========================================================
 
     def deploy(
@@ -1012,26 +1268,12 @@ class RemediationAzureManager:
             request.subscription_id,
         )
 
-        # ----------------------------------------------------
-        # Load ARM template
-        # ----------------------------------------------------
-
         template = self._load_remediation_template()
-
-        # ----------------------------------------------------
-        # FILTER ARM TEMPLATE
-        #
-        # Only Remediation-02 is sent to ARM.
-        # ----------------------------------------------------
 
         template = self._filter_template_for_logic_app(
             template=template,
             logic_app_parameter_name="LA-Remediation-02",
         )
-
-        # ----------------------------------------------------
-        # Managed API IDs
-        # ----------------------------------------------------
 
         subscription_id = request.subscription_id
         location = request.location
@@ -1047,10 +1289,6 @@ class RemediationAzureManager:
             f"/providers/Microsoft.Web/locations/{location}"
             f"/managedApis/azurequeues"
         )
-
-        # ----------------------------------------------------
-        # ARM parameters
-        # ----------------------------------------------------
 
         parameters = {
             "LA-Remediation-02": {
@@ -1116,10 +1354,6 @@ class RemediationAzureManager:
                 }
             },
         }
-
-        # ----------------------------------------------------
-        # Deployment object
-        # ----------------------------------------------------
 
         deployment_properties = {
             "mode": "Incremental",
@@ -1199,6 +1433,7 @@ class RemediationAzureManager:
 
     # ========================================================
     # DEPLOY REMEDIATION-01
+    # EXISTING LOGIC - UNCHANGED
     # ========================================================
 
     def deploy_remediation_01(
@@ -1220,27 +1455,13 @@ class RemediationAzureManager:
             request.subscription_id,
         )
 
-        # ----------------------------------------------------
-        # Load ARM template
-        # ----------------------------------------------------
-
         template = self._load_remediation_template()
-
-        # ----------------------------------------------------
-        # FILTER ARM TEMPLATE
-        #
-        # Only Remediation-01 is sent to ARM.
-        # ----------------------------------------------------
 
         template = self._filter_template_for_logic_app(
             template=template,
             logic_app_parameter_name="LA-Remediation-01",
             remove_condition_parameter=True,
         )
-
-        # ----------------------------------------------------
-        # Managed API IDs
-        # ----------------------------------------------------
 
         subscription_id = request.subscription_id
         location = request.location
@@ -1256,10 +1477,6 @@ class RemediationAzureManager:
             f"/providers/Microsoft.Web/locations/{location}"
             f"/managedApis/azurequeues"
         )
-
-        # ----------------------------------------------------
-        # ARM parameters - Remediation 01
-        # ----------------------------------------------------
 
         parameters = {
             "LA-Remediation-01": {
@@ -1371,10 +1588,6 @@ class RemediationAzureManager:
             },
         }
 
-        # ----------------------------------------------------
-        # Deployment object
-        # ----------------------------------------------------
-
         deployment_properties = {
             "mode": "Incremental",
             "template": template,
@@ -1456,6 +1669,7 @@ class RemediationAzureManager:
 
     # ========================================================
     # DEPLOY REMEDIATION-0.5
+    # EXISTING LOGIC - UNCHANGED
     # ========================================================
 
     def deploy_remediation_05(
@@ -1475,26 +1689,12 @@ class RemediationAzureManager:
             request.subscription_id,
         )
 
-        # ----------------------------------------------------
-        # Load ARM template
-        # ----------------------------------------------------
-
         template = self._load_remediation_template()
-
-        # ----------------------------------------------------
-        # FILTER ARM TEMPLATE
-        #
-        # Only Remediation-0.5 is sent to ARM.
-        # ----------------------------------------------------
 
         template = self._filter_template_for_logic_app(
             template=template,
             logic_app_parameter_name="LA-Remediation-0.5",
         )
-
-        # ----------------------------------------------------
-        # Managed API IDs
-        # ----------------------------------------------------
 
         subscription_id = request.subscription_id
         location = request.location
@@ -1505,10 +1705,6 @@ class RemediationAzureManager:
             f"/managedApis/azurequeues"
         )
 
-        # ----------------------------------------------------
-        # ARM parameters - Remediation 0.5
-        # ----------------------------------------------------
-
         parameters = {
             "LA-Remediation-0.5": {
                 "value": "LA-Remediation-0.5"
@@ -1517,9 +1713,10 @@ class RemediationAzureManager:
             "location": {
                 "value": request.location
             },
+
             "callbackUri0.5": {
-    "value": callback_uri_01
-},
+                "value": callback_uri_01
+            },
 
             "storageAccountName": {
                 "value": request.storage_account_name
@@ -1541,8 +1738,6 @@ class RemediationAzureManager:
                 "value": "remediationweeklyqueue"
             },
 
-           
-
             "$connections": {
                 "value": {
                     "azurequeues-1": {
@@ -1557,10 +1752,6 @@ class RemediationAzureManager:
                 }
             },
         }
-
-        # ----------------------------------------------------
-        # Deployment object
-        # ----------------------------------------------------
 
         deployment_properties = {
             "mode": "Incremental",
@@ -1636,13 +1827,14 @@ class RemediationAzureManager:
                 "success": False,
                 "deployment_name":
                     deployment_name,
-                "provisioning_state": "Failed",
+                "provisioning_state":
+                    "Failed",
                 "error": str(exc),
             }
 
     # ========================================================
     # DEPLOY REMEDIATION-00
-    # NEW
+    # EXISTING LOGIC - UNCHANGED
     # ========================================================
 
     def deploy_remediation_00(
@@ -1665,26 +1857,12 @@ class RemediationAzureManager:
             request.subscription_id,
         )
 
-        # ----------------------------------------------------
-        # Load ARM template
-        # ----------------------------------------------------
-
         template = self._load_remediation_template()
-
-        # ----------------------------------------------------
-        # FILTER ARM TEMPLATE
-        #
-        # Only Remediation-00 is sent to ARM.
-        # ----------------------------------------------------
 
         template = self._filter_template_for_logic_app(
             template=template,
             logic_app_parameter_name="LA-Remediation-00",
         )
-
-        # ----------------------------------------------------
-        # Managed API IDs
-        # ----------------------------------------------------
 
         subscription_id = request.subscription_id
         location = request.location
@@ -1700,10 +1878,6 @@ class RemediationAzureManager:
             f"/providers/Microsoft.Web/locations/{location}"
             f"/managedApis/azurequeues"
         )
-
-        # ----------------------------------------------------
-        # ARM parameters - Remediation 00
-        # ----------------------------------------------------
 
         parameters = {
             "LA-Remediation-00": {
@@ -1739,13 +1913,6 @@ class RemediationAzureManager:
                 "value": request.share_point_site_url
             },
 
-            # ------------------------------------------------
-            # IMPORTANT:
-            #
-            # CallbackUri0.5 parameter in Remediation-00
-            # receives the callback URL of Remediation-01.
-            # ------------------------------------------------
-
             "CallbackUri0.5": {
                 "value": callback_uri_01
             },
@@ -1779,11 +1946,13 @@ class RemediationAzureManager:
                     "remediation_scan_url"
                 ]
             },
+
             "notificationServiceUrl": {
-    "value": callback_urls[
-        "notification_service_url"
-    ]
-},
+                "value": callback_urls[
+                    "notification_service_url"
+                ]
+            },
+
             "$connections": {
                 "value": {
 
@@ -1809,10 +1978,6 @@ class RemediationAzureManager:
                 }
             },
         }
-
-        # ----------------------------------------------------
-        # Deployment object
-        # ----------------------------------------------------
 
         deployment_properties = {
             "mode": "Incremental",
@@ -1888,6 +2053,352 @@ class RemediationAzureManager:
                 "success": False,
                 "deployment_name":
                     deployment_name,
-                "provisioning_state": "Failed",
-                "error": str(exc),
+                "provisioning_state":
+                    "Failed",
+                "error":
+                    str(exc),
+            }
+
+    # ========================================================
+    # DEPLOY REMEDIATION-03
+    # NEW - ONLY REMEDIATION-03
+    # ========================================================
+
+    def deploy_remediation_03(
+        self,
+        request,
+        connections: Dict[str, str],
+        function_urls: Dict[str, str],
+        callback_uri_00: str,
+        notification_service_url: str,
+    ) -> Dict[str, Any]:
+
+        logger.info(
+            "Starting Remediation-03 deployment: %s",
+            request.remediation_03_logic_app_name,
+        )
+
+        resource_client = ResourceManagementClient(
+            self.credential,
+            request.subscription_id,
+        )
+
+        # ----------------------------------------------------
+        # Load ARM template
+        # ----------------------------------------------------
+
+        template = self._load_remediation_template()
+
+        # ----------------------------------------------------
+        # Filter ONLY Remediation-03
+        # ----------------------------------------------------
+
+        template = self._filter_template_for_logic_app(
+            template=template,
+            logic_app_parameter_name="LA-Remediation-03",
+        )
+
+        # ----------------------------------------------------
+        # Basic values
+        # ----------------------------------------------------
+
+        subscription_id = request.subscription_id
+        location = request.location
+
+        # ----------------------------------------------------
+        # Managed API IDs
+        # ----------------------------------------------------
+
+        azure_tables_api_id = (
+            f"/subscriptions/{subscription_id}"
+            f"/providers/Microsoft.Web/locations/{location}"
+            f"/managedApis/azuretables"
+        )
+
+        azure_queues_api_id = (
+            f"/subscriptions/{subscription_id}"
+            f"/providers/Microsoft.Web/locations/{location}"
+            f"/managedApis/azurequeues"
+        )
+
+        sharepoint_api_id = (
+            f"/subscriptions/{subscription_id}"
+            f"/providers/Microsoft.Web/locations/{location}"
+            f"/managedApis/sharepointonline"
+        )
+
+        # ----------------------------------------------------
+        # Get SharePoint connection
+        # ONLY Remediation-03
+        # ----------------------------------------------------
+
+        sharepoint_connection_id = (
+            self.get_sharepoint_connection_id(
+                subscription_id=subscription_id,
+                resource_group_name=request.resource_group_name,
+                sharepoint_connection_name="sharepointonline-1",
+            )
+        )
+
+        # ----------------------------------------------------
+        # ARM parameters - Remediation-03
+        # ----------------------------------------------------
+
+        parameters = {
+            "LA-Remediation-03": {
+                "value":
+                    request.remediation_03_logic_app_name
+            },
+
+            "location": {
+                "value":
+                    request.location
+            },
+
+            "storageAccountName": {
+                "value":
+                    request.storage_account_name
+            },
+
+            "auditLogTableName": {
+                "value":
+                    request.audit_log_table_name
+            },
+
+            "qualysApiUrl": {
+                "value":
+                    request.qualys_api_url
+            },
+
+            "vulnerabilityServiceUrl": {
+                "value":
+                    function_urls[
+                        "vulnerability_service_url"
+                    ]
+            },
+
+            "qualysScanReportUrl": {
+                "value":
+                    function_urls[
+                        "qualys_scan_report_url"
+                    ]
+            },
+
+            "notificationServiceUrl": {
+                "value":
+                    notification_service_url
+            },
+
+            "reportTemplateId": {
+                "value":
+                    request.report_template_id
+            },
+
+            # ------------------------------------------------
+            # Callback from Remediation-00
+            # ------------------------------------------------
+
+            "callbackUri00": {
+                "value":
+                    callback_uri_00
+            },
+
+            "configServiceUrl": {
+                "value":
+                    function_urls[
+                        "config_service_url"
+                    ]
+            },
+
+            "sharePointSiteUrl": {
+                "value":
+                    request.share_point_site_url
+            },
+
+            "dfnFileContentFunctionUrl": {
+                "value":
+                    function_urls[
+                        "dfn_file_content_function_url"
+                    ]
+            },
+
+            "FA-Launch_Qualys_Report": {
+                "value":
+                    function_urls[
+                        "fa_launch_qualys_report_url"
+                    ]
+            },
+
+            "FA-Check_Qualys_Report": {
+                "value":
+                    function_urls[
+                        "fa_check_qualys_report_url"
+                    ]
+            },
+
+            "Download_Qualys_Report": {
+                "value":
+                    function_urls[
+                        "download_qualys_report_url"
+                    ]
+            },
+
+            "Cross_Check_Remediated_Vulnerabilities_in_DFN_with_Scan_Report": {
+                "value":
+                    function_urls[
+                        "cross_check_remediated_vulnerabilities_url"
+                    ]
+            },
+
+            "Call_Value_Stream_Report_Function": {
+                "value":
+                    function_urls[
+                        "call_value_stream_report_function_url"
+                    ]
+            },
+
+            "Merge_Qualys_Report": {
+                "value":
+                    function_urls[
+                        "merge_qualys_report_url"
+                    ]
+            },
+
+            "Check_Next_Week": {
+                "value":
+                    function_urls[
+                        "check_next_week_url"
+                    ]
+            },
+
+            # ------------------------------------------------
+            # Connections
+            #
+            # IMPORTANT:
+            # ARM template expects:
+            # [parameters('connections')]
+            #
+            # Therefore Python must send:
+            # "connections"
+            # ------------------------------------------------
+
+            "$connections": {
+                "value": {
+
+                    "azuretables-1": {
+                        "connectionId":
+                            connections[
+                                "table_connection_id"
+                            ],
+                        "connectionName":
+                            request.table_connection_name,
+                        "id":
+                            azure_tables_api_id,
+                    },
+
+                    "azurequeues-1": {
+                        "connectionId":
+                            connections[
+                                "queue_connection_id"
+                            ],
+                        "connectionName":
+                            request.queue_connection_name,
+                        "id":
+                            azure_queues_api_id,
+                    },
+
+                    "sharepointonline-1": {
+                        "connectionId":
+                            sharepoint_connection_id,
+                        "connectionName":
+                            "sharepointonline-1",
+                        "id":
+                            sharepoint_api_id,
+                    },
+                }
+            },
+        }
+
+        # ----------------------------------------------------
+        # Deployment object
+        # ----------------------------------------------------
+
+        deployment_properties = {
+            "mode": "Incremental",
+            "template": template,
+            "parameters": parameters,
+        }
+
+        deployment_name = (
+            f"remediation-03-{uuid.uuid4().hex[:8]}"
+        )
+
+        logger.info(
+            "Creating Remediation-03 ARM deployment: %s",
+            deployment_name,
+        )
+
+        try:
+
+            poller = (
+                resource_client.deployments
+                .begin_create_or_update(
+                    request.resource_group_name,
+                    deployment_name,
+                    {
+                        "properties":
+                            deployment_properties
+                    },
+                )
+            )
+
+            deployment_result = poller.result()
+
+            provisioning_state = (
+                deployment_result.properties
+                .provisioning_state
+            )
+
+            logger.info(
+                "Remediation-03 deployment completed: "
+                "name=%s state=%s",
+                deployment_name,
+                provisioning_state,
+            )
+
+            if provisioning_state != "Succeeded":
+
+                return {
+                    "success": False,
+                    "deployment_name":
+                        deployment_name,
+                    "provisioning_state":
+                        provisioning_state,
+                    "error":
+                        "Remediation-03 ARM deployment "
+                        "did not succeed",
+                }
+
+            return {
+                "success": True,
+                "deployment_name":
+                    deployment_name,
+                "provisioning_state":
+                    provisioning_state,
+            }
+
+        except Exception as exc:
+
+            logger.exception(
+                "Remediation-03 ARM deployment failed"
+            )
+
+            return {
+                "success": False,
+                "deployment_name":
+                    deployment_name,
+                "provisioning_state":
+                    "Failed",
+                "error":
+                    str(exc),
             }
