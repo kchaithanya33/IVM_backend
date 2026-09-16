@@ -207,13 +207,8 @@ class RemediationDeploymentRequest(BaseModel):
     get_next_business_day_function_app_name: Optional[str] = None
     get_next_business_day_function_name: Optional[str] = None
 
-    # --------------------------------------------------------
-    # Business Day Logic App
-    # Used to generate BusinessDayLogicAppUrl
-    # --------------------------------------------------------
-
-    business_day_logic_app_name: Optional[str] = None
-    business_day_logic_app_trigger_name: Optional[str] = None
+  
+   
 
     # ========================================================
     # REMEDIATION 00
@@ -293,7 +288,7 @@ class RemediationDeploymentResponse(BaseModel):
     # Remediation 0.5 callback URL
     # --------------------------------------------------------
 
-    business_day_logic_app_url: Optional[str] = None
+   
 
     # --------------------------------------------------------
     # Remediation 00

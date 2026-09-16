@@ -29,25 +29,6 @@ function CheckIcon() {
 }
 
 
-function ChevronDown() {
-  return (
-    <svg
-      className="chevron-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-    >
-      <path
-        d="M6 9L12 15L18 9"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-
 // ============================================================
 // INFRASTRUCTURE FORM
 // ============================================================
@@ -56,9 +37,7 @@ function InfrastructureForm({
   formData,
   onChange,
 }) {
-
   return (
-
     <section className="infrastructure-form">
 
       {/* ====================================================
@@ -70,21 +49,19 @@ function InfrastructureForm({
 
       <div className="form-grid">
 
-
         {/* ==================================================
             1. SUBSCRIPTION ID
+            USER CAN EDIT
             ================================================== */}
 
         <div className="form-field">
 
           <label>
-
             Subscription ID
 
             <span className="required">
               *
             </span>
-
           </label>
 
 
@@ -92,9 +69,9 @@ function InfrastructureForm({
 
             <input
               type="text"
-              placeholder="string"
+              placeholder="Enter Subscription ID"
               value={
-                formData.subscriptionId
+                formData.subscriptionId || ""
               }
               onChange={(event) =>
                 onChange(
@@ -112,18 +89,17 @@ function InfrastructureForm({
 
         {/* ==================================================
             2. RESOURCE GROUP NAME
+            USER CAN EDIT
             ================================================== */}
 
         <div className="form-field">
 
           <label>
-
             Resource Group Name
 
             <span className="required">
               *
             </span>
-
           </label>
 
 
@@ -131,9 +107,9 @@ function InfrastructureForm({
 
             <input
               type="text"
-              placeholder="string"
+              placeholder="Enter Resource Group Name"
               value={
-                formData.resourceGroupName
+                formData.resourceGroupName || ""
               }
               onChange={(event) =>
                 onChange(
@@ -144,7 +120,6 @@ function InfrastructureForm({
               required
             />
 
-
             <CheckIcon />
 
           </div>
@@ -154,18 +129,17 @@ function InfrastructureForm({
 
         {/* ==================================================
             3. RESOURCE GROUP LOCATION
+            FIXED VALUE - USER CANNOT EDIT
             ================================================== */}
 
         <div className="form-field">
 
           <label>
-
             Resource Group Location
 
             <span className="required">
               *
             </span>
-
           </label>
 
 
@@ -173,18 +147,12 @@ function InfrastructureForm({
 
             <input
               type="text"
-              placeholder="string"
-              value={
-                formData.resourceGroupLocation
-              }
-              onChange={(event) =>
-                onChange(
-                  "resourceGroupLocation",
-                  event.target.value
-                )
-              }
-              required
+              value="canadacentral"
+              readOnly
+              disabled
             />
+
+            <CheckIcon />
 
           </div>
 
@@ -193,18 +161,17 @@ function InfrastructureForm({
 
         {/* ==================================================
             4. STORAGE ACCOUNT NAME
+            FIXED VALUE - USER CANNOT EDIT
             ================================================== */}
 
         <div className="form-field">
 
           <label>
-
             Storage Account Name
 
             <span className="required">
               *
             </span>
-
           </label>
 
 
@@ -212,19 +179,10 @@ function InfrastructureForm({
 
             <input
               type="text"
-              placeholder="string"
-              value={
-                formData.storageAccountName
-              }
-              onChange={(event) =>
-                onChange(
-                  "storageAccountName",
-                  event.target.value
-                )
-              }
-              required
+              value="ivmstorageaccount"
+              readOnly
+              disabled
             />
-
 
             <CheckIcon />
 
@@ -235,84 +193,17 @@ function InfrastructureForm({
 
         {/* ==================================================
             5. STORAGE ACCOUNT LOCATION
+            FIXED VALUE - USER CANNOT EDIT
             ================================================== */}
 
         <div className="form-field">
 
           <label>
-
             Storage Account Location
 
             <span className="required">
               *
             </span>
-
-          </label>
-
-
-          <div className="select-wrapper">
-
-            <select
-              value={
-                formData.storageAccountLocation
-              }
-              onChange={(event) =>
-                onChange(
-                  "storageAccountLocation",
-                  event.target.value
-                )
-              }
-              required
-            >
-
-              <option value="">
-                string
-              </option>
-
-              <option value="eastus">
-                East US
-              </option>
-
-              <option value="eastus2">
-                East US 2
-              </option>
-
-              <option value="centralindia">
-                Central India
-              </option>
-
-              <option value="canadacentral">
-                Canada Central
-              </option>
-
-              <option value="westeurope">
-                West Europe
-              </option>
-
-            </select>
-
-
-            <ChevronDown />
-
-          </div>
-
-        </div>
-
-
-        {/* ==================================================
-            6. FUNCTION APP NAME
-            ================================================== */}
-
-        <div className="form-field">
-
-          <label>
-
-            Function App Name
-
-            <span className="required">
-              *
-            </span>
-
           </label>
 
 
@@ -320,19 +211,10 @@ function InfrastructureForm({
 
             <input
               type="text"
-              placeholder="string"
-              value={
-                formData.functionAppName
-              }
-              onChange={(event) =>
-                onChange(
-                  "functionAppName",
-                  event.target.value
-                )
-              }
-              required
+              value="canadacentral"
+              readOnly
+              disabled
             />
-
 
             <CheckIcon />
 
@@ -341,12 +223,41 @@ function InfrastructureForm({
         </div>
 
 
+        {/* ==================================================
+            6. FUNCTION APP NAME
+            FIXED VALUE - USER CANNOT EDIT
+            ================================================== */}
+
+        <div className="form-field">
+
+          <label>
+            Function App Name
+
+            <span className="required">
+              *
+            </span>
+          </label>
+
+
+          <div className="input-wrapper">
+
+            <input
+              type="text"
+              value="ivmfunctionapp"
+              readOnly
+              disabled
+            />
+
+            <CheckIcon />
+
+          </div>
+
+        </div>
+
       </div>
 
     </section>
-
   );
-
 }
 
 

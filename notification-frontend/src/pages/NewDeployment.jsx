@@ -34,7 +34,7 @@ import KeyVaultConfiguration from "../components/wizard/KeyVaultConfiguration";
 
 import FunctionDeployment from "../components/wizard/FunctionDeployment";
 
-import NotificationARMConfiguration from "../components/wizard/NotificationARMConfiguration";
+import NotificationService from "../components/wizard/NotificationService";
 
 import WizardFooter from "../components/wizard/WizardFooter";
 
@@ -209,13 +209,20 @@ function NewDeployment() {
 
     storage_account_name: "",
 
-    function_app_name: "",
+    qualys_function_app_name: "",
 
   });
 
 
   // ==========================================================
   // INFRASTRUCTURE FORM DATA
+  // ==========================================================
+  //
+  // Only Subscription ID and Resource Group Name are entered
+  // by the user.
+  //
+  // These infrastructure values are fixed.
+  //
   // ==========================================================
 
   const [formData, setFormData] =
@@ -225,13 +232,13 @@ function NewDeployment() {
 
       resourceGroupName: "",
 
-      resourceGroupLocation: "",
+      resourceGroupLocation: "canadacentral",
 
-      storageAccountName: "",
+      storageAccountName: "ivmstorageaccount",
 
-      storageAccountLocation: "",
+      storageAccountLocation: "canadacentral",
 
-      functionAppName: "",
+      functionAppName: "ivmfunctionapp",
 
     });
 
@@ -297,28 +304,63 @@ function NewDeployment() {
 
 
   // ==========================================================
+  // NOTIFICATION SERVICE USER FORM DATA
+  // ==========================================================
+
+  const [
+    notificationServiceFormData,
+    setNotificationServiceFormData,
+  ] = useState({
+
+    chg_approval_recipients: "",
+
+  });
+
+
+  // ==========================================================
   // NOTIFICATION ARM FIXED CONFIGURATION
   // ==========================================================
 
   const notificationARMConfiguration = {
 
+    qualys_function_name:
+      "QualysScanStatus",
+
     logic_app_name:
-      "notification-service",
+      "Notification-service",
 
     completion_logic_app_name:
-      "notification-completion",
+      "Completion-logic",
 
     notification_followup_logic_app_name:
-      "notification-followup",
+      "Notification-Followup-01",
+
+    vuln_scan_complete_logic_app_name:
+      "LA-VulnScan-Complete",
+
+    sts_change_approval_check_logic_app_name:
+      "LA-STS-ChangeApprovalCheck",
+
+    status_tracking_system_logic_app_name:
+      "LA-StatusTrackingSystem",
 
     followup_queue_name:
       "taskreminder",
+
+    qualys_scan_status_queue_name:
+      "qualysscanstatusqueue",
 
     notification_log_table_name:
       "NotificationLogs",
 
     notification_status_table_name:
       "NotificationStatus",
+
+    scan_status_log_table_name:
+      "ScanStatusLog",
+
+    scan_completion_log_table_name:
+      "ScanCompletionLog",
 
     azure_tables_connection_name:
       "azuretables-1",
@@ -424,6 +466,28 @@ function NewDeployment() {
   ) => {
 
     setKeyVaultFormData(
+      (previous) => ({
+
+        ...previous,
+
+        [field]: value,
+
+      })
+    );
+
+  };
+
+
+  // ==========================================================
+  // NOTIFICATION SERVICE CHANGE
+  // ==========================================================
+
+  const handleNotificationServiceChange = (
+    field,
+    value
+  ) => {
+
+    setNotificationServiceFormData(
       (previous) => ({
 
         ...previous,
@@ -681,19 +745,15 @@ function NewDeployment() {
 
   const handleNext = () => {
 
+    // --------------------------------------------------------
+    // Only these two fields are entered by the user.
+    // --------------------------------------------------------
+
     const requiredFields = [
 
       "subscriptionId",
 
       "resourceGroupName",
-
-      "resourceGroupLocation",
-
-      "storageAccountName",
-
-      "storageAccountLocation",
-
-      "functionAppName",
 
     ];
 
@@ -712,7 +772,7 @@ function NewDeployment() {
     ) {
 
       alert(
-        "Please fill in all required fields before proceeding."
+        "Please fill in Subscription ID and Resource Group Name before proceeding."
       );
 
       return;
@@ -1169,25 +1229,34 @@ function NewDeployment() {
 
     try {
 
+      // ------------------------------------------------------
+      // INFRASTRUCTURE DEPLOYMENT PAYLOAD
+      //
+      // Only subscription_id and resource_group_name come
+      // from the user.
+      //
+      // These infrastructure values are fixed.
+      // ------------------------------------------------------
+
       const deploymentPayload = {
 
         resource_group_name:
           formData.resourceGroupName.trim(),
 
         storage_account_name:
-          formData.storageAccountName.trim(),
+          "ivmstorageaccount",
 
         subscription_id:
           formData.subscriptionId.trim(),
 
         resource_group_location:
-          formData.resourceGroupLocation.trim(),
+          "canadacentral",
 
         storage_account_location:
-          formData.storageAccountLocation.trim(),
+          "canadacentral",
 
         function_app_name:
-          formData.functionAppName.trim(),
+          "ivmfunctionapp",
 
       };
 
@@ -1229,14 +1298,45 @@ function NewDeployment() {
 
 
       if (!response.ok) {
+  let errorMessage =
+    "Infrastructure deployment failed.";
 
-        throw new Error(
-          data.detail ||
-          data.message ||
-          "Infrastructure deployment failed."
+  if (typeof data.detail === "string") {
+    errorMessage = data.detail;
+  } else if (Array.isArray(data.detail)) {
+    errorMessage = data.detail
+      .map((error) => {
+        if (typeof error === "string") {
+          return error;
+        }
+
+        return (
+          error?.msg ||
+          error?.message ||
+          JSON.stringify(error)
         );
+      })
+      .join("\n");
+  } else if (
+    data.detail &&
+    typeof data.detail === "object"
+  ) {
+    errorMessage =
+      data.detail.message ||
+      data.detail.error ||
+      JSON.stringify(data.detail);
+  } else if (
+    typeof data.message === "string"
+  ) {
+    errorMessage = data.message;
+  } else if (
+    typeof data.error === "string"
+  ) {
+    errorMessage = data.error;
+  }
 
-      }
+  throw new Error(errorMessage);
+}
 
 
       setDeploymentResult(data);
@@ -1271,9 +1371,18 @@ function NewDeployment() {
         deploymentPayload.resource_group_location;
 
 
-      const functionAppName =
+      // ======================================================
+      // NOTIFICATION:
+      // Keep the infrastructure Function App value available
+      // as qualys_function_app_name for Notification Service.
+      // ======================================================
+
+      const qualysFunctionAppName =
+        data.qualys_function_app_name ||
+        data.qualysFunctionAppName ||
         data.function_app_name ||
         data.functionAppName ||
+        data.resources?.qualys_function_app_name ||
         data.resources?.function_app_name ||
         deploymentPayload.function_app_name;
 
@@ -1292,8 +1401,8 @@ function NewDeployment() {
         storage_account_name:
           storageAccountName,
 
-        function_app_name:
-          functionAppName,
+        qualys_function_app_name:
+          qualysFunctionAppName,
 
       });
 
@@ -1680,7 +1789,7 @@ function NewDeployment() {
 
         if (
           !deployedResourceInfo
-            .function_app_name
+            .qualys_function_app_name
         ) {
 
           throw new Error(
@@ -1752,7 +1861,7 @@ function NewDeployment() {
 
           function_app_name:
             deployedResourceInfo
-              .function_app_name,
+              .qualys_function_app_name,
 
           storage_account_name:
             deployedResourceInfo
@@ -1825,6 +1934,7 @@ function NewDeployment() {
 
           }
         );
+
 
       } catch (error) {
 
@@ -1954,7 +2064,7 @@ function NewDeployment() {
 
         if (
           !deployedResourceInfo
-            .function_app_name
+            .qualys_function_app_name
         ) {
 
           throw new Error(
@@ -1988,7 +2098,7 @@ function NewDeployment() {
 
           function_app_name:
             deployedResourceInfo
-              .function_app_name,
+              .qualys_function_app_name,
 
           table_name:
             "AppConfiguration",
@@ -2128,39 +2238,47 @@ function NewDeployment() {
   // STEP 7 -> STEP 8
   // ==========================================================
 
+  const handleFunctionDeploymentNext =
+    () => {
+
+      if (isFunctionDeploying) {
+
+        return;
+
+      }
+
+
+      console.log(
+        "Moving to Notification ARM Deployment."
+      );
+
+
+      setCurrentStep(8);
+
+    };
+
+
   // ==========================================================
-// STEP 7 -> STEP 8
-// ==========================================================
+  // NOTIFICATION SERVICE FORM CHANGE
+  // ==========================================================
 
-const handleFunctionDeploymentNext =
-  () => {
+  const handleNotificationRecipientChange =
+    (value) => {
 
-    // Next should work whether Function App
-    // has been deployed or not.
-    //
-    // The only thing that should prevent Next
-    // is an active deployment.
+      handleNotificationServiceChange(
+        "chg_approval_recipients",
+        value
+      );
 
-    if (isFunctionDeploying) {
+    };
 
-      return;
-
-    }
-
-    console.log(
-      "Moving to Notification ARM Deployment."
-    );
-
-    setCurrentStep(8);
-
-  };
 
   // ==========================================================
   // NOTIFICATION ARM DEPLOYMENT
   // ==========================================================
 
   const handleNotificationARMDeploy =
-    async () => {
+    async (userPayload = {}) => {
 
       if (
         isNotificationARMDeploying
@@ -2181,6 +2299,10 @@ const handleFunctionDeploymentNext =
 
 
       try {
+
+        // ------------------------------------------------------
+        // REQUIRED INFRASTRUCTURE
+        // ------------------------------------------------------
 
         if (
           !deployedResourceInfo
@@ -2230,6 +2352,46 @@ const handleFunctionDeploymentNext =
         }
 
 
+        if (
+          !deployedResourceInfo
+            .qualys_function_app_name
+        ) {
+
+          throw new Error(
+            "Qualys Function App information is not available."
+          );
+
+        }
+
+
+        // ------------------------------------------------------
+        // CHG APPROVAL RECIPIENT
+        // ------------------------------------------------------
+
+        const chgApprovalRecipients =
+          String(
+            userPayload?.chg_approval_recipients ||
+            notificationServiceFormData
+              .chg_approval_recipients ||
+            ""
+          ).trim();
+
+
+        if (
+          !chgApprovalRecipients
+        ) {
+
+          throw new Error(
+            "Please provide CHG Approval Recipients."
+          );
+
+        }
+
+
+        // ------------------------------------------------------
+        // COMPLETE NOTIFICATION PAYLOAD
+        // ------------------------------------------------------
+
         const notificationPayload = {
 
           subscription_id:
@@ -2248,6 +2410,14 @@ const handleFunctionDeploymentNext =
             deployedResourceInfo
               .storage_account_name,
 
+          qualys_function_app_name:
+            deployedResourceInfo
+              .qualys_function_app_name,
+
+          qualys_function_name:
+            notificationARMConfiguration
+              .qualys_function_name,
+
           logic_app_name:
             notificationARMConfiguration
               .logic_app_name,
@@ -2260,9 +2430,25 @@ const handleFunctionDeploymentNext =
             notificationARMConfiguration
               .notification_followup_logic_app_name,
 
+          vuln_scan_complete_logic_app_name:
+            notificationARMConfiguration
+              .vuln_scan_complete_logic_app_name,
+
+          sts_change_approval_check_logic_app_name:
+            notificationARMConfiguration
+              .sts_change_approval_check_logic_app_name,
+
+          status_tracking_system_logic_app_name:
+            notificationARMConfiguration
+              .status_tracking_system_logic_app_name,
+
           followup_queue_name:
             notificationARMConfiguration
               .followup_queue_name,
+
+          qualys_scan_status_queue_name:
+            notificationARMConfiguration
+              .qualys_scan_status_queue_name,
 
           notification_log_table_name:
             notificationARMConfiguration
@@ -2271,6 +2457,14 @@ const handleFunctionDeploymentNext =
           notification_status_table_name:
             notificationARMConfiguration
               .notification_status_table_name,
+
+          scan_status_log_table_name:
+            notificationARMConfiguration
+              .scan_status_log_table_name,
+
+          scan_completion_log_table_name:
+            notificationARMConfiguration
+              .scan_completion_log_table_name,
 
           azure_tables_connection_name:
             notificationARMConfiguration
@@ -2287,6 +2481,9 @@ const handleFunctionDeploymentNext =
           teams_connection_name:
             notificationARMConfiguration
               .teams_connection_name,
+
+          chg_approval_recipients:
+            chgApprovalRecipients,
 
         };
 
@@ -2333,6 +2530,7 @@ const handleFunctionDeploymentNext =
 
           }
         );
+
 
       } catch (error) {
 
@@ -2694,11 +2892,19 @@ const handleFunctionDeploymentNext =
             ==================================================== */}
 
         <WizardSidebar
-          currentStep={currentStep}
-          completedSteps={completedSteps}
+
+          currentStep={
+            currentStep
+          }
+
+          completedSteps={
+            completedSteps
+          }
+
           onStepClick={(stepId) => {
             setCurrentStep(stepId);
           }}
+
         />
 
 
@@ -2944,12 +3150,12 @@ const handleFunctionDeploymentNext =
 
           {/* ==================================================
               STEP 8
-              NOTIFICATION ARM
+              NOTIFICATION SERVICE
               ================================================== */}
 
           {currentStep === 8 && (
 
-            <NotificationARMConfiguration
+            <NotificationService
 
               deploymentInfo={
                 deployedResourceInfo
@@ -2957,6 +3163,14 @@ const handleFunctionDeploymentNext =
 
               configuration={
                 notificationARMConfiguration
+              }
+
+              formData={
+                notificationServiceFormData
+              }
+
+              onChange={
+                handleNotificationRecipientChange
               }
 
               onDeploy={

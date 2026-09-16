@@ -701,22 +701,19 @@ class RemediationAzureManager:
         self,
         subscription_id: str,
         resource_group_name: str,
-        business_day_logic_app_name: str,
-        business_day_logic_app_trigger_name: str,
+      
     ) -> str:
 
         logger.info(
             "Resolving Remediation-0.5 Logic App callback URL: "
             "app=%s trigger=%s",
-            business_day_logic_app_name,
-            business_day_logic_app_trigger_name,
+           
         )
 
         return self.get_logic_app_callback_url(
             subscription_id=subscription_id,
             resource_group_name=resource_group_name,
-            logic_app_name=business_day_logic_app_name,
-            trigger_name=business_day_logic_app_trigger_name,
+           
         )
 
     # ========================================================
@@ -910,7 +907,7 @@ class RemediationAzureManager:
             "businessDaysServiceUrl",
             "getNextBusinessDayUrl",
             "queueName",
-            "BusinessDayLogicAppUrl",
+         "callbackUri0.5",
             "$connections",
         }
 
@@ -1466,7 +1463,7 @@ class RemediationAzureManager:
         request,
         connections: Dict[str, str],
         function_urls: Dict[str, str],
-        business_day_logic_app_url: str,
+        callback_uri_01: str,
     ) -> Dict[str, Any]:
 
         logger.info(
@@ -1520,6 +1517,9 @@ class RemediationAzureManager:
             "location": {
                 "value": request.location
             },
+            "callbackUri0.5": {
+    "value": callback_uri_01
+},
 
             "storageAccountName": {
                 "value": request.storage_account_name
@@ -1541,9 +1541,7 @@ class RemediationAzureManager:
                 "value": "remediationweeklyqueue"
             },
 
-            "BusinessDayLogicAppUrl": {
-                "value": business_day_logic_app_url
-            },
+           
 
             "$connections": {
                 "value": {
